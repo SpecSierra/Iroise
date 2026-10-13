@@ -47,9 +47,12 @@ public:
 
     Gfx::IntSize size() const { return m_size; }
 
-    // Copies the bitmap into a free buffer and commits it. Returns false when the compositor has not asked for a
+    // Copies BGRx pixels into a free buffer and commits it. Returns false when the compositor has not asked for a
     // new frame yet; on_frame_ready fires once it has.
-    bool present(Gfx::Bitmap const&, Gfx::IntSize painted_size);
+    bool present(u8 const* pixels, size_t pitch, Gfx::IntSize size);
+
+    wl_display* display() const { return m_display; }
+    wl_surface* surface() const { return m_surface; }
 
     Function<void()> on_frame_ready;
     Function<void(Gfx::IntSize)> on_resize;

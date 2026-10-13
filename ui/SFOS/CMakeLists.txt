@@ -9,4 +9,13 @@ add_executable(ladybird
     WaylandWindow.cpp
 )
 target_link_libraries(ladybird PRIVATE PkgConfig::WAYLAND_CLIENT)
+
+if (USE_VULKAN_DMABUF_IMAGES)
+    # With shared GPU images the window is presented through Vulkan, with no pixel copies on the CPU.
+    target_sources(ladybird PRIVATE VulkanPresenter.cpp)
+    target_link_libraries(ladybird PRIVATE Vulkan::Vulkan)
+    # libhybris exports most Vulkan entry points as IFUNCs that only resolve once vkCreateInstance has loaded the
+    # Android driver, so they must not be bound at startup.
+    target_link_options(ladybird PRIVATE LINKER:-z,lazy)
+endif()
 create_ladybird_bundle(ladybird)

@@ -18,6 +18,9 @@
 #include <LibWebView/URL.h>
 #include <LibWebView/Utilities.h>
 #include <UI/SFOS/WaylandWindow.h>
+#ifdef USE_VULKAN_DMABUF_IMAGES
+#    include <UI/SFOS/VulkanPresenter.h>
+#endif
 
 namespace Ladybird {
 
@@ -65,8 +68,21 @@ private:
                 present();
         };
         m_window.on_resize = [this](auto size) {
+#ifdef USE_VULKAN_DMABUF_IMAGES
+            if (m_vulkan_presenter && m_vulkan_presenter->resize(size).is_error())
+                m_vulkan_presenter = nullptr;
+#endif
             reset_viewport_size(size.template to_type<Web::DevicePixels>());
         };
+
+#ifdef USE_VULKAN_DMABUF_IMAGES
+        if (!Core::Environment::has("LADYBIRD_SFOS_CPU_PRESENT"sv)) {
+            if (auto presenter = VulkanPresenter::create(m_window.display(), m_window.surface(), m_window.size()); presenter.is_error())
+                warnln("ladybird-sfos: no Vulkan presentation ({}), copying frames on the CPU", presenter.error());
+            else
+                m_vulkan_presenter = presenter.release_value();
+        }
+#endif
         m_window.on_touch = [this](auto phase, int id, auto position) {
             handle_touch(phase, id, position);
         };
@@ -76,18 +92,37 @@ private:
     {
         if (!m_has_usable_bitmap || !m_front_bitmap.shared_image_buffer)
             return;
-        auto bitmap = m_front_bitmap.shared_image_buffer->bitmap_if_present();
-        if (!bitmap)
-            return;
+        auto const& buffer = *m_front_bitmap.shared_image_buffer;
+        auto painted_size = m_front_bitmap.last_painted_size.to_type<int>();
 
-        m_has_unpresented_frame = !m_window.present(*bitmap, m_front_bitmap.last_painted_size.to_type<int>());
-        if (m_has_unpresented_frame)
+#ifdef USE_VULKAN_DMABUF_IMAGES
+        if (auto const* dmabuf = buffer.linux_dmabuf_handle(); dmabuf && m_vulkan_presenter) {
+            if (auto result = m_vulkan_presenter->present(*dmabuf, painted_size); !result.is_error()) {
+                did_present(true, "Vulkan"sv);
+                return;
+            }
+            warnln("ladybird-sfos: Vulkan presentation failed, copying frames on the CPU from now on");
+            m_vulkan_presenter = nullptr;
+        }
+#endif
+
+        // NB: A shared GPU image also has a bitmap, which is a mapping of the same memory.
+        if (auto bitmap = buffer.bitmap_if_present()) {
+            auto size = Gfx::IntSize { min(bitmap->width(), painted_size.width()), min(bitmap->height(), painted_size.height()) };
+            did_present(m_window.present(bitmap->scanline_u8(0), bitmap->pitch(), size), "CPU copy"sv);
+        }
+    }
+
+    void did_present(bool presented, StringView source)
+    {
+        m_has_unpresented_frame = !presented;
+        if (!presented)
             return;
 
         ++m_frames_presented;
         if (auto elapsed = m_frame_timer.elapsed_milliseconds(); elapsed >= 1000) {
             if (s_log_frame_rate)
-                warnln("ladybird-sfos: {} fps", m_frames_presented * 1000 / elapsed);
+                warnln("ladybird-sfos: {} fps from {}", m_frames_presented * 1000 / elapsed, source);
             m_frames_presented = 0;
             m_frame_timer.start();
         }
@@ -155,6 +190,9 @@ private:
 
     WaylandWindow& m_window;
     bool m_has_unpresented_frame { false };
+#ifdef USE_VULKAN_DMABUF_IMAGES
+    OwnPtr<VulkanPresenter> m_vulkan_presenter;
+#endif
 
     Optional<int> m_active_touch;
     Gfx::IntPoint m_touch_start;

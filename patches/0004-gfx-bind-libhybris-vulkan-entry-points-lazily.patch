@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibGfx/CMakeLists.txt b/Libraries/LibGfx/CMakeLists.txt
-index 1373f954..9b980cd7 100644
+index 1373f954..6f74f18e 100644
 --- a/Libraries/LibGfx/CMakeLists.txt
 +++ b/Libraries/LibGfx/CMakeLists.txt
-@@ -116,6 +116,12 @@ if (HAS_VULKAN)
+@@ -116,6 +116,14 @@ if (HAS_VULKAN)
      target_link_libraries(LibGfx PUBLIC Vulkan::Headers)
      target_link_libraries(LibGfx PRIVATE Vulkan::Vulkan GPUOpen::VulkanMemoryAllocator)
  
@@ -10,6 +10,8 @@ index 1373f954..9b980cd7 100644
 +        # libhybris exports most Vulkan entry points as IFUNCs whose resolvers only work once vkCreateInstance has
 +        # loaded the Android driver, so they must not be bound when LibGfx loads.
 +        target_link_options(LibGfx PRIVATE LINKER:-z,lazy)
++        # Those drivers also cannot export the memory behind an image, so shared images come from the dma-heap.
++        target_compile_definitions(LibGfx PRIVATE LADYBIRD_SHARED_IMAGES_FROM_DMA_HEAP=1)
 +    endif()
 +
      if (USE_VULKAN_DMABUF_IMAGES)

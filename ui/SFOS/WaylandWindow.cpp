@@ -6,7 +6,6 @@
 
 #include <AK/Format.h>
 #include <AK/StringView.h>
-#include <LibGfx/Bitmap.h>
 #include <UI/SFOS/WaylandWindow.h>
 
 #include <errno.h>
@@ -202,7 +201,7 @@ void WaylandWindow::resize(Gfx::IntSize size)
         on_resize(m_size);
 }
 
-bool WaylandWindow::present(Gfx::Bitmap const& bitmap, Gfx::IntSize painted_size)
+bool WaylandWindow::present(u8 const* pixels, size_t pitch, Gfx::IntSize size)
 {
     if (m_frame_callback)
         return false;
@@ -211,13 +210,13 @@ bool WaylandWindow::present(Gfx::Bitmap const& bitmap, Gfx::IntSize painted_size
     if (free_buffer.is_end())
         return false;
 
-    auto width = min(min(bitmap.width(), painted_size.width()), m_size.width());
-    auto height = min(min(bitmap.height(), painted_size.height()), m_size.height());
+    auto width = min(size.width(), m_size.width());
+    auto height = min(size.height(), m_size.height());
     auto stride = static_cast<size_t>(m_size.width()) * 4;
 
     // NB: The engine's BGRx/BGRA byte order is what Wayland calls XRGB8888 on little-endian machines.
     for (int y = 0; y < height; ++y)
-        memcpy(free_buffer->data + y * stride, bitmap.scanline_u8(y), static_cast<size_t>(width) * 4);
+        memcpy(free_buffer->data + y * stride, pixels + y * pitch, static_cast<size_t>(width) * 4);
 
     free_buffer->busy = true;
     wl_surface_attach(m_surface, free_buffer->buffer, 0, 0);

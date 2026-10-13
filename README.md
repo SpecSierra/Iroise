@@ -34,9 +34,8 @@ the vcpkg-built libraries and gcc 14's `libstdc++` travel with them.
 ## GPU painting (Vulkan through libhybris)
 
 Works on the Jolla Phone 2 (Mali-G610, Vulkan 1.3) with Jolla's `libhybris-libvulkan`
-package, which is in the phone's repos but not installed by default. For tests it
-was fetched with `pkcon download` and unpacked into the bundle's `lib/` instead
-(with `$ORIGIN` rpaths added, since its plugin directory is normally `/usr/lib64/libhybris`).
+package, which is in the phone's repos but not installed by default
+(`devel-su zypper install libhybris-libvulkan`).
 
 - The wrapper exports most entry points as IFUNCs that only resolve after
   `vkCreateInstance`, so LibGfx must be linked `-z lazy` and must not store
@@ -46,12 +45,16 @@ was fetched with `pkcon download` and unpacked into the bundle's `lib/` instead
   compositor (patch 0005).
 - The compositor's seccomp filter kills the Mali driver's ioctls, so GPU runs
   currently need `--disable-sandbox`.
-- Frames are still read back into a shared bitmap (patch 0003). The driver does
-  offer the four extensions upstream's dma-buf sharing path needs
-  (`VK_EXT_external_memory_dma_buf`, `VK_EXT_image_drm_format_modifier`,
-  `VK_KHR_external_memory_fd`, `VK_KHR_image_format_list`) plus
-  `VK_KHR_wayland_surface` and `VK_KHR_swapchain`, so presenting without the
-  readback is the next step.
+- The driver imports dma-bufs but cannot export its own memory: `vkGetMemoryFdKHR`
+  returns success with fd -1. Shared images are therefore allocated from
+  `/dev/dma_heap/system` and imported on both sides (patch 0006). The driver takes
+  BGRA with the LINEAR modifier as a render target this way.
+- The front end presents those images with `VulkanPresenter`: import once per
+  buffer (recognised by inode), `vkCmdBlitImage` to a FIFO swapchain on the
+  `wl_surface` through the wrapper's Wayland WSI. The swapchain only offers RGBA
+  orders, which the blit converts. `LADYBIRD_SFOS_CPU_PRESENT=1` forces the old
+  wl_shm copy path for comparison.
+- With the package installed no `HYBRIS_*` settings are needed.
 
 ## Milestones
 
