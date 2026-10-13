@@ -194,8 +194,10 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
     auto theme = TRY(Gfx::load_system_theme(theme_path.string()));
 
     auto view = Ladybird::WindowedWebView::create(move(theme), *window, Ladybird::device_pixel_ratio_from_environment());
+    // NB: On a fresh profile the application puts its welcome page ahead of the URLs we were given. Every run here
+    //     has a fresh profile, so take the last URL: ours if there is one, the welcome page otherwise.
     if (!browser_options.urls.is_empty())
-        view->load(browser_options.urls.first());
+        view->load(browser_options.urls.last());
 
     return app->execute();
 }
