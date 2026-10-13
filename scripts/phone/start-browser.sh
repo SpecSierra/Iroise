@@ -15,6 +15,10 @@ export PACIFIC_DEPLOYMENT_PATH=/tmp/ladybird/browser/share/
 export PACIFIC_RUNTIME_LIBRARY=/tmp/ladybird/browser/lib/libsailfishbrowser.so.1
 export PACIFIC_TRANSLATION_PATH=/tmp/ladybird/browser/translations/
 export LADYBIRD_SFOS_LOG_FPS=1
+# Without this, Qt sends warnings (QML errors included) to the journal instead of our log.
+export QT_LOGGING_TO_CONSOLE=1
+export PACIFIC_LOG_ENGINE=${PACIFIC_LOG_ENGINE:-}
+export PACIFIC_GRAB_DIR=${PACIFIC_GRAB_DIR:-}
 ulimit -c 0
 mkdir -p "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
 url=$1; minutes=${2:-15}

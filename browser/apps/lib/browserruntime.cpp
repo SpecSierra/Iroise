@@ -275,6 +275,19 @@ extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
     }
 
     browser->load();
+    // PACIFIC_GRAB_DIR=<dir> saves what the window shows once a second, as <dir>/grab-<n>.jpg (the last 20 are
+    // kept). The system screenshot service only writes under the home directory, which test runs stay out of.
+    const QString grabDirectory = QString::fromLocal8Bit(qgetenv("PACIFIC_GRAB_DIR"));
+    if (!grabDirectory.isEmpty()) {
+        QTimer *grabTimer = new QTimer(view);
+        QObject::connect(grabTimer, &QTimer::timeout, view, [view, grabDirectory]() {
+            static int count = 0;
+            view->grabWindow().scaledToWidth(516).save(QStringLiteral("%1/grab-%2.jpg").arg(grabDirectory).arg(count % 20, 2, 10, QLatin1Char('0')), "JPG", 70);
+            ++count;
+        });
+        grabTimer->start(1000);
+    }
+
     view->setProperty("atlanticBrowserRuntimeLoaded", true);
     view->raise();
     view->requestActivate();

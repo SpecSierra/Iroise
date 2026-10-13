@@ -138,6 +138,10 @@ void LadybirdEngine::send(quint32 view, lb_embed_message_type type, int a, int b
     header.c = c;
     header.d = d;
     header.scale = scale;
+    // PACIFIC_LOG_ENGINE=1 traces what the interface asks of the engine, except the touch stream.
+    static const bool logMessages = !qgetenv("PACIFIC_LOG_ENGINE").isEmpty();
+    if (logMessages && type != LB_EMBED_TOUCH)
+        qWarning("LadybirdEngine: view %u message %d a=%d b=%d c=%d d=%d scale=%.3f text=%s", view, int(type), a, b, c, d, scale, text.left(80).constData());
     QByteArray payload = text.left(LB_EMBED_TEXT_MAX);
     header.text_length = static_cast<uint32_t>(payload.size());
 

@@ -118,6 +118,12 @@ void WPEQtView::setLoadProgress(int progress)
 
 void WPEQtView::engineFrame(const LadybirdFrame& frame)
 {
+    static const bool logFrames = !qgetenv("PACIFIC_LOG_ENGINE").isEmpty();
+    if (logFrames && (frame.pitch != m_frame.pitch || frame.bufferSize != m_frame.bufferSize || frame.paintedSize != m_frame.paintedSize)) {
+        qWarning("WPEQtView: frame geometry pitch=%d buffer=%dx%d painted=%dx%d item=%dx%d", frame.pitch,
+            frame.bufferSize.width(), frame.bufferSize.height(), frame.paintedSize.width(), frame.paintedSize.height(),
+            int(width()), int(height()));
+    }
     m_frame = frame;
     update();
     emit frameArrived();
@@ -207,6 +213,12 @@ QSGNode* WPEQtView::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*)
         GLenum format = hasBgra ? GL_BGRA_EXT : GL_RGBA;
 
         if (!m_textureId || textureSize != m_textureSize) {
+            // NB: The node works out its texture coordinates when it is given a texture or a source rectangle that
+            //     differs from the one it has. A new texture of another size can land at the old one's address
+            //     with the same source rectangle, and the node would then keep coordinates for the old size and
+            //     show the page stretched. So a new texture gets a new node.
+            delete node;
+            node = nullptr;
             delete m_texture;
             m_texture = nullptr;
             gl->glGenTextures(1, &m_textureId);
