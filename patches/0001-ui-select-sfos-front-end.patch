@@ -1,0 +1,11 @@
+--- a/UI/CMakeLists.txt
++++ b/UI/CMakeLists.txt
+@@ -48,6 +48,8 @@
+ 
+ if (ANDROID OR VCPKG_TARGET_ANDROID)
+     add_subdirectory("Android")
++elseif (LADYBIRD_UI_SFOS OR DEFINED ENV{LADYBIRD_UI_SFOS})
++    add_subdirectory("SFOS")
+ else()
+     add_subdirectory("Qt")
+ endif()
