@@ -1,13 +1,13 @@
-#ifndef ATLANTIC_BROWSERRUNTIME_H
-#define ATLANTIC_BROWSERRUNTIME_H
+#ifndef PACIFIC_BROWSERRUNTIME_H
+#define PACIFIC_BROWSERRUNTIME_H
 
 #include <QtGlobal>
 
 class QGuiApplication;
 class QQuickView;
 
-extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
+extern "C" Q_DECL_EXPORT bool pacificBrowserRuntimeStart(QQuickView *view,
                                                           QGuiApplication *app,
                                                           const char *dataPath);
 
-#endif // ATLANTIC_BROWSERRUNTIME_H
+#endif // PACIFIC_BROWSERRUNTIME_H

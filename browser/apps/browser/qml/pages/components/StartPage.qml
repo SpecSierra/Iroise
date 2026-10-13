@@ -382,7 +382,7 @@ Item {
 
                                 if (binned) {
                                     //% "Removing bookmark"
-                                    removeRemorse.execute(qsTrId("atlantic-la-removing_bookmark"),
+                                    removeRemorse.execute(qsTrId("pacific-la-removing_bookmark"),
                                                           function() { favoritesModel.removeAt(from) })
                                 } else if (to >= 0 && to !== from) {
                                     favoritesModel.move(from, to)
@@ -442,7 +442,7 @@ Item {
                     width: grid.cell
                     horizontalAlignment: Text.AlignHCenter
                     //% "Add"
-                    text: qsTrId("atlantic-la-add")
+                    text: qsTrId("pacific-la-add")
                     color: Theme.secondaryColor
                     font.pixelSize: Theme.fontSizeExtraSmall
                 }

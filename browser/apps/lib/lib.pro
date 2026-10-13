@@ -1,5 +1,5 @@
 TEMPLATE = lib
-TARGET = sailfishbrowser
+TARGET = pacificbrowser
 
 QT += qml quick gui gui-private dbus concurrent sql
 

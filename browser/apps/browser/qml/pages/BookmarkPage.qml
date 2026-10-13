@@ -68,14 +68,14 @@ Page {
         PullDownMenu {
             MenuItem {
                 //% "Show this folder on the start page"
-                text: qsTrId("atlantic-me-folder_on_start_page")
+                text: qsTrId("pacific-me-folder_on_start_page")
                 visible: !page.searching && startPageFolder.value !== page.folderId
                 onClicked: startPageFolder.value = page.folderId
             }
 
             MenuItem {
                 //% "New folder"
-                text: qsTrId("atlantic-me-new_folder")
+                text: qsTrId("pacific-me-new_folder")
                 visible: !page.searching
                 onClicked: pageStack.animatorPush(newFolderDialog)
             }
@@ -89,7 +89,7 @@ Page {
                                                    : qsTrId("sailfish_browser-he-bookmarks")
                 //% "Shown on the start page"
                 description: startPageFolder.value === page.folderId
-                             ? qsTrId("atlantic-la-shown_on_start_page") : ""
+                             ? qsTrId("pacific-la-shown_on_start_page") : ""
             }
             SearchField {
                 width: parent.width
@@ -125,13 +125,13 @@ Page {
 
                 DialogHeader {
                     //% "Create"
-                    acceptText: qsTrId("atlantic-he-create_folder_accept")
+                    acceptText: qsTrId("pacific-he-create_folder_accept")
                 }
 
                 TextField {
                     width: parent.width
                     //% "Folder name"
-                    label: qsTrId("atlantic-la-folder_name")
+                    label: qsTrId("pacific-la-folder_name")
                     placeholderText: label
                     EnterKey.iconSource: "image://theme/icon-m-enter-accept"
                     EnterKey.onClicked: accept()

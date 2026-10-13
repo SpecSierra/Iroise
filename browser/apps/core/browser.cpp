@@ -49,12 +49,12 @@ Browser::Browser(QQuickView *view, const QString &dataPath, QObject *parent)
     // overlay window, not in this on-screen view (which is the transparent shell). The
     // runtime loads it into the overlay after this ctor; skip setSource here so we don't
     // also run a second ApplicationWindow in the shell view.
-    const QByteArray dc = qgetenv("ATLANTIC_DIRECT_COMPOSITE");
+    const QByteArray dc = qgetenv("PACIFIC_DIRECT_COMPOSITE");
     if (!dc.isEmpty() && dc != "0")
         return;
 
     QString mainQml;
-    if (!qEnvironmentVariableIsEmpty("ATLANTIC_MINIMAL_UI")) {
+    if (!qEnvironmentVariableIsEmpty("PACIFIC_MINIMAL_UI")) {
         mainQml = QStringLiteral("browser-minimal.qml");
     } else {
         mainQml = QStringLiteral("browser.qml");

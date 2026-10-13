@@ -20,7 +20,7 @@ Page {
 
     function returnToBrowser() {
         var browser = pageStack.find(function(candidate) {
-            return candidate.objectName === "atlanticBrowserPage"
+            return candidate.objectName === "pacificBrowserPage"
         })
         if (browser)
             pageStack.pop(browser)
@@ -39,9 +39,9 @@ Page {
     function verdictLabel(verdict) {
         switch (verdict) {
         //% "Partly works"
-        case "partial": return qsTrId("atlantic-la-extension_verdict_partial")
+        case "partial": return qsTrId("pacific-la-extension_verdict_partial")
         //% "Will not work"
-        case "broken": return qsTrId("atlantic-la-extension_verdict_broken")
+        case "broken": return qsTrId("pacific-la-extension_verdict_broken")
         default: return ""
         }
     }
@@ -51,10 +51,10 @@ Page {
         if (!reasons || reasons.length === 0)
             return ""
         if (verdict === "broken")
-            //% "Needs %1, which Atlantic does not provide."
-            return qsTrId("atlantic-la-extension_needs").arg(reasons.join(", "))
-        //% "Some features need %1, which Atlantic does not provide."
-        return qsTrId("atlantic-la-extension_some_features_need").arg(reasons.join(", "))
+            //% "Needs %1, which Pacific does not provide."
+            return qsTrId("pacific-la-extension_needs").arg(reasons.join(", "))
+        //% "Some features need %1, which Pacific does not provide."
+        return qsTrId("pacific-la-extension_some_features_need").arg(reasons.join(", "))
     }
 
     SilicaBackground.Background {
@@ -74,7 +74,7 @@ Page {
 
             MenuItem {
                 //% "Install from a link"
-                text: qsTrId("atlantic-me-extension_install_link")
+                text: qsTrId("pacific-me-extension_install_link")
                 onClicked: pageStack.animatorPush(linkDialog)
             }
         }
@@ -84,7 +84,7 @@ Page {
 
             PageHeader {
                 //% "Get extensions"
-                title: qsTrId("atlantic-he-extension_store")
+                title: qsTrId("pacific-he-extension_store")
             }
 
             SearchField {
@@ -92,7 +92,7 @@ Page {
 
                 width: parent.width
                 //% "Search addons.mozilla.org"
-                placeholderText: qsTrId("atlantic-la-extension_search")
+                placeholderText: qsTrId("pacific-la-extension_search")
                 inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
 
                 Component.onCompleted: page.searchFieldItem = searchField
@@ -136,15 +136,15 @@ Page {
                 MenuItem {
                     text: model.verdict === "broken"
                           //% "Install anyway"
-                          ? qsTrId("atlantic-me-extension_install_anyway")
+                          ? qsTrId("pacific-me-extension_install_anyway")
                           //% "Install"
-                          : qsTrId("atlantic-me-extension_install_one")
+                          : qsTrId("pacific-me-extension_install_one")
                     enabled: !model.installed && !model.installing
                     onClicked: WebExtensionStore.install(model.slug)
                 }
                 MenuItem {
                     //% "Open its page"
-                    text: qsTrId("atlantic-me-extension_open_page")
+                    text: qsTrId("pacific-me-extension_open_page")
                     visible: model.homepage !== ""
                     onClicked: {
                         WebExtensionStore.cancel()
@@ -221,7 +221,7 @@ Page {
                                 color: Theme.secondaryColor
                                 visible: model.installed
                                 //% "· installed"
-                                text: qsTrId("atlantic-la-extension_installed")
+                                text: qsTrId("pacific-la-extension_installed")
                             }
                         }
                     }
@@ -266,7 +266,7 @@ Page {
                     // then gets to decide.
                     remorseAction(
                         //% "Installing %1 — it will not work here"
-                        qsTrId("atlantic-la-extension_installing_broken").arg(model.name),
+                        qsTrId("pacific-la-extension_installing_broken").arg(model.name),
                         function() { WebExtensionStore.install(model.slug) })
                 } else {
                     WebExtensionStore.install(model.slug)
@@ -280,11 +280,11 @@ Page {
             // to do; afterwards it reports the empty result instead.
             text: WebExtensionStore.searching
                   //% "Nothing found"
-                  ? qsTrId("atlantic-la-extension_store_no_results")
+                  ? qsTrId("pacific-la-extension_store_no_results")
                   //% "Find extensions"
-                  : qsTrId("atlantic-la-extension_store_empty")
+                  : qsTrId("pacific-la-extension_store_empty")
             //% "Search addons.mozilla.org to find extensions"
-            hintText: qsTrId("atlantic-la-extension_store_empty_hint")
+            hintText: qsTrId("pacific-la-extension_store_empty_hint")
         }
 
         VerticalScrollDecorator {}
@@ -307,15 +307,15 @@ Page {
 
                 DialogHeader {
                     //% "Install"
-                    acceptText: qsTrId("atlantic-he-extension_install_accept")
+                    acceptText: qsTrId("pacific-he-extension_install_accept")
                 }
 
                 TextField {
                     width: parent.width
                     //% "AMO address, add-on name, or a .xpi link"
-                    placeholderText: qsTrId("atlantic-la-extension_link_placeholder")
+                    placeholderText: qsTrId("pacific-la-extension_link_placeholder")
                     //% "Install from a link"
-                    label: qsTrId("atlantic-la-extension_link_label")
+                    label: qsTrId("pacific-la-extension_link_label")
                     inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
                     onTextChanged: link = text
                     EnterKey.iconSource: "image://theme/icon-m-enter-accept"
@@ -329,7 +329,7 @@ Page {
                     font.pixelSize: Theme.fontSizeExtraSmall
                     color: Theme.secondaryColor
                     //% "A direct .xpi link is downloaded as given and cannot be checked against a publisher checksum."
-                    text: qsTrId("atlantic-la-extension_link_warning")
+                    text: qsTrId("pacific-la-extension_link_warning")
                 }
             }
 
@@ -349,14 +349,14 @@ Page {
 
         onInstalled: {
             //% "Installed %1"
-            storeNotice.text = qsTrId("atlantic-la-extension_installed_notice").arg(name)
+            storeNotice.text = qsTrId("pacific-la-extension_installed_notice").arg(name)
             storeNotice.show()
         }
         onInstallFailed: {
             //% "Could not install %1"
             storeNotice.text = error !== ""
                 ? error
-                : qsTrId("atlantic-la-extension_install_failed_notice").arg(slug)
+                : qsTrId("pacific-la-extension_install_failed_notice").arg(slug)
             storeNotice.show()
         }
     }

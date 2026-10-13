@@ -218,9 +218,9 @@ private:
     qreal m_bottomInset = 0.0;              // reserved bottom URL-bar strip (dip); see setContentBottomInset
     QList<int> m_mruTabs;                   // most-recently-used first; front = active
     QTimer *m_memoryPressureTimer = nullptr;
-    bool m_tabDiscardEnabled = true;        // ATLANTIC_TAB_DISCARD (default on)
-    int m_pressureKeepMin = 2;              // ATLANTIC_TAB_DISCARD_KEEP_MIN
-    int m_memFreeThresholdMb = 400;         // ATLANTIC_TAB_DISCARD_MEMFREE_MB
+    bool m_tabDiscardEnabled = true;        // PACIFIC_TAB_DISCARD (default on)
+    int m_pressureKeepMin = 2;              // PACIFIC_TAB_DISCARD_KEEP_MIN
+    int m_memFreeThresholdMb = 400;         // PACIFIC_TAB_DISCARD_MEMFREE_MB
     bool m_underMemoryPressure = false;
     QPointer<QQmlComponent> m_webPageComponent;
     QPointer<QObject> m_chromeWindow;

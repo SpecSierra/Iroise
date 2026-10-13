@@ -26,7 +26,7 @@ Page {
     id: browserPage
 
     // Lets deeper settings pages pop straight back here (see ExtensionsPage).
-    objectName: "atlanticBrowserPage"
+    objectName: "pacificBrowserPage"
 
     readonly property bool active: status == PageStatus.Active
     property bool tabPageActive
@@ -930,7 +930,7 @@ Page {
                 openFilePicker()
             } else {
                 _filePickerOpen = false
-                if (pageStack.currentPage && pageStack.currentPage.objectName === "atlanticFilePickerPage") {
+                if (pageStack.currentPage && pageStack.currentPage.objectName === "pacificFilePickerPage") {
                     pageStack.pop(pageStack.currentPage, PageStackAction.Immediate)
                 }
             }
@@ -968,7 +968,7 @@ Page {
     Nemo.Notification {
         id: extensionNotification
 
-        appName: "Atlantic"
+        appName: "Pacific"
         isTransient: false
     }
 

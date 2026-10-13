@@ -22,17 +22,17 @@ Page {
 
     readonly property var uaProfiles: [
         //% "Chrome on Android"
-        { id: "chrome-android", label: qsTrId("atlantic-me-ua_chrome_android") },
+        { id: "chrome-android", label: qsTrId("pacific-me-ua_chrome_android") },
         //% "Safari on iPhone"
-        { id: "safari-iphone", label: qsTrId("atlantic-me-ua_safari_iphone") },
+        { id: "safari-iphone", label: qsTrId("pacific-me-ua_safari_iphone") },
         //% "Firefox on Android"
-        { id: "firefox-android", label: qsTrId("atlantic-me-ua_firefox_android") },
+        { id: "firefox-android", label: qsTrId("pacific-me-ua_firefox_android") },
         //% "Chrome on Windows"
-        { id: "chrome-desktop", label: qsTrId("atlantic-me-ua_chrome_desktop") },
+        { id: "chrome-desktop", label: qsTrId("pacific-me-ua_chrome_desktop") },
         //% "Safari on Mac"
-        { id: "safari-mac", label: qsTrId("atlantic-me-ua_safari_mac") },
+        { id: "safari-mac", label: qsTrId("pacific-me-ua_safari_mac") },
         //% "Firefox on Linux"
-        { id: "firefox-desktop", label: qsTrId("atlantic-me-ua_firefox_desktop") }
+        { id: "firefox-desktop", label: qsTrId("pacific-me-ua_firefox_desktop") }
     ]
 
     function profileLabel(id) {
@@ -106,15 +106,15 @@ Page {
 
         header: PageHeader {
             //% "Site user agents"
-            title: qsTrId("atlantic-he-site_user_agents")
+            title: qsTrId("pacific-he-site_user_agents")
             //% "Make selected websites see a different browser"
-            description: qsTrId("atlantic-he-site_user_agents_description")
+            description: qsTrId("pacific-he-site_user_agents_description")
         }
 
         PullDownMenu {
             MenuItem {
                 //% "Add website"
-                text: qsTrId("atlantic-me-add_website")
+                text: qsTrId("pacific-me-add_website")
                 onClicked: {
                     var dialog = pageStack.push(addSiteDialog)
                     dialog.accepted.connect(function() {
@@ -129,9 +129,9 @@ Page {
         ViewPlaceholder {
             enabled: siteModel.count === 0
             //% "No websites added"
-            text: qsTrId("atlantic-la-no_websites_added")
-            //% "Pull down to make a website see a different browser, e.g. if it refuses to work in Atlantic"
-            hintText: qsTrId("atlantic-la-no_websites_added_hint")
+            text: qsTrId("pacific-la-no_websites_added")
+            //% "Pull down to make a website see a different browser, e.g. if it refuses to work in Pacific"
+            hintText: qsTrId("pacific-la-no_websites_added_hint")
         }
 
         delegate: ListItem {
@@ -179,7 +179,7 @@ Page {
                 }
                 MenuItem {
                     //% "Remove"
-                    text: qsTrId("atlantic-me-remove_website")
+                    text: qsTrId("pacific-me-remove_website")
                     onClicked: siteItem.remove()
                 }
             }
@@ -209,7 +209,7 @@ Page {
 
                 DialogHeader {
                     //% "Add"
-                    acceptText: qsTrId("atlantic-he-add_site_accept")
+                    acceptText: qsTrId("pacific-he-add_site_accept")
                 }
 
                 TextField {
@@ -217,9 +217,9 @@ Page {
                     width: parent.width
                     focus: true
                     //% "Website"
-                    label: qsTrId("atlantic-la-website")
+                    label: qsTrId("pacific-la-website")
                     //% "e.g. maps.google.com"
-                    placeholderText: qsTrId("atlantic-ph-website_example")
+                    placeholderText: qsTrId("pacific-ph-website_example")
                     inputMethodHints: Qt.ImhNoPredictiveText | Qt.ImhNoAutoUppercase | Qt.ImhUrlCharactersOnly
                     EnterKey.iconSource: "image://theme/icon-m-enter-accept"
                     EnterKey.onClicked: dialog.accept()
@@ -229,7 +229,7 @@ Page {
                     id: profileCombo
                     width: parent.width
                     //% "Appear as"
-                    label: qsTrId("atlantic-la-appear_as")
+                    label: qsTrId("pacific-la-appear_as")
 
                     menu: ContextMenu {
                         Repeater {

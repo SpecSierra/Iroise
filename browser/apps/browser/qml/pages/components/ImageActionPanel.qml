@@ -191,7 +191,7 @@ Item {
                     truncationMode: TruncationMode.Fade
                     color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
                     //% "Save image"
-                    text: qsTrId("atlantic-bt-save_image")
+                    text: qsTrId("pacific-bt-save_image")
                 }
 
                 onClicked: {

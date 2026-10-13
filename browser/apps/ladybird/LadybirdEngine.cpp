@@ -93,6 +93,17 @@ void LadybirdEngine::start()
         environment.insert(QStringLiteral("XDG_CACHE_HOME"), engineHome + QStringLiteral("/.cache"));
         environment.insert(QStringLiteral("XDG_CONFIG_HOME"), engineHome + QStringLiteral("/.config"));
         environment.insert(QStringLiteral("XDG_DATA_HOME"), engineHome + QStringLiteral("/.local/share"));
+    } else {
+        // The engine keeps its profile, cache and settings in "Ladybird" directories of its own. Put those inside
+        // the browser's directories: they are the ones the sandbox lets us write to, and removing the browser's
+        // data then removes the engine's with it.
+        QString data = BrowserPaths::dataLocation() + QStringLiteral("/engine");
+        QString cache = BrowserPaths::cacheLocation() + QStringLiteral("/engine");
+        QDir().mkpath(data + QStringLiteral("/config"));
+        QDir().mkpath(cache);
+        environment.insert(QStringLiteral("XDG_DATA_HOME"), data);
+        environment.insert(QStringLiteral("XDG_CONFIG_HOME"), data + QStringLiteral("/config"));
+        environment.insert(QStringLiteral("XDG_CACHE_HOME"), cache);
     }
     // The engine saves downloads into this folder without asking, and gives up if it is not there.
     QString downloads = engineHome.isEmpty() ? BrowserPaths::downloadLocation() : engineHome + QStringLiteral("/Downloads");

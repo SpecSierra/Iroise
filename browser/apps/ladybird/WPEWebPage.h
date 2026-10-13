@@ -322,7 +322,7 @@ public:
     void loadCurrentUrlAgain();
     // Warm the connection for a navigation the UI expects (link under the
     // finger, URL-bar completion). Fetches nothing; rate-limited per origin;
-    // inert unless ATLANTIC_PRECONNECT is set.
+    // inert unless PACIFIC_PRECONNECT is set.
     Q_INVOKABLE void preconnect(const QString &url);
     Q_INVOKABLE void grabToFile(const QSize &size);
     Q_INVOKABLE void grabThumbnail(const QSize &size);
@@ -333,7 +333,7 @@ public:
     // — so the viewport shows one page and the URL bar names another. Measured
     // on edition.cnn.com (2026-08-19): back_forward navigation, DCL 14 988 ms,
     // load 23 774 ms, 188 resources re-run, because bfcache capacity is 0 under
-    // ATLANTIC_CACHE_MODEL=viewer. These overrides capture the page being left
+    // PACIFIC_CACHE_MODEL=viewer. These overrides capture the page being left
     // and hand the UI the destination entry's last-seen pixels to cover the gap.
     //
     // Deliberately NOT virtual in the base: WPEWebContainer calls through a

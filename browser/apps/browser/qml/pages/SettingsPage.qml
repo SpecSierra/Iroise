@@ -83,7 +83,7 @@ Page {
             SectionHeader {
                 //: Section Header for the settings that are asked about most
                 //% "General"
-                text: qsTrId("atlantic-sh-general")
+                text: qsTrId("pacific-sh-general")
             }
 
             BrowserComboBox {
@@ -239,7 +239,7 @@ Page {
                 //% "Passwords"
                 text: qsTrId("settings_browser-la-passwords")
                 //% "Saved logins, kept in an encrypted vault"
-                description: qsTrId("atlantic-la-passwords_description")
+                description: qsTrId("pacific-la-passwords_description")
                 onClicked: pageStack.push("LoginsPage.qml")
             }
 
@@ -249,9 +249,9 @@ Page {
                 iconSource: Qt.resolvedUrl("../icons/icon-m-extension.svg")
                 //: The label for the button for managing installed browser extensions
                 //% "Extensions"
-                text: qsTrId("atlantic-la-extensions")
+                text: qsTrId("pacific-la-extensions")
                 //% "Add-ons from addons.mozilla.org"
-                description: qsTrId("atlantic-la-extensions_description")
+                description: qsTrId("pacific-la-extensions_description")
                 onClicked: pageStack.push("ExtensionsPage.qml")
             }
 
@@ -336,7 +336,7 @@ Page {
             SectionHeader {
                 //: Section Header for privacy and security settings
                 //% "Privacy & security"
-                text: qsTrId("atlantic-sh-privacy_security")
+                text: qsTrId("pacific-sh-privacy_security")
             }
 
             TextSwitch {
@@ -368,9 +368,9 @@ Page {
 
             TextSwitch {
                 //% "Adblock"
-                text: qsTrId("atlantic-la-ad_block")
+                text: qsTrId("pacific-la-ad_block")
                 //% "Block advertisements and trackers"
-                description: qsTrId("atlantic-la-ad_block_description")
+                description: qsTrId("pacific-la-ad_block_description")
                 checked: adBlockConf.value
                 automaticCheck: false
                 leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
@@ -388,9 +388,9 @@ Page {
 
             TextSwitch {
                 //% "Block cookie banners"
-                text: qsTrId("atlantic-la-cookie_banner_blocking")
+                text: qsTrId("pacific-la-cookie_banner_blocking")
                 //% "Automatically refuse cookie consent pop-ups"
-                description: qsTrId("atlantic-la-cookie_banner_blocking_description")
+                description: qsTrId("pacific-la-cookie_banner_blocking_description")
                 checked: cookieBannerConf.value
                 automaticCheck: false
                 leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
@@ -440,7 +440,7 @@ Page {
             SectionHeader {
                 //: Section Header for settings most people never need to open
                 //% "Advanced"
-                text: qsTrId("atlantic-sh-advanced")
+                text: qsTrId("pacific-sh-advanced")
             }
 
             SettingsLinkItem {
@@ -449,16 +449,16 @@ Page {
                 //% "Clear browsing data"
                 text: qsTrId("settings_browser-la-clear-browsing-data")
                 //% "History, cookies, caches and site data"
-                description: qsTrId("atlantic-la-clear_browsing_data_description")
+                description: qsTrId("pacific-la-clear_browsing_data_description")
                 onClicked: pageStack.push("PrivacySettingsPage.qml", { previousPage: page })
             }
 
             SettingsLinkItem {
                 iconSource: "image://theme/icon-m-wizard"
                 //% "Change user agents"
-                text: qsTrId("atlantic-he-site_user_agents")
+                text: qsTrId("pacific-he-site_user_agents")
                 //% "Make selected websites see a different browser"
-                description: qsTrId("atlantic-he-site_user_agents_description")
+                description: qsTrId("pacific-he-site_user_agents_description")
                 onClicked: pageStack.push("SiteUaSettingsPage.qml")
             }
 

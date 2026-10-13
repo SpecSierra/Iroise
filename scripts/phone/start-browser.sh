@@ -12,7 +12,7 @@ export XDG_CACHE_HOME=/tmp/ladybird/browser-home/cache
 export PACIFIC_ENGINE=/tmp/ladybird/bin/Ladybird
 export PACIFIC_ENGINE_HOME=/tmp/ladybird/home
 export PACIFIC_DEPLOYMENT_PATH=/tmp/ladybird/browser/share/
-export PACIFIC_RUNTIME_LIBRARY=/tmp/ladybird/browser/lib/libsailfishbrowser.so.1
+export PACIFIC_RUNTIME_LIBRARY=/tmp/ladybird/browser/lib/libpacificbrowser.so.1
 export PACIFIC_TRANSLATION_PATH=/tmp/ladybird/browser/translations/
 export LADYBIRD_SFOS_LOG_FPS=1
 # Without this, Qt sends warnings (QML errors included) to the journal instead of our log.

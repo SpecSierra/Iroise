@@ -17,7 +17,7 @@ Rectangle {
                                            ? webView.title
                                            : (webView.url && webView.url.length > 0
                                               ? webView.url
-                                              : "Atlantic")
+                                              : "Pacific")
 
     function normalizedInput(text) {
         return UrlUtils.normalize(text, SearchEngineModel.searchUrlTemplate(searchEngineConf.value))

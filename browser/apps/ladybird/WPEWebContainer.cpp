@@ -56,14 +56,14 @@ WPEWebContainer::WPEWebContainer(QQuickItem *parent)
     // up to ~1GB pinned GPU tiles, measured on franceinfo/revolut). Keep only
     // the active tab + a small MRU set live; discard the rest (their tab-model
     // entry survives, so activatePage() recreates + reloads them on return).
-    if (qEnvironmentVariableIsSet("ATLANTIC_TAB_DISCARD"))
-        m_tabDiscardEnabled = qgetenv("ATLANTIC_TAB_DISCARD").trimmed() != "0";
-    if (qEnvironmentVariableIsSet("ATLANTIC_MAX_LIVE_TABS"))
-        m_maxLiveTabCount = qMax(1, qEnvironmentVariableIntValue("ATLANTIC_MAX_LIVE_TABS"));
-    if (qEnvironmentVariableIsSet("ATLANTIC_TAB_DISCARD_KEEP_MIN"))
-        m_pressureKeepMin = qMax(1, qEnvironmentVariableIntValue("ATLANTIC_TAB_DISCARD_KEEP_MIN"));
-    if (qEnvironmentVariableIsSet("ATLANTIC_TAB_DISCARD_MEMFREE_MB"))
-        m_memFreeThresholdMb = qMax(0, qEnvironmentVariableIntValue("ATLANTIC_TAB_DISCARD_MEMFREE_MB"));
+    if (qEnvironmentVariableIsSet("PACIFIC_TAB_DISCARD"))
+        m_tabDiscardEnabled = qgetenv("PACIFIC_TAB_DISCARD").trimmed() != "0";
+    if (qEnvironmentVariableIsSet("PACIFIC_MAX_LIVE_TABS"))
+        m_maxLiveTabCount = qMax(1, qEnvironmentVariableIntValue("PACIFIC_MAX_LIVE_TABS"));
+    if (qEnvironmentVariableIsSet("PACIFIC_TAB_DISCARD_KEEP_MIN"))
+        m_pressureKeepMin = qMax(1, qEnvironmentVariableIntValue("PACIFIC_TAB_DISCARD_KEEP_MIN"));
+    if (qEnvironmentVariableIsSet("PACIFIC_TAB_DISCARD_MEMFREE_MB"))
+        m_memFreeThresholdMb = qMax(0, qEnvironmentVariableIntValue("PACIFIC_TAB_DISCARD_MEMFREE_MB"));
     qInfo() << "[WPE-DISCARD] enabled=" << m_tabDiscardEnabled
             << "maxLive=" << m_maxLiveTabCount
             << "keepMin=" << m_pressureKeepMin

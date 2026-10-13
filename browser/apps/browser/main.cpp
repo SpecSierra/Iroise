@@ -64,17 +64,17 @@ static void configureBrowserApplication(QGuiApplication *app, QQuickView *view)
 
 static bool loadBrowserRuntime(QLibrary *runtimeLibrary, QQuickView *view, QGuiApplication *app)
 {
-    if (view->property("atlanticBrowserRuntimeLoaded").toBool())
+    if (view->property("pacificBrowserRuntimeLoaded").toBool())
         return true;
 
-    runtimeLibrary->setFileName(QString::fromLocal8Bit(environmentOr("PACIFIC_RUNTIME_LIBRARY", "/usr/lib64/libsailfishbrowser.so.1")));
+    runtimeLibrary->setFileName(QString::fromLocal8Bit(environmentOr("PACIFIC_RUNTIME_LIBRARY", "/usr/lib64/libpacificbrowser.so.1")));
     if (!runtimeLibrary->load()) {
         fprintf(stderr, "[PACIFIC] Failed to load browser runtime %s: %s\n",
                 qPrintable(runtimeLibrary->fileName()), qPrintable(runtimeLibrary->errorString()));
         return false;
     }
 
-    auto startRuntime = reinterpret_cast<BrowserRuntimeStartFn>(runtimeLibrary->resolve("atlanticBrowserRuntimeStart"));
+    auto startRuntime = reinterpret_cast<BrowserRuntimeStartFn>(runtimeLibrary->resolve("pacificBrowserRuntimeStart"));
     if (!startRuntime) {
         fprintf(stderr, "[PACIFIC] Failed to resolve the runtime entry point in %s: %s\n",
                 qPrintable(runtimeLibrary->fileName()), qPrintable(runtimeLibrary->errorString()));

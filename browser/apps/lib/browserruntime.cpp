@@ -86,7 +86,7 @@ void requestActivePageRenderRecovery(QQuickView *view, const char *reason)
     if (resumedPageCount > 0)
         view->update();
 
-    fprintf(stderr, "[ATLANTIC-RUNTIME] Render recovery (%s): resumed %d active page(s) out of %d\n",
+    fprintf(stderr, "[PACIFIC-RUNTIME] Render recovery (%s): resumed %d active page(s) out of %d\n",
             reason ? reason : "unknown", resumedPageCount, pages.size());
 }
 
@@ -114,7 +114,7 @@ void installRenderRecoveryHooks(QQuickView *view, QGuiApplication *app)
             return;
         }
 
-        fprintf(stderr, "[ATLANTIC-RUNTIME] Application state transition: %s -> %s\n",
+        fprintf(stderr, "[PACIFIC-RUNTIME] Application state transition: %s -> %s\n",
                 applicationStateName(oldState), applicationStateName(newState));
         requestActivePageRenderRecovery(view, "app-activated");
     },
@@ -123,7 +123,7 @@ void installRenderRecoveryHooks(QQuickView *view, QGuiApplication *app)
     QObject::connect(view, &QQuickWindow::sceneGraphError,
                      view,
                      [view](QQuickWindow::SceneGraphError error, const QString &message) {
-        fprintf(stderr, "[ATLANTIC-RUNTIME] Scene graph error (%d): %s\n",
+        fprintf(stderr, "[PACIFIC-RUNTIME] Scene graph error (%d): %s\n",
                 static_cast<int>(error), message.toUtf8().constData());
         requestActivePageRenderRecovery(view, "scenegraph-error");
     },
@@ -132,7 +132,7 @@ void installRenderRecoveryHooks(QQuickView *view, QGuiApplication *app)
     QObject::connect(view, &QQuickWindow::sceneGraphInvalidated,
                      view,
                      [view, app]() {
-        fprintf(stderr, "[ATLANTIC-RUNTIME] Scene graph invalidated\n");
+        fprintf(stderr, "[PACIFIC-RUNTIME] Scene graph invalidated\n");
         // Minimizing tears down the scene graph while applicationState still
         // reads Active (the state change lands later), so the app-state check
         // alone is not enough. An unexposed window means this invalidation is
@@ -199,7 +199,7 @@ static void registerBrowserQmlTypes()
     registered = true;
 }
 
-extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
+extern "C" Q_DECL_EXPORT bool pacificBrowserRuntimeStart(QQuickView *view,
                                                           QGuiApplication *app,
                                                           const char *dataPath)
 {
@@ -207,7 +207,7 @@ extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
         return false;
     }
 
-    if (view->property("atlanticBrowserRuntimeLoaded").toBool()) {
+    if (view->property("pacificBrowserRuntimeLoaded").toBool()) {
         return true;
     }
 
@@ -216,12 +216,12 @@ extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
 
     registerBrowserQmlTypes();
 
-    fprintf(stderr, "[ATLANTIC-RUNTIME] Starting browser runtime\n");
+    fprintf(stderr, "[PACIFIC-RUNTIME] Starting browser runtime\n");
     BrowserService *service = new BrowserService(app);
     if (service->registered()) {
-        fprintf(stderr, "[ATLANTIC-RUNTIME] BrowserService registered\n");
+        fprintf(stderr, "[PACIFIC-RUNTIME] BrowserService registered\n");
     } else {
-        fprintf(stderr, "[ATLANTIC-RUNTIME] BrowserService registration failed; transfer callbacks unavailable\n");
+        fprintf(stderr, "[PACIFIC-RUNTIME] BrowserService registration failed; transfer callbacks unavailable\n");
     }
 
     Browser *browser = new Browser(view, QString::fromLocal8Bit(dataPath ? dataPath : ""), app);
@@ -229,7 +229,7 @@ extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
     QDBusConnection sessionBus = QDBusConnection::sessionBus();
 
     // Object BEFORE name, like BrowserService does for "/" — never the reverse.
-    // On a cold D-Bus activation ("open link in Atlantic" with no instance
+    // On a cold D-Bus activation ("open link in Pacific" with no instance
     // running) dbus-daemon holds the caller's openUrl until this name appears
     // and delivers it the instant it does. Registering the name first opened a
     // window where the name was owned but /ui did not exist yet, so the call
@@ -240,13 +240,13 @@ extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
     BrowserUIService *uiService = new BrowserUIService(app);
     const bool uiServiceNameRegistered = sessionBus.registerService(kBrowserUiServiceName);
     if (!uiServiceNameRegistered) {
-        fprintf(stderr, "[ATLANTIC-RUNTIME] BrowserUIService name registration failed for %s\n",
+        fprintf(stderr, "[PACIFIC-RUNTIME] BrowserUIService name registration failed for %s\n",
                 qPrintable(kBrowserUiServiceName));
     }
     if (uiServiceNameRegistered && uiService->registered()) {
-        fprintf(stderr, "[ATLANTIC-RUNTIME] BrowserUIService registered\n");
+        fprintf(stderr, "[PACIFIC-RUNTIME] BrowserUIService registered\n");
     } else if (!uiService->registered()) {
-        fprintf(stderr, "[ATLANTIC-RUNTIME] BrowserUIService object registration failed\n");
+        fprintf(stderr, "[PACIFIC-RUNTIME] BrowserUIService object registration failed\n");
     }
     installRenderRecoveryHooks(view, app);
 
@@ -288,7 +288,7 @@ extern "C" Q_DECL_EXPORT bool atlanticBrowserRuntimeStart(QQuickView *view,
         grabTimer->start(1000);
     }
 
-    view->setProperty("atlanticBrowserRuntimeLoaded", true);
+    view->setProperty("pacificBrowserRuntimeLoaded", true);
     view->raise();
     view->requestActivate();
     return true;

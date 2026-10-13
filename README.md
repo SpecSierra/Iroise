@@ -21,6 +21,8 @@ patches. Developed and tested on the Jolla Phone 2 (MT6858, Mali-G610).
 | `scripts/build-browser.sh` | builds `browser/` against the SFOS SDK target |
 | `scripts/bundle.sh`, `scripts/deploy.sh` | relocatable bundle, copied to `/tmp/ladybird` on the phone |
 | `scripts/phone/` | start/stop scripts that run on the phone |
+| `scripts/package-rpm.sh` | the `pacific-browser` RPM: engine, interface, launcher entry, Sailjail profile |
+| `browser/data/icon-launcher-pacific.svg` | the launcher icon; the PNGs are rendered from it |
 | `scripts/embed-harness.py` | talks the embedding protocol to an engine on the build host: load a page, tap, print what comes back |
 
 ## Build
@@ -39,6 +41,29 @@ libpulse-dev gperf bison flex`, plus rustup (the toolchain in
 The build is native, not cross: the SFOS 5.x glibc (2.41) is newer than the
 Ubuntu 24.04 host's (2.39), so host-built binaries load on the device as long as
 the vcpkg-built libraries and gcc 14's `libstdc++` travel with them.
+
+## Package
+
+```sh
+scripts/build.sh && scripts/bundle.sh && scripts/build-browser.sh
+scripts/package-rpm.sh 0.1.0 1        # dist/rpm/pacific-browser-0.1.0-1.aarch64.rpm (needs fpm, cairosvg)
+```
+
+One RPM. The engine bundle goes to `/usr/libexec/pacific` as it is (its binaries find
+their libraries by `$ORIGIN`), the interface to `/usr/bin/pacific-browser`,
+`/usr/lib64/libpacificbrowser.so.1` and `/usr/share/pacific-browser`. The package is
+not signed: install it with `devel-su rpm -U`.
+
+The launcher entry and both D-Bus service files start
+`sailjail -p pacific-browser.desktop /usr/bin/pacific-browser`, so the browser and
+every engine process run inside Sailjail (firejail); the engine's own seccomp
+filters nest inside that. Sailjail only starts ELF binaries, so there is no wrapper
+script, and the per-application profile in `/etc/sailjail/permissions` carries what
+the defaults would hide: the libhybris GPU paths, `/dev/dma_heap`, the interface's
+QML under `/usr/share`, the ambience wallpaper. The engine's profile, cache and
+settings live in an `engine` directory inside the browser's own
+`org.pacific/pacificbrowser` data and cache directories, so the sandbox needs no
+further exceptions and removing the browser's data removes the engine's.
 
 ## GPU painting (Vulkan through libhybris)
 

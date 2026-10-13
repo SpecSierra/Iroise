@@ -208,7 +208,7 @@ WebContainer {
     // switches to the destination URL at once — so the viewport shows one page
     // and the URL bar names another. On edition.cnn.com that gap is the whole
     // load (DCL ~15 s, load ~24 s, measured 2026-08-19) because bfcache is
-    // capacity 0 under ATLANTIC_CACHE_MODEL=viewer.
+    // capacity 0 under PACIFIC_CACHE_MODEL=viewer.
     //
     // Cover the gap with the destination entry's own last-seen pixels. This
     // buys no load time; it stops the browser showing a page it has left.

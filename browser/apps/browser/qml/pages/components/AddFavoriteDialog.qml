@@ -52,7 +52,7 @@ Dialog {
 
         DialogHeader {
             //% "Add"
-            acceptText: qsTrId("atlantic-he-add_favorite_accept")
+            acceptText: qsTrId("pacific-he-add_favorite_accept")
         }
 
         TextField {
@@ -72,7 +72,7 @@ Dialog {
 
             width: parent.width
             //% "Name (optional)"
-            label: qsTrId("atlantic-la-favorite_name")
+            label: qsTrId("pacific-la-favorite_name")
             placeholderText: label
             inputMethodHints: Qt.ImhNoPredictiveText
             EnterKey.iconSource: "image://theme/icon-m-enter-accept"

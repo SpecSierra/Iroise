@@ -12,7 +12,7 @@ import Sailfish.Pickers 1.0
 // clears browserPage._filePickerOpen when done.
 ContentPickerPage {
     id: filePicker
-    objectName: "atlanticFilePickerPage"
+    objectName: "pacificFilePickerPage"
 
     property var webView
     property var browserPage

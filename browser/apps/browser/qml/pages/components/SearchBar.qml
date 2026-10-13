@@ -49,7 +49,7 @@ Item {
                 id: textLabel
                 anchors.verticalCenter: parent.verticalCenter
                 //% "Find: \"%1\""
-                text: qsTrId("atlantic-la-find_term").arg(search)
+                text: qsTrId("pacific-la-find_term").arg(search)
                 color: touchArea.down ? Theme.highlightColor : Theme.primaryColor
             }
 

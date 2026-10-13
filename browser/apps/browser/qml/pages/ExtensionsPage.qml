@@ -19,7 +19,7 @@ Page {
     // dropping the user on the settings page they came from.
     function returnToBrowser() {
         var browser = pageStack.find(function(candidate) {
-            return candidate.objectName === "atlanticBrowserPage"
+            return candidate.objectName === "pacificBrowserPage"
         })
         if (browser)
             pageStack.pop(browser)
@@ -41,19 +41,19 @@ Page {
         PullDownMenu {
             MenuItem {
                 //% "Reload extensions"
-                text: qsTrId("atlantic-me-extensions_reload")
+                text: qsTrId("pacific-me-extensions_reload")
                 onClicked: WebExtensionManager.reload()
             }
             MenuItem {
                 //% "Install from file"
-                text: qsTrId("atlantic-me-extensions_install")
+                text: qsTrId("pacific-me-extensions_install")
                 onClicked: pageStack.animatorPush(filePickerPage)
             }
             // Declared last so it sits nearest the content edge: searching
             // addons.mozilla.org is the common way in, sideloading a file is not.
             MenuItem {
                 //% "Get extensions"
-                text: qsTrId("atlantic-me-extensions_browse")
+                text: qsTrId("pacific-me-extensions_browse")
                 onClicked: pageStack.push("ExtensionStorePage.qml")
             }
         }
@@ -63,7 +63,7 @@ Page {
 
             PageHeader {
                 //% "Extensions"
-                title: qsTrId("atlantic-he-extensions")
+                title: qsTrId("pacific-he-extensions")
             }
 
             Label {
@@ -74,7 +74,7 @@ Page {
                 color: Theme.secondaryColor
                 visible: listView.count === 0
                 //% "No extensions installed. Pull down to browse addons.mozilla.org, install a .zip or .xpi package, or copy an unpacked extension into %1."
-                text: qsTrId("atlantic-la-extensions_empty").arg(WebExtensionManager.extensionsDirectory)
+                text: qsTrId("pacific-la-extensions_empty").arg(WebExtensionManager.extensionsDirectory)
             }
 
             Label {
@@ -97,7 +97,7 @@ Page {
             menu: ContextMenu {
                 MenuItem {
                     //% "Open popup"
-                    text: qsTrId("atlantic-me-extension_open_popup")
+                    text: qsTrId("pacific-me-extension_open_popup")
                     visible: model.popupUrl !== ""
                     onClicked: {
                         WebExtensionManager.openActionPopup(model.extensionId)
@@ -106,7 +106,7 @@ Page {
                 }
                 MenuItem {
                     //% "Options"
-                    text: qsTrId("atlantic-me-extension_options")
+                    text: qsTrId("pacific-me-extension_options")
                     visible: model.optionsUrl !== ""
                     onClicked: {
                         WebExtensionManager.openOptionsPage(model.extensionId)
@@ -116,17 +116,17 @@ Page {
                 MenuItem {
                     text: model.enabled
                           //% "Disable"
-                          ? qsTrId("atlantic-me-extension_disable")
+                          ? qsTrId("pacific-me-extension_disable")
                           //% "Enable"
-                          : qsTrId("atlantic-me-extension_enable")
+                          : qsTrId("pacific-me-extension_enable")
                     onClicked: WebExtensionManager.setExtensionEnabled(model.extensionId, !model.enabled)
                 }
                 MenuItem {
                     //% "Remove"
-                    text: qsTrId("atlantic-me-extension_remove")
+                    text: qsTrId("pacific-me-extension_remove")
                     onClicked: item.remorseAction(
                         //% "Removing %1"
-                        qsTrId("atlantic-la-extension_removing").arg(model.name),
+                        qsTrId("pacific-la-extension_removing").arg(model.name),
                         function() { WebExtensionManager.uninstall(model.extensionId) })
                 }
             }
@@ -192,7 +192,7 @@ Page {
                             text: model.enabled
                                   ? model.version
                                     //% "%1 — disabled"
-                                  : qsTrId("atlantic-la-extension_disabled").arg(model.version)
+                                  : qsTrId("pacific-la-extension_disabled").arg(model.version)
                         }
                     }
                 }
@@ -229,7 +229,7 @@ Page {
                     font.pixelSize: Theme.fontSizeExtraSmall
                     color: item.highlighted ? Theme.secondaryHighlightColor : Theme.secondaryColor
                     //% "Site access: %1"
-                    text: qsTrId("atlantic-la-extension_site_access").arg(model.hostPermissions.join(", "))
+                    text: qsTrId("pacific-la-extension_site_access").arg(model.hostPermissions.join(", "))
                 }
             }
 
@@ -246,7 +246,7 @@ Page {
 
         FilePickerPage {
             //% "Select an extension package"
-            title: qsTrId("atlantic-ti-extension_pick")
+            title: qsTrId("pacific-ti-extension_pick")
             nameFilters: ["*.zip", "*.xpi", "*.crx"]
 
             onSelectedContentPropertiesChanged: {

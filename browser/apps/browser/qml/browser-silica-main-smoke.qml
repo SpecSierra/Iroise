@@ -50,7 +50,7 @@ ApplicationWindow {
 
                 Label {
                     anchors.horizontalCenter: parent.horizontalCenter
-                    text: "Atlantic"
+                    text: "Pacific"
                     color: Theme.primaryColor
                     font.pixelSize: Math.round(Theme.fontSizeExtraLarge * 1.2)
                     font.weight: Font.Light
