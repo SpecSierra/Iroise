@@ -71,6 +71,8 @@ public:
     static void clearPrivateBrowsingData() { }
 
     quint32 frameSerial() const { return static_cast<quint32>(m_frame.serial); }
+    // How much of the view the newest frame covers. Less than the view right after it grew.
+    QSize paintedSize() const { return m_frame.paintedSize; }
     bool sceneGraphComposited() const { return true; }
 
     // Runs a JavaScript expression in the page. The callback gets its value, as far as JSON can carry it; it is

@@ -39,6 +39,7 @@ const int kThumbnailIntervalMs = 4000;
 const int kThumbnailMaxWidth = 540;
 const int kSelectionPollMs = 200;
 const int kScrollPollMs = 120;
+const int kChromeHideGuardMs = 500;
 // How long after the finger lifts the page is still asked where it is: a fling takes about this long.
 const int kScrollPollsAfterTouch = 15;
 
@@ -136,9 +137,23 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     m_chromeGestureDebounceTimer.setSingleShot(true);
     m_chromeGestureDebounceTimer.setInterval(150);
     connect(&m_chromeGestureDebounceTimer, &QTimer::timeout, this, [this] {
-        if (m_chromeGestureArmed && m_chrome != m_pendingChrome)
-            setChrome(m_pendingChrome);
+        if (m_chromeGestureArmed && m_chrome != m_pendingChrome) {
+            if (m_pendingChrome) {
+                finishChromeHide(false);
+                setChrome(true);
+            } else {
+                beginChromeHide();
+            }
+        }
         m_chromeGestureArmed = false;
+    });
+    // NB: A page that is slow to paint must not keep the toolbar up for long; it then goes as it used to.
+    m_chromeHideGuard.setSingleShot(true);
+    m_chromeHideGuard.setInterval(kChromeHideGuardMs);
+    connect(&m_chromeHideGuard, &QTimer::timeout, this, [this] { finishChromeHide(true); });
+    connect(this, &WPEQtView::frameArrived, this, [this] {
+        if (m_chromeHidePending && paintedSize().height() >= static_cast<int>(height()) - 1)
+            finishChromeHide(true);
     });
     connect(this, &WPEQtView::scrollPositionChanged, this, [this](qreal scrollY, qreal scrollHeight, qreal innerHeight) {
         bool atTop = scrollY <= 0;
@@ -1353,4 +1368,29 @@ void WPEWebPage::pageColorChanged(int kind, const QString &color)
         m_backgroundColor = QColor(color);
     if (surroundColor() != before)
         emit surroundColorChanged();
+}
+
+void WPEWebPage::beginChromeHide()
+{
+    if (m_chromeHidePending || !m_chrome)
+        return;
+    m_chromeHidePending = true;
+    // The interface answers this by giving the page the strip under the toolbar, which resizes us before the
+    // signal returns.
+    emit chromeHidePendingChanged();
+    if (paintedSize().height() >= static_cast<int>(height()) - 1)
+        finishChromeHide(true);
+    else
+        m_chromeHideGuard.start();
+}
+
+void WPEWebPage::finishChromeHide(bool hide)
+{
+    if (!m_chromeHidePending)
+        return;
+    m_chromeHideGuard.stop();
+    if (hide)
+        setChrome(false);
+    m_chromeHidePending = false;
+    emit chromeHidePendingChanged();
 }

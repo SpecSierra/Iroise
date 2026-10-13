@@ -359,7 +359,8 @@ Page {
     // physical portrait screen, so after Silica rotates the page it is on a
     // different page edge per orientation. The whole band is reserved (both
     // sides of the notch) and filled with the page's own colour, so that the
-    // page looks as if it reached the edge of the screen.
+    // page looks as if it reached the edge of the screen. The same fill is
+    // what shows for a moment wherever the page has not painted yet.
     // WPEWebContainer sizes itself and its pages from its parent item, so
     // insetting this frame is all it takes. The chrome (Overlay) stays at the
     // page edges, so fullscreenHeight is still the page height.
@@ -369,7 +370,6 @@ Page {
     Rectangle {
         anchors.fill: parent
         color: webView.contentItem ? webView.contentItem.surroundColor : "black"
-        visible: browserPage._notchInset > 0
     }
 
     Item {
@@ -415,6 +415,9 @@ Page {
                 Math.max(
                     (viewportInsetConfig.value
                      && overlay.animator.state === "chromeVisible"
+                     // The toolbar is about to go: the page gets its strip now and
+                     // paints it while the toolbar still covers it.
+                     && !(webView.contentItem && webView.contentItem.chromeHidePending)
                      && !contentFullscreen)
                     ? overlay.toolBar.rowHeight : 0,
                     contentFullscreen ? 0 : virtualKeyboardObserver.contentInset)
