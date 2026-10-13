@@ -1,0 +1,19 @@
+[Desktop Entry]
+Type=Application
+Name=Web Browser
+X-MeeGo-Logical-Id=sailfish-browser-ap-name
+X-MeeGo-Translation-Catalog=sailfish-browser
+Icon=icon-launcher-browser
+Exec=/usr/bin/invoker --type=browser,silica-qt5 -A -- /usr/bin/sailfish-browser %U
+Comment=Sailfish UI application
+MimeType=text/html;application/xhtml+xml;application/xml;text/xml;x-scheme-handler/http;x-scheme-handler/https;
+X-Maemo-Service=org.pacific.browser.ui
+X-Maemo-Object-Path=/ui
+X-Maemo-Method=org.pacific.browser.ui.openUrl
+
+# NOTE: Sailjail confinement (the [X-Sailjail] permissions block, the
+# /etc/sailjail/applications profile and the pacific-browser custom
+# permission) is owned entirely by the engine packaging
+# (atlantic-engine/build-rpms-native.sh, which generates pacific-browser.desktop
+# + the sailjail profile/permission). This legacy desktop file is not the one
+# shipped, so any [X-Sailjail] block here would do nothing.

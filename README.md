@@ -15,10 +15,10 @@ patches. Developed and tested on the Jolla Phone 2 (MT6858, Mali-G610).
 | `upstream/` | Ladybird checkout (not tracked; commit pinned in `UPSTREAM_COMMIT`) |
 | `ui/SFOS/` | our Qt-free front end, linked into `upstream/UI/SFOS` by the build script |
 | `patches/` | patches applied to `upstream/` |
-| `ui/protocol/` | the socket protocol between the engine and the Silica app |
-| `silica/` | the Silica app (Qt 5.6) that embeds the engine: `LadybirdView` + a toolbar |
+| `ui/protocol/` | the socket protocol between the engine and the browser interface |
+| `browser/` | the browser interface (Qt 5.6, Silica): Atlantic's, with its WebKit layer replaced by `browser/apps/ladybird/` |
 | `scripts/build.sh` | native aarch64 build of the engine on the build host |
-| `scripts/build-silica.sh` | builds `silica/` against the SFOS SDK target |
+| `scripts/build-browser.sh` | builds `browser/` against the SFOS SDK target |
 | `scripts/bundle.sh`, `scripts/deploy.sh` | relocatable bundle, copied to `/tmp/ladybird` on the phone |
 | `scripts/phone/` | start/stop scripts that run on the phone |
 
@@ -64,20 +64,37 @@ package, which is in the phone's repos but not installed by default
   wl_shm copy path for comparison.
 - With the package installed no `HYBRIS_*` settings are needed.
 
-## Silica interface
+## Browser interface
 
-The browser interface is a normal Silica app. It cannot link the engine (Qt 5.6,
-C++11 against C++23) and a separate page surface cannot sit under a Silica window
-on lipstick (see Atlantic's `direct-composite-overlay` investigation), so:
+The interface is Atlantic's Silica browser (MPL-2.0, itself derived from
+sailfish-browser), copied into `browser/` with its identities renamed so it cannot
+collide with an Atlantic install (`org.pacific.browser`, profile
+`org.pacific/pacificbrowser`, dconf `/apps/pacific-browser`). Atlantic's migration
+out of the stock browser's profile is disabled: Pacific never touches another
+browser's files.
 
-- The app starts the engine with `LADYBIRD_SFOS_EMBED_SOCKET` set; the engine then
-  opens no window and connects back over a `SOCK_SEQPACKET` socket.
-- Each frame arrives as a dma-buf file descriptor. `LadybirdView` maps it and
-  uploads it to a texture in the Qt scene graph. The phone's EGL has no
+It cannot link the engine (Qt 5.6 and C++11 against C++23), and a separate page
+surface cannot sit under a Silica window on lipstick (see Atlantic's
+`direct-composite-overlay` investigation), so:
+
+- `LadybirdEngine` starts one engine process with `LADYBIRD_SFOS_EMBED_SOCKET` set;
+  the engine then opens no window and connects back over a `SOCK_SEQPACKET` socket.
+  One engine serves every tab; each tab is a numbered view (`ui/protocol/EmbedProtocol.h`).
+- Each frame arrives as a dma-buf file descriptor, is mapped, and is uploaded to a
+  texture in the Qt scene graph. The phone's EGL has no
   `EGL_EXT_image_dma_buf_import`, so this is a CPU upload per frame for now; the
   zero-copy route would be Android native buffers
   (`EGL_ANDROID_image_native_buffer` + `VK_ANDROID_external_memory_android_hardware_buffer`).
-- Touches, the size, and load/back/forward/reload go the other way.
+- Touches, the size, visibility, navigation, and on-screen keyboard text go the other way.
+- `WPEQtView`, `WPEWebPage` and `WPEWebContainer` keep the names and the surface the
+  interface was written against. `WPEWebPage` keeps every property and method the
+  QML uses; what the engine protocol cannot do yet is a property that never changes
+  or a method that does nothing. Not wired yet: text selection, find in page,
+  pickers and select menus, permissions, downloads, saved-login autofill, ad
+  blocking switches, extensions, clearing engine data, dark mode, scroll-driven
+  toolbar hiding, pinch zoom.
+
+On the phone: `sh /tmp/ladybird/start-browser.sh [url] [minutes]`.
 
 ## Milestones
 

@@ -73,10 +73,11 @@ void EmbeddedHost::send(lb_embed_header const& header, StringView text, int fd)
         warnln("ladybird-sfos: sending to the embedding app failed: {}", strerror(errno));
 }
 
-void EmbeddedHost::send_frame(Gfx::LinuxDmaBufHandle const& dmabuf, Gfx::IntSize painted_size)
+void EmbeddedHost::send_frame(u32 view, Gfx::LinuxDmaBufHandle const& dmabuf, Gfx::IntSize painted_size)
 {
     lb_embed_header header {};
     header.type = LB_EMBED_FRAME;
+    header.view = view;
     header.a = painted_size.width();
     header.b = painted_size.height();
     header.c = dmabuf.size.width();
@@ -85,20 +86,23 @@ void EmbeddedHost::send_frame(Gfx::LinuxDmaBufHandle const& dmabuf, Gfx::IntSize
     send(header, {}, dmabuf.file.fd());
 }
 
-void EmbeddedHost::send_text(lb_embed_message_type type, StringView text)
+void EmbeddedHost::send_text(u32 view, lb_embed_message_type type, StringView text)
 {
     lb_embed_header header {};
     header.type = type;
+    header.view = view;
     text = text.substring_view(0, min(text.length(), static_cast<size_t>(LB_EMBED_TEXT_MAX)));
     header.text_length = static_cast<u32>(text.length());
     send(header, text);
 }
 
-void EmbeddedHost::send_loading(bool is_loading)
+void EmbeddedHost::send_flags(u32 view, lb_embed_message_type type, bool first, bool second)
 {
     lb_embed_header header {};
-    header.type = LB_EMBED_LOADING;
-    header.a = is_loading ? 1 : 0;
+    header.type = type;
+    header.view = view;
+    header.a = first ? 1 : 0;
+    header.b = second ? 1 : 0;
     send(header);
 }
 
@@ -122,36 +126,9 @@ void EmbeddedHost::receive()
         if (static_cast<size_t>(length) < sizeof(lb_embed_header))
             continue;
 
-        auto const& header = message.header;
-        auto text_length = min(static_cast<size_t>(header.text_length), static_cast<size_t>(length) - sizeof(lb_embed_header));
-        switch (header.type) {
-        case LB_EMBED_LOAD:
-            if (on_load)
-                on_load(ByteString { message.text, text_length });
-            break;
-        case LB_EMBED_TOUCH:
-            if (on_touch)
-                on_touch(static_cast<lb_embed_touch_phase>(header.a), header.b, { header.c, header.d });
-            break;
-        case LB_EMBED_RESIZE:
-            if (on_resize && header.a > 0 && header.b > 0)
-                on_resize({ header.a, header.b }, header.scale);
-            break;
-        case LB_EMBED_GO_BACK:
-            if (on_go_back)
-                on_go_back();
-            break;
-        case LB_EMBED_GO_FORWARD:
-            if (on_go_forward)
-                on_go_forward();
-            break;
-        case LB_EMBED_RELOAD:
-            if (on_reload)
-                on_reload();
-            break;
-        default:
-            break;
-        }
+        auto text_length = min(static_cast<size_t>(message.header.text_length), static_cast<size_t>(length) - sizeof(lb_embed_header));
+        if (on_message)
+            on_message(message.header, StringView { message.text, text_length });
     }
 }
 

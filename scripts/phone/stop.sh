@@ -1,6 +1,6 @@
 #!/bin/sh
 # Runs on the phone: stop the browser and its helper processes.
-pkill -f '/tmp/ladybird/(bin|silica)/' 2>/dev/null
+pkill -f '/tmp/ladybird/(bin|browser/bin)/' 2>/dev/null
 sleep 1
-pkill -9 -f '/tmp/ladybird/(bin|libexec|silica)/' 2>/dev/null
+pkill -9 -f '/tmp/ladybird/(bin|libexec|browser/bin)/' 2>/dev/null
 true

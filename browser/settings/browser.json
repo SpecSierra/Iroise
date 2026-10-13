@@ -1,0 +1,16 @@
+{
+    "translation_catalog": "settings-sailfish-browser",
+    "entries": [
+    {
+        "path": "applications/sailfish-browser.desktop",
+        "title": "Browser",
+        "translation_id": "settings_applications-browser",
+        "type": "application",
+        "icon": "image://theme/icon-m-browser",
+        "order": 100,
+        "params": {
+            "source": "/usr/share/jolla-settings/pages/browser/browser.qml"
+        }
+    }
+    ]
+}

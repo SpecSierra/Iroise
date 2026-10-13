@@ -1,0 +1,92 @@
+/****************************************************************************
+**
+** Copyright (c) 2013 Jolla Ltd.
+** Contact: Vesa-Matti Hartikainen <vesa-matti.hartikainen@jollamobile.com>
+**
+****************************************************************************/
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "bookmark.h"
+#include "faviconmanager.h"
+
+#include <QUuid>
+
+Bookmark::Bookmark(const QString &title, const QString &url, const QString &favicon, bool hasTouchIcon,
+                   const QString &id, const QString &parentId, bool folder, QObject* parent)
+    : QObject(parent)
+    // QUuid::WithoutBraces is Qt 5.11; the SDK here is 5.6, so strip by hand.
+    , m_id(id.isEmpty() ? QUuid::createUuid().toString().remove(QLatin1Char('{')).remove(QLatin1Char('}')) : id)
+    , m_parentId(parentId)
+    , m_folder(folder)
+    , m_title(title)
+    , m_url(url)
+    , m_favicon(favicon)
+    , m_hasTouchIcon(hasTouchIcon)
+{
+    // A folder draws its own glyph in QML and never carries a site icon, so the
+    // generic-launcher-icon substitution below must not apply to it.
+    if (m_folder)
+        return;
+
+    if (m_favicon.isEmpty()) {
+        m_favicon = FaviconManager::defaultDesktopBookmarkIcon();
+        m_hasTouchIcon = true;
+    }
+}
+
+QString Bookmark::title() const
+{
+    return m_title;
+}
+
+void Bookmark::setTitle(const QString &title)
+{
+    if (title != m_title) {
+        m_title = title;
+        emit titleChanged();
+    }
+}
+
+QString Bookmark::url() const
+{
+    return m_url;
+}
+
+void Bookmark::setUrl(const QString &url)
+{
+    if (url != m_url) {
+        m_url = url;
+        emit urlChanged();
+    }
+}
+
+QString Bookmark::favicon() const
+{
+    return m_favicon;
+}
+
+void Bookmark::setFavicon(const QString &favicon)
+{
+    if (favicon != m_favicon) {
+        m_favicon = favicon;
+        emit faviconChanged();
+    }
+}
+
+void Bookmark::setParentId(const QString &parentId)
+{
+    m_parentId = parentId;
+}
+
+bool Bookmark::hasTouchIcon() const
+{
+    return m_hasTouchIcon;
+}
+
+void Bookmark::setHasTouchIcon(bool hasTouchIcon)
+{
+    m_hasTouchIcon = hasTouchIcon;
+}

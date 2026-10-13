@@ -13,7 +13,6 @@
 #include <AK/RefPtr.h>
 #include <AK/StringView.h>
 #include <LibCore/Notifier.h>
-#include <LibGfx/Point.h>
 #include <LibGfx/SharedImage.h>
 #include <LibGfx/Size.h>
 #include <UI/protocol/EmbedProtocol.h>
@@ -28,16 +27,12 @@ public:
     static ErrorOr<NonnullOwnPtr<EmbeddedHost>> connect(ByteString const& socket_path);
     ~EmbeddedHost();
 
-    void send_frame(Gfx::LinuxDmaBufHandle const&, Gfx::IntSize painted_size);
-    void send_text(lb_embed_message_type, StringView);
-    void send_loading(bool);
+    void send_frame(u32 view, Gfx::LinuxDmaBufHandle const&, Gfx::IntSize painted_size);
+    void send_text(u32 view, lb_embed_message_type, StringView);
+    void send_flags(u32 view, lb_embed_message_type, bool first, bool second = false);
 
-    Function<void(ByteString url)> on_load;
-    Function<void(lb_embed_touch_phase, int id, Gfx::IntPoint)> on_touch;
-    Function<void(Gfx::IntSize, double device_pixel_ratio)> on_resize;
-    Function<void()> on_go_back;
-    Function<void()> on_go_forward;
-    Function<void()> on_reload;
+    // Everything the app sends: the header, and the text that came with it.
+    Function<void(lb_embed_header const&, StringView text)> on_message;
     Function<void()> on_disconnect;
 
 private:

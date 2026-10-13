@@ -5,6 +5,7 @@
  */
 
 #include <AK/Format.h>
+#include <AK/HashMap.h>
 #include <AK/LexicalPath.h>
 #include <LibCore/ElapsedTimer.h>
 #include <LibCore/Environment.h>
@@ -15,6 +16,7 @@
 #include <LibWebCommon/Page/InputEvent.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/HeadlessWebView.h>
+#include <LibWebView/Menu.h>
 #include <LibWebView/URL.h>
 #include <LibWebView/Utilities.h>
 #include <UI/SFOS/EmbeddedHost.h>
@@ -250,51 +252,182 @@ static ErrorOr<int> run_windowed(Application& app)
     return app.execute();
 }
 
-// No window of our own: a Silica app shows our frames and sends us input over a socket.
+// No window of our own: a Silica app shows our frames and sends us input over a socket. It has one view per tab.
+#ifdef USE_VULKAN_DMABUF_IMAGES
+class EmbeddedViews {
+public:
+    explicit EmbeddedViews(EmbeddedHost& host, Core::AnonymousBuffer theme)
+        : m_host(host)
+        , m_theme(move(theme))
+    {
+        m_host.on_message = [this](lb_embed_header const& header, StringView text) { handle(header, text); };
+    }
+
+private:
+    // The Action a view enables and disables as its history changes; we only relay that.
+    struct HistoryObserver final : WebView::Action::Observer {
+        explicit HistoryObserver(Function<void()> callback)
+            : on_change(move(callback))
+        {
+        }
+        virtual void on_enabled_state_changed(WebView::Action&) override { on_change(); }
+        Function<void()> on_change;
+    };
+
+    void create_view(u32 id, Gfx::IntSize size, double device_pixel_ratio)
+    {
+        if (m_views.contains(id) || size.is_empty())
+            return;
+        auto view = PresentedWebView::create(m_theme, size, device_pixel_ratio);
+        auto* raw_view = view.ptr();
+
+        view->on_present = [this, id](Gfx::SharedImageBuffer const& buffer, Gfx::IntSize painted_size) -> Optional<StringView> {
+            auto const* dmabuf = buffer.linux_dmabuf_handle();
+            if (!dmabuf)
+                return {};
+            m_host.send_frame(id, *dmabuf, painted_size);
+            return "embedding app"sv;
+        };
+        view->on_url_change = [this, id](URL::URL const& url) {
+            auto text = url.serialize();
+            m_host.send_text(id, LB_EMBED_URL, text.bytes_as_string_view());
+        };
+        view->on_title_change = [this, id](Utf16String const& title) {
+            auto text = title.to_utf8();
+            m_host.send_text(id, LB_EMBED_TITLE, text.bytes_as_string_view());
+        };
+        view->on_load_start = [this, id] { m_host.send_flags(id, LB_EMBED_LOADING, true); };
+        view->on_load_finish = [this, id](URL::URL const&) { m_host.send_flags(id, LB_EMBED_LOADING, false); };
+        view->on_input_method_state_change = [this, id, raw_view] {
+            m_host.send_flags(id, LB_EMBED_TEXT_INPUT, raw_view->input_method_state().is_enabled);
+        };
+        view->on_web_content_crashed = [this, id](auto) { m_host.send_flags(id, LB_EMBED_CRASHED, true); };
+
+        for (auto* action : { &view->navigate_back_action(), &view->navigate_forward_action() }) {
+            action->add_observer(make<HistoryObserver>(Function<void()> { [this, id, raw_view] {
+                m_host.send_flags(id, LB_EMBED_HISTORY, raw_view->navigate_back_action().enabled(), raw_view->navigate_forward_action().enabled());
+            } }));
+        }
+
+        m_views.set(id, move(view));
+    }
+
+    void send_key(PresentedWebView& view, Web::UIEvents::KeyCode key, u32 code_point)
+    {
+        for (auto type : { Web::KeyEvent::Type::KeyDown, Web::KeyEvent::Type::KeyUp }) {
+            Web::KeyEvent event {};
+            event.type = type;
+            event.key = key;
+            event.code_point = code_point;
+            event.should_insert_text = type == Web::KeyEvent::Type::KeyDown && code_point != 0;
+            view.enqueue_input_event(move(event));
+        }
+    }
+
+    void handle(lb_embed_header const& header, StringView text)
+    {
+        if (header.type == LB_EMBED_CREATE_VIEW) {
+            create_view(header.view, { header.a, header.b }, header.scale >= 1 ? header.scale : device_pixel_ratio_from_environment());
+            return;
+        }
+        auto found = m_views.get(header.view);
+        if (!found.has_value())
+            return;
+        auto& view = **found;
+
+        switch (header.type) {
+        case LB_EMBED_DESTROY_VIEW:
+            m_views.remove(header.view);
+            break;
+        case LB_EMBED_LOAD:
+            if (auto url = WebView::sanitize_url(text); url.has_value())
+                view.load(*url);
+            break;
+        case LB_EMBED_TOUCH: {
+            auto phase = header.a == LB_EMBED_TOUCH_DOWN ? PresentedWebView::TouchPhase::Down : header.a == LB_EMBED_TOUCH_MOTION ? PresentedWebView::TouchPhase::Motion
+                                                                                                                                 : PresentedWebView::TouchPhase::Up;
+            view.handle_touch(phase, header.b, { header.c, header.d });
+            break;
+        }
+        case LB_EMBED_RESIZE:
+            if (header.a > 0 && header.b > 0)
+                view.resize({ header.a, header.b }, header.scale >= 1 ? header.scale : device_pixel_ratio_from_environment());
+            break;
+        case LB_EMBED_GO_BACK:
+            view.traverse_the_history_by_delta(-1);
+            break;
+        case LB_EMBED_GO_FORWARD:
+            view.traverse_the_history_by_delta(1);
+            break;
+        case LB_EMBED_RELOAD:
+            view.reload();
+            break;
+        case LB_EMBED_STOP:
+            view.stop_loading();
+            break;
+        case LB_EMBED_SET_VISIBLE:
+            view.set_system_visibility_state(header.a ? Web::HTML::VisibilityState::Visible : Web::HTML::VisibilityState::Hidden);
+            view.set_has_system_focus(header.a != 0);
+            break;
+        case LB_EMBED_COMMIT_TEXT:
+            view.commit_text_from_input_method(Utf16String::from_utf8(text), -header.a, header.a);
+            break;
+        case LB_EMBED_COMPOSE_TEXT:
+            if (text.is_empty())
+                view.unmark_text_from_input_method();
+            else
+                view.set_marked_text_from_input_method(Utf16String::from_utf8(text));
+            break;
+        case LB_EMBED_KEY:
+            switch (header.a) {
+            case LB_EMBED_KEY_BACKSPACE:
+                send_key(view, Web::UIEvents::KeyCode::Key_Backspace, 0);
+                break;
+            case LB_EMBED_KEY_RETURN:
+                send_key(view, Web::UIEvents::KeyCode::Key_Return, '\n');
+                break;
+            case LB_EMBED_KEY_TAB:
+                send_key(view, Web::UIEvents::KeyCode::Key_Tab, '\t');
+                break;
+            case LB_EMBED_KEY_LEFT:
+                send_key(view, Web::UIEvents::KeyCode::Key_Left, 0);
+                break;
+            case LB_EMBED_KEY_RIGHT:
+                send_key(view, Web::UIEvents::KeyCode::Key_Right, 0);
+                break;
+            case LB_EMBED_KEY_UP:
+                send_key(view, Web::UIEvents::KeyCode::Key_Up, 0);
+                break;
+            case LB_EMBED_KEY_DOWN:
+                send_key(view, Web::UIEvents::KeyCode::Key_Down, 0);
+                break;
+            case LB_EMBED_KEY_DELETE:
+                send_key(view, Web::UIEvents::KeyCode::Key_Delete, 0);
+                break;
+            case LB_EMBED_KEY_ESCAPE:
+                send_key(view, Web::UIEvents::KeyCode::Key_Escape, 0);
+                break;
+            default:
+                break;
+            }
+            break;
+        default:
+            break;
+        }
+    }
+
+    EmbeddedHost& m_host;
+    Core::AnonymousBuffer m_theme;
+    HashMap<u32, NonnullOwnPtr<PresentedWebView>> m_views;
+};
+#endif
+
 static ErrorOr<int> run_embedded(Application& app, ByteString const& socket_path)
 {
 #ifdef USE_VULKAN_DMABUF_IMAGES
     auto host = TRY(EmbeddedHost::connect(socket_path));
     host->on_disconnect = [] { Core::EventLoop::current().quit(0); };
-
-    // The app tells us its real size as soon as it has one.
-    auto view = PresentedWebView::create(TRY(load_theme()), { 1032, 2272 }, device_pixel_ratio_from_environment());
-
-    view->on_present = [&](Gfx::SharedImageBuffer const& buffer, Gfx::IntSize painted_size) -> Optional<StringView> {
-        auto const* dmabuf = buffer.linux_dmabuf_handle();
-        if (!dmabuf)
-            return {};
-        host->send_frame(*dmabuf, painted_size);
-        return "embedding app"sv;
-    };
-    view->on_url_change = [&](URL::URL const& url) {
-        auto text = url.serialize();
-        host->send_text(LB_EMBED_URL, text.bytes_as_string_view());
-    };
-    view->on_title_change = [&](Utf16String const& title) {
-        auto text = title.to_utf8();
-        host->send_text(LB_EMBED_TITLE, text.bytes_as_string_view());
-    };
-    view->on_load_start = [&] { host->send_loading(true); };
-    view->on_load_finish = [&](URL::URL const&) { host->send_loading(false); };
-
-    host->on_load = [&](ByteString const& text) {
-        if (auto url = WebView::sanitize_url(text); url.has_value())
-            view->load(*url);
-    };
-    host->on_touch = [&](lb_embed_touch_phase phase, int id, Gfx::IntPoint position) {
-        auto view_phase = phase == LB_EMBED_TOUCH_DOWN ? PresentedWebView::TouchPhase::Down : phase == LB_EMBED_TOUCH_MOTION ? PresentedWebView::TouchPhase::Motion
-                                                                                                                             : PresentedWebView::TouchPhase::Up;
-        view->handle_touch(view_phase, id, position);
-    };
-    host->on_resize = [&](Gfx::IntSize size, double device_pixel_ratio) { view->resize(size, device_pixel_ratio); };
-    host->on_go_back = [&] { view->traverse_the_history_by_delta(-1); };
-    host->on_go_forward = [&] { view->traverse_the_history_by_delta(1); };
-    host->on_reload = [&] { view->reload(); };
-
-    if (auto const& urls = Application::browser_options().urls; !urls.is_empty())
-        view->load(urls.last());
-
+    EmbeddedViews views { *host, TRY(load_theme()) };
     return app.execute();
 #else
     (void)app;

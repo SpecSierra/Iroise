@@ -1,0 +1,15 @@
+*~
+*.swp
+*.o
+*.moc
+moc_*.cpp
+*.qm
+Makefile
+*.so
+*.so.*
+*.ts
+RPMS/*
+sailfish-browser.pro.user
+build/
+build_browser/
+settings/.qmake.stash

@@ -1,0 +1,127 @@
+/****************************************************************************
+**
+** Copyright (c) 2016 - 2018 Jolla Ltd.
+** Copyright (c) 2020 Open Mobile Platform LLC.
+** Contact: Raine Makelainen <raine.makelainen@jolla.com>
+**
+****************************************************************************/
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+#include "browser.h"
+#include "browser_p.h"
+#include "declarativewebutils.h"
+#include "downloadmanager.h"
+#include "settingmanager.h"
+
+#include <QDir>
+#include <QGuiApplication>
+#include <QQmlContext>
+#include <QQuickView>
+#include <QTimer>
+#include <QUrl>
+#include <QDebug>
+BrowserPrivate::BrowserPrivate(QQuickView *view)
+    : view(view)
+{
+}
+
+Browser::Browser(QQuickView *view, const QString &dataPath, QObject *parent)
+    : QObject(parent)
+    , d_ptr(new BrowserPrivate(view))
+{
+    Q_D(Browser);
+    d->m_dataPath = dataPath;
+
+    Q_ASSERT(view);
+    Q_ASSERT(qGuiApp);
+
+    DeclarativeWebUtils *utils = DeclarativeWebUtils::instance();
+    DownloadManager *downloadManager = DownloadManager::instance();
+
+    d->view->rootContext()->setContextProperty("WebUtils", utils);
+    d->view->rootContext()->setContextProperty("Settings", SettingManager::instance());
+    d->view->rootContext()->setContextProperty("DownloadManager", downloadManager);
+
+    // Direct-composite: the UI scene (browser.qml) is hosted in the offscreen chrome
+    // overlay window, not in this on-screen view (which is the transparent shell). The
+    // runtime loads it into the overlay after this ctor; skip setSource here so we don't
+    // also run a second ApplicationWindow in the shell view.
+    const QByteArray dc = qgetenv("ATLANTIC_DIRECT_COMPOSITE");
+    if (!dc.isEmpty() && dc != "0")
+        return;
+
+    QString mainQml;
+    if (!qEnvironmentVariableIsEmpty("ATLANTIC_MINIMAL_UI")) {
+        mainQml = QStringLiteral("browser-minimal.qml");
+    } else {
+        mainQml = QStringLiteral("browser.qml");
+    }
+
+#ifdef USE_RESOURCES
+    d->view->setSource(QUrl(QString("qrc:///") + mainQml));
+#else
+    d->view->setSource(QUrl::fromLocalFile(Browser::applicationFilePath() + mainQml));
+#endif
+}
+
+void Browser::load()
+{
+    Q_ASSERT_X(qGuiApp, Q_FUNC_INFO, "There should always be a QGuiApplication running.");
+    const QStringList arguments = qGuiApp->arguments();
+    if (!arguments.contains(QStringLiteral("-prestart"))) {
+        if (arguments.count() > 1 && (arguments.last() != QStringLiteral("-debugMode"))) {
+            DeclarativeWebUtils::instance()->openUrl(arguments.last());
+        } else {
+            DeclarativeWebUtils::instance()->openUrl("");
+        }
+    }
+}
+
+QString Browser::applicationFilePath()
+{
+    Q_D(Browser);
+    Q_ASSERT_X(qGuiApp, Q_FUNC_INFO, "There should always be a QGuiApplication running.");
+    if (qGuiApp->arguments().contains("-desktop")) {
+        return qGuiApp->applicationDirPath() + QDir::separator();
+    } else {
+        return QString(d->m_dataPath);
+    }
+}
+
+void Browser::openUrl(const QString &url)
+{
+    DeclarativeWebUtils::instance()->openUrl(url);
+}
+
+void Browser::openSettings()
+{
+    DeclarativeWebUtils::instance()->openSettings();
+}
+
+void Browser::openNewTabView()
+{
+    emit DeclarativeWebUtils::instance()->activateNewTabViewRequested();
+}
+
+void Browser::showChrome()
+{
+    emit DeclarativeWebUtils::instance()->showChrome();
+}
+
+void Browser::cancelDownload(int transferId)
+{
+    DownloadManager::instance()->cancelTransfer(transferId);
+}
+
+void Browser::restartDownload(int transferid)
+{
+    DownloadManager::instance()->restartTransfer(transferid);
+}
+
+void Browser::dumpMemoryInfo(const QString &fileName)
+{
+    DeclarativeWebUtils::instance()->handleDumpMemoryInfoRequest(fileName);
+}

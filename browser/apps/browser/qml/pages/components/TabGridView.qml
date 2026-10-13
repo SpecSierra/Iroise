@@ -1,0 +1,146 @@
+/****************************************************************************
+**
+** Copyright (c) 2014 - 2019 Jolla Ltd.
+** Copyright (c) 2019 - 2021 Open Mobile Platform LLC.
+**
+****************************************************************************/
+
+/* This Source Code Form is subject to the terms of the Mozilla Public
+ * License, v. 2.0. If a copy of the MPL was not distributed with this file,
+ * You can obtain one at http://mozilla.org/MPL/2.0/. */
+
+import QtQuick 2.1
+import Sailfish.Silica 1.0
+
+SilicaGridView {
+    id: tabGridView
+
+    property bool portrait
+    property bool closingAllTabs
+
+    property var remorsePopup
+    property int horizontalMargin: Theme.horizontalPageMargin
+    readonly property bool largeScreen: Screen.sizeCategory > Screen.Medium
+
+    // SFOS home-screen style: always 2 columns in portrait on a normal phone,
+    // 3 columns on a large screen (tablet).
+    readonly property real columns: largeScreen
+                                        ? portrait ? 3 : 4
+                                        : 2
+
+    // Portrait-oriented thumbnails — taller than wide, showing a good slice of
+    // the page (≈ phone-screen aspect ratio scaled to the card width).
+    readonly property real thumbnailWidth: (parent.width - horizontalMargin * 2
+                                            - (Theme.paddingLarge * (columns - 1))) / columns
+    readonly property real thumbnailHeight: largeScreen
+                                            ? thumbnailWidth * 1.1
+                                            : portrait
+                                              ? thumbnailWidth * 1.5
+                                              : parent.height / 2.5
+
+    signal hide
+    signal enterNewTabUrl
+    signal activateTab(int index)
+    signal closeTab(int index)
+    signal closeAll
+    signal closeAllCanceled
+    signal closeAllPending
+
+    function closeAllTabs() {
+        remorsePopup = Remorse.popupAction(
+                    tabGridView,
+                    //% "Closed all tabs"
+                    qsTrId("sailfish_browser-closed-all-tabs"),
+                    function() {
+                        tabGridView.closeAll()
+                        remorsePopup = null
+                        closingAllTabs = false
+                    })
+        closingAllTabs = true
+        remorsePopup.canceled.connect(
+                    function() {
+                        closingAllTabs = false
+                        tabGridView.closeAllCanceled()
+                        remorsePopup = null
+                    })
+    }
+
+    onCountChanged: if (count > 0) closingAllTabs = false
+    onClosingAllTabsChanged: if (closingAllTabs) closeAllPending()
+
+    width: parent.width - x
+    height: parent.height
+    x: tabGridView.horizontalMargin
+    currentIndex: model.activeTabIndex
+    cellWidth: thumbnailWidth + Theme.paddingLarge
+    cellHeight: thumbnailHeight + Theme.paddingLarge
+
+    delegate: TabItem {
+        id: tabItem
+
+        enabled: !closingAllTabs
+        opacity: enabled ? 1.0 : 0.0
+        Behavior on opacity { FadeAnimator {}}
+
+        width: thumbnailWidth
+        height: thumbnailHeight
+
+        GridView.onAdd: AddAnimation {
+            target: tabItem
+        }
+        GridView.onRemove: RemoveAnimation {
+            target: tabItem
+        }
+    }
+
+    // Behind tab delegates
+    children: [
+        Rectangle {
+            z: -2
+            x: -tabGridView.horizontalMargin
+            width: tabGridView.width + tabGridView.horizontalMargin
+            height: tabGridView.height
+            color: "transparent"
+        },
+        MouseArea {
+            z: -1
+            width: tabGridView.width
+            height: tabGridView.height
+            onClicked: hide()
+        }
+    ]
+
+    Item {
+        height: parent.height
+        anchors.right: parent.right
+        width: Math.round(Theme.paddingSmall/2)
+
+        VerticalScrollDecorator {
+            _forcedParent: parent
+            flickable: tabGridView
+        }
+    }
+
+    ViewPlaceholder {
+        x: -Theme.horizontalPageMargin
+        width: parent.width + Theme.horizontalPageMargin
+        enabled: !model.count || closingAllTabs
+        //: Hint to create a new tab via button new tab.
+        //% "Push button plus to create a new tab"
+        text: qsTrId("sailfish_browser-la-push_button_plus_to_create_tab_hint")
+    }
+
+    Timer {
+        interval: 100
+        running: true
+        onTriggered: positionViewAtIndex(model.activeTabIndex, GridView.Center)
+    }
+
+    Connections {
+        target: webView
+
+        onApplicationClosing: {
+            if (tabGridView.closingAllTabs) tabGridView.closeAll()
+        }
+    }
+}
