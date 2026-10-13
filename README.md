@@ -1,9 +1,12 @@
-# ladybird-sfos — Ladybird on Sailfish OS
+# Pacific — a Ladybird-based browser for Sailfish OS
 
-Exploration: get the [Ladybird](https://ladybird.org) engine compiled and running
-on Sailfish OS, without Qt 6 (upstream's only Linux front end needs Qt 6.10+).
+Pacific runs the [Ladybird](https://ladybird.org) engine on Sailfish OS, GPU
+accelerated, inside a Silica interface. It is the successor to
+Atlantic (WPE WebKit); nothing here is shipped yet.
 
-Not related to the Atlantic repos; nothing here is shipped.
+Upstream's only Linux front end needs Qt 6.10+, which Sailfish OS does not have,
+so Pacific carries its own Qt-free front end for the engine and a small set of
+patches. Developed and tested on the Jolla Phone 2 (MT6858, Mali-G610).
 
 ## Layout
 
