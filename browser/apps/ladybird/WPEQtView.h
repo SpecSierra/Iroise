@@ -121,6 +121,10 @@ protected:
 
     // A finger that stayed down in one place; the touch is not a tap any more. In item coordinates.
     virtual void longPressed(const QPointF&) { }
+    // A finger that came down and went up in one place, which the engine makes a click of.
+    virtual void tapped(const QPointF&) { }
+    virtual void filePickerRequested(bool multiple) { Q_UNUSED(multiple); }
+    virtual void colorPickerRequested(const QString& color) { Q_UNUSED(color); }
     // What the engine says that only the page class above knows what to do with.
     virtual void findResult(int current, int total) { Q_UNUSED(current); Q_UNUSED(total); }
     virtual void selectMenuRequested(const QByteArray& optionsJson) { Q_UNUSED(optionsJson); }

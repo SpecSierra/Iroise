@@ -37,6 +37,7 @@ enum lb_embed_message_type {
     LB_EMBED_SET_AD_BLOCKING = 14,            /* a = 1 to block advertising and trackers */
     LB_EMBED_SET_COOKIE_BANNER_BLOCKING = 15, /* a = 1 to block cookie banners */
     LB_EMBED_SET_DARK_MODE = 16,              /* a = 1 for pages to prefer their dark colours */
+    LB_EMBED_CLEAR_DATA = 24,                 /* a = lb_embed_clear bits */
     /* Back to messages for one view. */
     LB_EMBED_RUN_SCRIPT = 17, /* text = a JavaScript expression, run in the page. If its value is a string, the
                                  string comes back in LB_EMBED_SCRIPT_RESULT; the app puts what it needs to tell
@@ -47,6 +48,8 @@ enum lb_embed_message_type {
                                          text = what was typed into a prompt */
     LB_EMBED_PINCH = 21,      /* c = x, d = y of the point between the fingers (device pixels); scale = how
                                  far apart the fingers are now, over how far they were at the last message */
+    LB_EMBED_FILE_PICKER_CLOSED = 22, /* text = the chosen files' paths, one per line; empty for none */
+    LB_EMBED_COLOR_PICKED = 23,       /* a = 1 if a colour was chosen; text = it, as #rrggbb */
 
     /* engine -> Silica app */
     LB_EMBED_FRAME = 101,   /* a, b = painted size; c, d = buffer size; e = row pitch in bytes; fd = dma-buf (BGRA) */
@@ -64,6 +67,15 @@ enum lb_embed_message_type {
                                      Answered with LB_EMBED_SELECT_MENU_CLOSED. */
     LB_EMBED_DIALOG = 111,        /* a = lb_embed_dialog; text = JSON {"message", "default"}. The page waits
                                      for LB_EMBED_DIALOG_CLOSED. */
+    LB_EMBED_FILE_PICKER = 112,   /* a = 1 if several files may be chosen. Answered with
+                                     LB_EMBED_FILE_PICKER_CLOSED. */
+    LB_EMBED_COLOR_PICKER = 113,  /* text = the colour an <input type=color> has now, as #rrggbb. Answered
+                                     with LB_EMBED_COLOR_PICKED. */
+};
+
+enum lb_embed_clear {
+    LB_EMBED_CLEAR_CACHE = 1,
+    LB_EMBED_CLEAR_SITE_DATA = 2, /* cookies and what sites stored */
 };
 
 enum lb_embed_find {

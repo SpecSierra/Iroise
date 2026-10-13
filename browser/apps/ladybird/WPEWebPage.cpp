@@ -36,6 +36,31 @@ QList<WPEWebPage *> &livePages()
 const int kThumbnailIntervalMs = 4000;
 const int kThumbnailMaxWidth = 540;
 const int kSelectionPollMs = 200;
+const int kScrollPollMs = 120;
+// How long after the finger lifts the page is still asked where it is: a fling takes about this long.
+const int kScrollPollsAfterTouch = 15;
+
+// The kinds of <input> the interface has a picker of its own for. A tap on one hands it over.
+const char kInputPickerScript[] =
+    "(function(x,y){"
+    "var e=document.elementFromPoint(x,y);"
+    "while(e&&e.tagName!=='INPUT')e=e.parentElement;"
+    "if(!e||e.disabled||e.readOnly)return null;"
+    "var t=(e.getAttribute('type')||'').toLowerCase();"
+    "if(['date','month','week','time','datetime-local'].indexOf(t)<0)return null;"
+    "window.__pacificPendingInput=e;e.blur();"
+    "return {type:t,value:e.value||'',min:e.getAttribute('min')||'',max:e.getAttribute('max')||'',step:e.getAttribute('step')||''};"
+    "})(%1,%2)";
+
+const char kResolveInputPickerScript[] =
+    "(function(v){"
+    "var e=window.__pacificPendingInput;window.__pacificPendingInput=null;"
+    "if(!e)return 0;"
+    "e.value=v;"
+    "e.dispatchEvent(new Event('input',{bubbles:true,composed:true}));"
+    "e.dispatchEvent(new Event('change',{bubbles:true,composed:true}));"
+    "return 1;"
+    "})((%1)[0])";
 // The handles hang below the line they mark and are dragged by their middle, so the text a handle points at is
 // this far above where the finger says it is, in CSS pixels.
 const qreal kHandleToTextCssPx = 24;
@@ -102,6 +127,49 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     // A tab's thumbnail is a scaled copy of what is on screen, refreshed while the tab is the one showing.
     m_thumbnailTimer.setInterval(kThumbnailIntervalMs);
     connect(&m_thumbnailTimer, &QTimer::timeout, this, &WPEWebPage::captureThumbnail);
+
+    // Nor does it say where the page is scrolled to, which is what hides and shows the toolbar.
+    m_scrollPoll.setInterval(kScrollPollMs);
+    connect(&m_scrollPoll, &QTimer::timeout, this, &WPEWebPage::queryScrollPosition);
+    m_chromeGestureDebounceTimer.setSingleShot(true);
+    m_chromeGestureDebounceTimer.setInterval(150);
+    connect(&m_chromeGestureDebounceTimer, &QTimer::timeout, this, [this] {
+        if (m_chromeGestureArmed && m_chrome != m_pendingChrome)
+            setChrome(m_pendingChrome);
+        m_chromeGestureArmed = false;
+    });
+    connect(this, &WPEQtView::scrollPositionChanged, this, [this](qreal scrollY, qreal scrollHeight, qreal innerHeight) {
+        bool atTop = scrollY <= 0;
+        bool atBottom = (scrollHeight - scrollY - innerHeight) <= 1.0;
+        if (atTop != m_atYBeginning) {
+            m_atYBeginning = atTop;
+            emit atYBeginningChanged();
+        }
+        if (atBottom != m_atYEnd) {
+            m_atYEnd = atBottom;
+            emit atYEndChanged();
+        }
+        // Scrolling down the page hides the toolbar, scrolling back up or reaching the top shows it.
+        if (m_chromeGestureEnabled && !m_fixedToolbar && !m_forcedChrome) {
+            qreal delta = scrollY - m_lastScrollY;
+            bool targetChrome;
+            if (atTop) {
+                targetChrome = true;
+            } else if (delta > m_chromeGestureThreshold) {
+                targetChrome = false;
+            } else if (delta < -m_chromeGestureThreshold) {
+                targetChrome = true;
+            } else {
+                return;
+            }
+            if (targetChrome != m_pendingChrome || !m_chromeGestureArmed) {
+                m_pendingChrome = targetChrome;
+                m_chromeGestureArmed = true;
+                m_chromeGestureDebounceTimer.start();
+            }
+        }
+        m_lastScrollY = scrollY;
+    });
 
     // The engine does not tell us when a selection changes or moves with the page, so while there is one, ask.
     m_selectionPoll.setInterval(kSelectionPollMs);
@@ -467,6 +535,14 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
 {
     if (event->type() == QEvent::TouchBegin)
         emit touched();
+    // While a finger is down the page may be scrolling, and for a while after it lifts.
+    if (event->type() == QEvent::TouchEnd || event->type() == QEvent::TouchCancel) {
+        m_scrollPollsLeft = kScrollPollsAfterTouch;
+    } else {
+        m_scrollPollsLeft = -1;
+        if (!m_scrollPoll.isActive())
+            m_scrollPoll.start();
+    }
     WPEQtView::touchEvent(event);
 }
 
@@ -948,11 +1024,23 @@ void WPEWebPage::closeSelectMenu()
 
 void WPEWebPage::chooseFiles(const QStringList &filePaths)
 {
-    Q_UNUSED(filePaths);
+    if (!m_fileChooserActive)
+        return;
+    QStringList paths;
+    for (const QString &entry : filePaths) {
+        QUrl url = QUrl::fromUserInput(entry);
+        QString path = url.isValid() && url.isLocalFile() ? url.toLocalFile() : entry;
+        if (!path.isEmpty())
+            paths.append(path);
+    }
+    sendToEngine(LB_EMBED_FILE_PICKER_CLOSED, 0, 0, 0, 0, paths.join(QLatin1Char('\n')).toUtf8());
+    m_fileChooserActive = false;
+    emit fileChooserActiveChanged();
 }
 
 void WPEWebPage::cancelFileChooser()
 {
+    chooseFiles(QStringList());
 }
 
 void WPEWebPage::openSelectMenu(const QStringList &options, int selectedIndex)
@@ -967,20 +1055,37 @@ void WPEWebPage::openSelectMenu(const QStringList &options, int selectedIndex)
 
 void WPEWebPage::resolveInputPicker(const QString &value)
 {
-    Q_UNUSED(value);
+    if (m_inputPickerIsEngineColor) {
+        sendToEngine(LB_EMBED_COLOR_PICKED, 1, 0, 0, 0, value.toUtf8());
+    } else {
+        // NB: The value goes in as the one element of a JSON array, so that no quote or backslash in it needs
+        //     escaping by hand.
+        QJsonArray quoted;
+        quoted.append(value);
+        evaluate(QString::fromLatin1(kResolveInputPickerScript).arg(QString::fromUtf8(QJsonDocument(quoted).toJson(QJsonDocument::Compact))));
+    }
+    closeInputPicker();
 }
 
 void WPEWebPage::cancelInputPicker()
 {
+    if (m_inputPickerIsEngineColor)
+        sendToEngine(LB_EMBED_COLOR_PICKED, 0);
+    else
+        evaluate(QStringLiteral("window.__pacificPendingInput=null,0"));
+    closeInputPicker();
 }
 
 void WPEWebPage::openInputPicker(const QString &type, const QString &value, const QString &min, const QString &max, const QString &step)
 {
-    Q_UNUSED(type);
-    Q_UNUSED(value);
-    Q_UNUSED(min);
-    Q_UNUSED(max);
-    Q_UNUSED(step);
+    m_inputPickerType = type;
+    m_inputPickerValue = value;
+    m_inputPickerMin = min;
+    m_inputPickerMax = max;
+    m_inputPickerStep = step;
+    m_inputPickerActive = true;
+    emit inputPickerChanged();
+    emit inputPickerActiveChanged();
 }
 
 void WPEWebPage::openImageLongPress(const QString &imageUrl)
@@ -1152,4 +1257,72 @@ void WPEWebPage::resolveJsDialog(bool accepted, const QString &text)
 void WPEWebPage::applyDarkModeGlobally(bool dark)
 {
     LadybirdEngine::instance()->send(0, LB_EMBED_SET_DARK_MODE, dark ? 1 : 0);
+}
+
+// --- Pickers, the file chooser, where the page is scrolled to, engine data -----------------------------------
+
+void WPEWebPage::closeInputPicker()
+{
+    m_inputPickerIsEngineColor = false;
+    if (m_inputPickerActive) {
+        m_inputPickerActive = false;
+        emit inputPickerActiveChanged();
+    }
+}
+
+void WPEWebPage::tapped(const QPointF &position)
+{
+    const qreal scale = deviceScaleFactor();
+    QString script = QString::fromLatin1(kInputPickerScript).arg(position.x() / scale, 0, 'f', 2).arg(position.y() / scale, 0, 'f', 2);
+    evaluate(script, [this](const QJsonValue &value) {
+        if (!value.isObject())
+            return;
+        QJsonObject input = value.toObject();
+        m_inputPickerIsEngineColor = false;
+        openInputPicker(input.value(QStringLiteral("type")).toString(), input.value(QStringLiteral("value")).toString(),
+            input.value(QStringLiteral("min")).toString(), input.value(QStringLiteral("max")).toString(),
+            input.value(QStringLiteral("step")).toString());
+    });
+}
+
+void WPEWebPage::colorPickerRequested(const QString &color)
+{
+    m_inputPickerIsEngineColor = true;
+    openInputPicker(QStringLiteral("color"), color, QString(), QString(), QString());
+}
+
+void WPEWebPage::filePickerRequested(bool multiple)
+{
+    if (m_fileChooserSelectMultiple != multiple) {
+        m_fileChooserSelectMultiple = multiple;
+        emit fileChooserSelectMultipleChanged();
+    }
+    m_fileChooserActive = true;
+    emit fileChooserActiveChanged();
+}
+
+void WPEWebPage::queryScrollPosition()
+{
+    if (m_scrollPollsLeft == 0) {
+        m_scrollPoll.stop();
+        return;
+    }
+    if (m_scrollPollsLeft > 0)
+        --m_scrollPollsLeft;
+    // NB: One question at a time, and a lost answer must not stop the asking for good.
+    if (m_scrollQueryPending)
+        return;
+    m_scrollQueryPending = true;
+    QTimer::singleShot(1000, this, [this] { m_scrollQueryPending = false; });
+    evaluate(QStringLiteral("[window.scrollY,document.documentElement.scrollHeight,window.innerHeight]"), [this](const QJsonValue &value) {
+        m_scrollQueryPending = false;
+        QJsonArray position = value.toArray();
+        if (position.size() == 3)
+            emit scrollPositionChanged(position.at(0).toDouble(), position.at(1).toDouble(), position.at(2).toDouble());
+    });
+}
+
+void WPEWebPage::clearEngineDataGlobally(bool cache, bool siteData)
+{
+    LadybirdEngine::instance()->send(0, LB_EMBED_CLEAR_DATA, (cache ? LB_EMBED_CLEAR_CACHE : 0) | (siteData ? LB_EMBED_CLEAR_SITE_DATA : 0));
 }

@@ -93,8 +93,7 @@ void SettingManager::clearHistory(int period)
 
 void SettingManager::clearCookiesAndSiteData()
 {
-    // FIXME: The engine protocol has no way to clear the engine's cookies and site data yet.
-    qWarning("clearCookiesAndSiteData: not implemented for the Ladybird engine");
+    WPEWebPage::clearEngineDataGlobally(false, true);
 }
 
 void SettingManager::clearPasswords()
@@ -106,8 +105,7 @@ void SettingManager::clearPasswords()
 void SettingManager::clearCache()
 {
     WPEWebPage::clearHistoryPreviews();
-    // FIXME: The engine protocol has no way to clear the engine's HTTP cache yet.
-    qWarning("clearCache: not implemented for the Ladybird engine");
+    WPEWebPage::clearEngineDataGlobally(true, false);
 }
 
 void SettingManager::clearSitePermissions()

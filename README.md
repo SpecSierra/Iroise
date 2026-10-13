@@ -98,9 +98,8 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
 - `WPEQtView`, `WPEWebPage` and `WPEWebContainer` keep the names and the surface the
   interface was written against. `WPEWebPage` keeps every property and method the
   QML uses; what the engine protocol cannot do yet is a property that never changes
-  or a method that does nothing. Not wired yet: date/time/colour pickers and file
-  choosers, permissions, downloads, saved-login autofill, the per-site ad-block
-  allowlist, extensions, clearing engine data, scroll-driven toolbar hiding.
+  or a method that does nothing. Not wired yet: downloads, permissions,
+  saved-login autofill, the per-site ad-block allowlist, extensions.
 - Scripts: `LB_EMBED_RUN_SCRIPT` evaluates an expression in the page through the
   engine's console input, the one path that hands a value back. Only strings come
   back intact, so `WPEQtView::evaluate` wraps the expression in `JSON.stringify`
@@ -117,6 +116,17 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   scheme and pinch zoom use the engine's own API, each through its own message.
   A page waits for its dialog to be answered; before this, one `alert()` blocked
   the page for good.
+- The file chooser and the colour picker are the engine's requests too, shown with
+  the interface's own pickers. Date and time inputs have no engine request: a tap
+  that lands on one (checked by a script) opens the interface's picker, which writes
+  the value back and fires `input` and `change`.
+- The toolbar hides when the page scrolls down and returns when it scrolls up or
+  reaches the top. The engine does not report scrolling, so the page is asked for
+  its position while a finger is on it and for about two seconds after.
+- Clearing the cache and clearing cookies and site data in Settings go to the
+  engine's `clear_browsing_data`.
+- Permission prompts are not wired because the engine only ever asks for the
+  microphone; geolocation never reaches the front end as a question.
 - Ad blocking is the engine's own: Ladybird ships Brave's `adblock` crate with
   request blocking, cosmetic filtering and built-in list subscriptions, all off by
   default. The interface's "Adblock" switch turns on EasyList, EasyPrivacy, the

@@ -18,7 +18,10 @@
 #include <LibGfx/SystemTheme.h>
 #include <LibMain/Main.h>
 #include <LibWebCommon/CSS/PreferredColorScheme.h>
+#include <LibWebCommon/HTML/ColorPickerUpdateState.h>
+#include <LibWebCommon/HTML/FileFilter.h>
 #include <LibWebCommon/HTML/SelectItem.h>
+#include <LibWebCommon/HTML/SelectedFile.h>
 #include <LibWebCommon/Page/InputEvent.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/HeadlessWebView.h>
@@ -378,6 +381,14 @@ private:
         view->on_request_confirm = [send_dialog](Utf16String const& message) { send_dialog(LB_EMBED_DIALOG_CONFIRM, message, {}); };
         view->on_request_prompt = [send_dialog](Utf16String const& message, Utf16String const& default_text) { send_dialog(LB_EMBED_DIALOG_PROMPT, message, default_text); };
 
+        view->on_request_file_picker = [this, id](Web::HTML::FileFilter const&, Web::HTML::AllowMultipleFiles allow_multiple_files) {
+            m_host.send_numbers(id, LB_EMBED_FILE_PICKER, allow_multiple_files == Web::HTML::AllowMultipleFiles::Yes);
+        };
+        view->on_request_color_picker = [this, id](Color current_color) {
+            auto text = current_color.to_string_without_alpha();
+            m_host.send_text(id, LB_EMBED_COLOR_PICKER, text.bytes_as_string_view());
+        };
+
         view->set_preferred_color_scheme(m_dark_mode ? Web::CSS::PreferredColorScheme::Dark : Web::CSS::PreferredColorScheme::Light);
 
         for (auto* action : { &view->navigate_back_action(), &view->navigate_forward_action() }) {
@@ -464,6 +475,15 @@ private:
                 entry.value->set_preferred_color_scheme(m_dark_mode ? Web::CSS::PreferredColorScheme::Dark : Web::CSS::PreferredColorScheme::Light);
             return;
         }
+        if (header.type == LB_EMBED_CLEAR_DATA) {
+            WebView::Application::ClearBrowsingDataOptions options;
+            if (header.a & LB_EMBED_CLEAR_CACHE)
+                options.delete_cached_files = WebView::Application::ClearBrowsingDataOptions::Delete::Yes;
+            if (header.a & LB_EMBED_CLEAR_SITE_DATA)
+                options.delete_site_data = WebView::Application::ClearBrowsingDataOptions::Delete::Yes;
+            (void)WebView::Application::the().clear_browsing_data(options);
+            return;
+        }
         if (header.type == LB_EMBED_CREATE_VIEW) {
             create_view(header.view, { header.a, header.b }, header.scale >= 1 ? header.scale : device_pixel_ratio_from_environment());
             return;
@@ -546,6 +566,20 @@ private:
                 view.prompt_closed(header.a != 0 ? Optional<Utf16String> { Utf16String::from_utf8(text) } : Optional<Utf16String> {});
                 break;
             }
+            break;
+        case LB_EMBED_FILE_PICKER_CLOSED: {
+            Vector<Web::HTML::SelectedFile> files;
+            text.for_each_split_view('\n', SplitBehavior::Nothing, [&](StringView path) {
+                if (auto file = WebView::create_selected_file(path); !file.is_error())
+                    files.append(file.release_value());
+                else
+                    warnln("ladybird-sfos: cannot open the chosen file {}: {}", path, file.error());
+            });
+            view.file_picker_closed(move(files));
+            break;
+        }
+        case LB_EMBED_COLOR_PICKED:
+            view.color_picker_update(header.a ? Gfx::Color::from_string(text) : Optional<Gfx::Color> {}, Web::HTML::ColorPickerUpdateState::Closed);
             break;
         case LB_EMBED_PINCH:
             view.handle_pinch({ header.c, header.d }, header.scale);

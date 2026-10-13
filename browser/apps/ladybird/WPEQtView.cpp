@@ -213,6 +213,12 @@ void WPEQtView::engineMessage(const lb_embed_header& header, const QString& text
     case LB_EMBED_DIALOG:
         dialogRequested(header.a, text.toUtf8());
         break;
+    case LB_EMBED_FILE_PICKER:
+        filePickerRequested(header.a != 0);
+        break;
+    case LB_EMBED_COLOR_PICKER:
+        colorPickerRequested(text);
+        break;
     case LB_EMBED_LOADING: {
         m_loading = header.a != 0;
         // Answers the old page still owed will not come.
@@ -466,8 +472,11 @@ void WPEQtView::touchEvent(QTouchEvent* event)
             if (point.id() != m_touchId)
                 continue;
             m_longPressTimer.stop();
-            if (!m_touchConsumed)
+            if (!m_touchConsumed) {
                 sendToEngine(LB_EMBED_TOUCH, LB_EMBED_TOUCH_UP, point.id(), static_cast<int>(point.pos().x()), static_cast<int>(point.pos().y()));
+                if (QLineF(m_touchStart, point.pos()).length() <= touchSlop)
+                    tapped(point.pos());
+            }
             m_touchId = -1;
             break;
         default:

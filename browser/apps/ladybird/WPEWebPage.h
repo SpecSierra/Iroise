@@ -408,6 +408,8 @@ public:
 
     // For the whole engine: whether pages should prefer their dark colours.
     static void applyDarkModeGlobally(bool dark);
+    // For the whole engine: forget cached files and/or cookies and what sites stored.
+    static void clearEngineDataGlobally(bool cache, bool siteData);
 
     // Save-password prompt (Phase 3). offerSaveLogin() is called by the
     // loginBridge capture message; resolveSaveLogin() persists on accept.
@@ -561,6 +563,9 @@ protected:
 
     // From the engine view below.
     void longPressed(const QPointF &position) override;
+    void tapped(const QPointF &position) override;
+    void filePickerRequested(bool multiple) override;
+    void colorPickerRequested(const QString &color) override;
     void findResult(int current, int total) override;
     void selectMenuRequested(const QByteArray &optionsJson) override;
     void dialogRequested(int kind, const QByteArray &json) override;
@@ -665,6 +670,16 @@ private:
     qint64 m_lastSoftBackspaceTimeMs = 0;
     qint64 m_lastSoftEnterTimeMs = 0;
     void querySelection();
+    void queryScrollPosition();
+    void closeInputPicker();
+
+    // Where the page is scrolled to is asked for while a finger is on it and for a moment after, see
+    // queryScrollPosition().
+    QTimer m_scrollPoll;
+    int m_scrollPollsLeft = 0;
+    bool m_scrollQueryPending = false;
+    // The picker that is open belongs to the engine (a colour) rather than to our own script (dates and times).
+    bool m_inputPickerIsEngineColor = false;
     void moveSelectionEdge(bool start, qreal cssX, qreal cssY);
 
     // The engine's ids of the options in m_selectMenuOptions.
