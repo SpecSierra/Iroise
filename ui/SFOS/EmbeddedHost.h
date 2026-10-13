@@ -28,7 +28,7 @@ public:
     ~EmbeddedHost();
 
     void send_frame(u32 view, Gfx::LinuxDmaBufHandle const&, Gfx::IntSize painted_size);
-    void send_text(u32 view, lb_embed_message_type, StringView, i32 a = 0);
+    void send_text(u32 view, lb_embed_message_type, StringView, i32 a = 0, i32 b = 0);
     void send_numbers(u32 view, lb_embed_message_type, i32 a, i32 b = 0);
     void send_flags(u32 view, lb_embed_message_type, bool first, bool second = false);
 

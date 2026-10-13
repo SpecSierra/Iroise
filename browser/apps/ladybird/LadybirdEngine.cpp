@@ -6,6 +6,9 @@
 
 #include "LadybirdEngine.h"
 
+#include "LadybirdDownloads.h"
+#include "browserpaths.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QProcessEnvironment>
@@ -91,6 +94,10 @@ void LadybirdEngine::start()
         environment.insert(QStringLiteral("XDG_CONFIG_HOME"), engineHome + QStringLiteral("/.config"));
         environment.insert(QStringLiteral("XDG_DATA_HOME"), engineHome + QStringLiteral("/.local/share"));
     }
+    // The engine saves downloads into this folder without asking, and gives up if it is not there.
+    QString downloads = engineHome.isEmpty() ? BrowserPaths::downloadLocation() : engineHome + QStringLiteral("/Downloads");
+    QDir().mkpath(downloads);
+    environment.insert(QStringLiteral("XDG_DOWNLOAD_DIR"), downloads);
     m_process.setProcessEnvironment(environment);
     m_process.setProcessChannelMode(QProcess::ForwardedChannels);
     m_process.start(enginePath, QStringList());
@@ -213,6 +220,9 @@ void LadybirdEngine::receive()
             const lb_embed_header& header = buffer.header;
             if (header.type == LB_EMBED_FRAME) {
                 handleFrame(header, fd);
+            } else if (header.type == LB_EMBED_DOWNLOAD) {
+                size_t textLength = qMin(static_cast<size_t>(header.text_length), static_cast<size_t>(length) - sizeof(lb_embed_header));
+                LadybirdDownloads::instance()->report(header.a, header.b, QByteArray(buffer.text, static_cast<int>(textLength)));
             } else if (LadybirdEngineClient* client = m_views.value(header.view)) {
                 size_t textLength = qMin(static_cast<size_t>(header.text_length), static_cast<size_t>(length) - sizeof(lb_embed_header));
                 client->engineMessage(header, QString::fromUtf8(buffer.text, static_cast<int>(textLength)));

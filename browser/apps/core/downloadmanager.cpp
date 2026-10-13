@@ -144,7 +144,8 @@ bool DownloadManager::pdfPrinting() const
     return m_pdfPrinting;
 }
 
-bool DownloadManager::prepareDownload(WebKitDownload *download, const QString &suggestedFilename)
+bool DownloadManager::prepareDownload(WebKitDownload *download, const QString &suggestedFilename,
+                                      const QString &settledPath)
 {
     if (!download)
         return false;
@@ -181,6 +182,12 @@ bool DownloadManager::prepareDownload(WebKitDownload *download, const QString &s
     record.startTime = QDateTime::currentDateTimeUtc();
     m_records.insert(downloadId, record);
     emit downloadRecordCreated(downloadId);
+
+    if (!settledPath.isEmpty()) {
+        m_autoDestination.remove(download);
+        confirmDownload(downloadId, settledPath);
+        return true;
+    }
 
     // Started through startDownload(): nobody is there to answer a prompt.
     if (m_autoDestination.contains(download)) {

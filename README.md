@@ -21,6 +21,7 @@ patches. Developed and tested on the Jolla Phone 2 (MT6858, Mali-G610).
 | `scripts/build-browser.sh` | builds `browser/` against the SFOS SDK target |
 | `scripts/bundle.sh`, `scripts/deploy.sh` | relocatable bundle, copied to `/tmp/ladybird` on the phone |
 | `scripts/phone/` | start/stop scripts that run on the phone |
+| `scripts/embed-harness.py` | talks the embedding protocol to an engine on the build host: load a page, tap, print what comes back |
 
 ## Build
 
@@ -98,8 +99,18 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
 - `WPEQtView`, `WPEWebPage` and `WPEWebContainer` keep the names and the surface the
   interface was written against. `WPEWebPage` keeps every property and method the
   QML uses; what the engine protocol cannot do yet is a property that never changes
-  or a method that does nothing. Not wired yet: downloads, permissions,
-  saved-login autofill, the per-site ad-block allowlist, extensions.
+  or a method that does nothing. Not wired yet: permissions, saved-login autofill,
+  the per-site ad-block allowlist, extensions.
+- Downloads: the engine saves a download itself, without asking, into
+  `XDG_DOWNLOAD_DIR` (which the interface sets to the Sailfish downloads folder) and
+  reports its progress. `LadybirdDownloads` turns those reports into the calls the
+  interface's `DownloadManager` was written to get from WebKit, behind a stand-in
+  for the few WebKit functions it uses, so the Sailfish transfer list, cancelling
+  and "save link/image" work as before. There is no "Save as" prompt and the
+  save-destination setting is not honoured. PDFs open in the engine's own viewer.
+  Patch 0008 fixes a link to a file on another site never being saved: the response
+  goes to the process that would host the document, and its claim to the download
+  was refused.
 - Scripts: `LB_EMBED_RUN_SCRIPT` evaluates an expression in the page through the
   engine's console input, the one path that hands a value back. Only strings come
   back intact, so `WPEQtView::evaluate` wraps the expression in `JSON.stringify`

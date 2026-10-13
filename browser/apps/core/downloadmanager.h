@@ -98,7 +98,10 @@ public slots:
     Q_INVOKABLE void cancelPendingDownload(int downloadId);
 
 public:
-    bool prepareDownload(WebKitDownload *download, const QString &suggestedFilename);
+    // `settledPath` is for an engine that has already chosen where the file
+    // goes and is writing it: nobody is asked, and nothing is renamed.
+    bool prepareDownload(WebKitDownload *download, const QString &suggestedFilename,
+                         const QString &settledPath = QString());
     void updateDownload(WebKitDownload *download);
     void downloadFinished(WebKitDownload *download);
     void downloadFailed(WebKitDownload *download, const QString &reason);

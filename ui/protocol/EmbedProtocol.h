@@ -38,6 +38,8 @@ enum lb_embed_message_type {
     LB_EMBED_SET_COOKIE_BANNER_BLOCKING = 15, /* a = 1 to block cookie banners */
     LB_EMBED_SET_DARK_MODE = 16,              /* a = 1 for pages to prefer their dark colours */
     LB_EMBED_CLEAR_DATA = 24,                 /* a = lb_embed_clear bits */
+    LB_EMBED_DOWNLOAD_START = 25,             /* text = URL of a file to save into the downloads folder */
+    LB_EMBED_DOWNLOAD_CANCEL = 26,            /* a = the download's id */
     /* Back to messages for one view. */
     LB_EMBED_RUN_SCRIPT = 17, /* text = a JavaScript expression, run in the page. If its value is a string, the
                                  string comes back in LB_EMBED_SCRIPT_RESULT; the app puts what it needs to tell
@@ -71,6 +73,17 @@ enum lb_embed_message_type {
                                      LB_EMBED_FILE_PICKER_CLOSED. */
     LB_EMBED_COLOR_PICKER = 113,  /* text = the colour an <input type=color> has now, as #rrggbb. Answered
                                      with LB_EMBED_COLOR_PICKED. */
+    /* For the whole engine (view 0). Downloads start when a page navigates to something that is not a page, or
+       on LB_EMBED_DOWNLOAD_START; either way the engine saves the file itself and only reports. */
+    LB_EMBED_DOWNLOAD = 114,      /* a = the download's id; b = lb_embed_download_status;
+                                     text = JSON {"url", "path", "received", "total" (-1 if not known), "error"} */
+};
+
+enum lb_embed_download_status {
+    LB_EMBED_DOWNLOAD_IN_PROGRESS = 0,
+    LB_EMBED_DOWNLOAD_COMPLETED = 1,
+    LB_EMBED_DOWNLOAD_CANCELLED = 2,
+    LB_EMBED_DOWNLOAD_FAILED = 3,
 };
 
 enum lb_embed_clear {

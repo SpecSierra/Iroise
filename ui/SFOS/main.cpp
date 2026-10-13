@@ -24,6 +24,7 @@
 #include <LibWebCommon/HTML/SelectedFile.h>
 #include <LibWebCommon/Page/InputEvent.h>
 #include <LibWebView/Application.h>
+#include <LibWebView/FileDownloader.h>
 #include <LibWebView/HeadlessWebView.h>
 #include <LibWebView/Menu.h>
 #include <LibWebView/Settings.h>
@@ -285,13 +286,80 @@ static ErrorOr<int> run_windowed(Application& app)
 
 // No window of our own: a Silica app shows our frames and sends us input over a socket. It has one view per tab.
 #ifdef USE_VULKAN_DMABUF_IMAGES
-class EmbeddedViews {
+class EmbeddedViews final : private WebView::FileDownloaderObserver {
 public:
     explicit EmbeddedViews(EmbeddedHost& host, Core::AnonymousBuffer theme)
         : m_host(host)
         , m_theme(move(theme))
     {
         m_host.on_message = [this](lb_embed_header const& header, StringView text) { handle(header, text); };
+    }
+
+private:
+    // The engine saves downloads itself; the app lists them and shows how far along they are.
+    virtual void download_added(WebView::FileDownloader::Download const& download) override
+    {
+        // NB: Downloads from earlier runs are restored at start-up, finished ones included. Only what starts now
+        //     is news.
+        if (download.status != WebView::FileDownloader::DownloadStatus::InProgress || download.is_private == WebView::IsPrivate::Yes)
+            return;
+        m_reported_downloads.set(download.id, MonotonicTime::now());
+        report_download(download);
+    }
+
+    virtual void download_updated(WebView::FileDownloader::Download const& download) override
+    {
+        auto last_report = m_reported_downloads.get(download.id);
+        if (!last_report.has_value())
+            return;
+        // NB: Progress arrives with every piece of the file that does; a few reports a second are plenty.
+        auto now = MonotonicTime::now();
+        if (WebView::FileDownloader::status_is_active(download.status)) {
+            if (now - *last_report < AK::Duration::from_milliseconds(250))
+                return;
+            m_reported_downloads.set(download.id, now);
+        } else {
+            m_reported_downloads.remove(download.id);
+        }
+        report_download(download);
+    }
+
+    void report_download(WebView::FileDownloader::Download const& download)
+    {
+        using enum WebView::FileDownloader::DownloadStatus;
+        auto status = LB_EMBED_DOWNLOAD_IN_PROGRESS;
+        if (download.status == Completed)
+            status = LB_EMBED_DOWNLOAD_COMPLETED;
+        else if (download.status == Canceled)
+            status = LB_EMBED_DOWNLOAD_CANCELLED;
+        else if (download.status == Failed)
+            status = LB_EMBED_DOWNLOAD_FAILED;
+
+        JsonObject state;
+        state.set("url"sv, download.url.serialize());
+        state.set("path"sv, String::from_utf8_with_replacement_character(download.destination.string()));
+        state.set("received"sv, download.downloaded_size);
+        state.set("total"sv, download.total_size.has_value() ? static_cast<i64>(*download.total_size) : -1);
+        state.set("error"sv, download.error.value_or({}));
+        auto text = state.serialized();
+
+        m_host.send_text(0, LB_EMBED_DOWNLOAD, text.bytes_as_string_view(), static_cast<i32>(download.id), status);
+    }
+
+    void start_download(StringView url_text)
+    {
+        auto url = WebView::sanitize_url(url_text);
+        if (!url.has_value())
+            return;
+        auto name = url->basename();
+        if (name.is_empty())
+            name = "download"sv;
+        auto destination = WebView::Application::the().default_path_for_downloaded_file(name);
+        if (destination.is_error()) {
+            warnln("ladybird-sfos: nowhere to save {}: {}", *url, destination.error());
+            return;
+        }
+        WebView::Application::the().file_downloader().download_file(WebView::IsPrivate::No, *url, destination.release_value());
     }
 
 private:
@@ -475,6 +543,14 @@ private:
                 entry.value->set_preferred_color_scheme(m_dark_mode ? Web::CSS::PreferredColorScheme::Dark : Web::CSS::PreferredColorScheme::Light);
             return;
         }
+        if (header.type == LB_EMBED_DOWNLOAD_START) {
+            start_download(text);
+            return;
+        }
+        if (header.type == LB_EMBED_DOWNLOAD_CANCEL) {
+            WebView::Application::the().file_downloader().cancel_download(static_cast<u64>(header.a));
+            return;
+        }
         if (header.type == LB_EMBED_CLEAR_DATA) {
             WebView::Application::ClearBrowsingDataOptions options;
             if (header.a & LB_EMBED_CLEAR_CACHE)
@@ -637,6 +713,8 @@ private:
     bool m_block_ads { false };
     bool m_block_cookie_banners { false };
     bool m_dark_mode { false };
+    // The downloads the app knows of, and when it last heard of each.
+    HashMap<u64, MonotonicTime> m_reported_downloads;
     RefPtr<Core::Timer> m_restart_list_updates_timer;
     RefPtr<Core::Timer> m_resume_list_updates_timer;
 };

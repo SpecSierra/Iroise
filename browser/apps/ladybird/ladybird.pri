@@ -22,3 +22,6 @@ INCLUDEPATH += $$PWD/shim
 HEADERS += $$PWD/DirectFrameTextures.h
 SOURCES += $$PWD/DirectFrameTextures.cpp
 LIBS += -lEGL
+
+HEADERS += $$PWD/LadybirdDownloads.h
+SOURCES += $$PWD/LadybirdDownloads.cpp

@@ -1,0 +1,33 @@
+diff --git a/Libraries/LibWebView/WebContentPage.cpp b/Libraries/LibWebView/WebContentPage.cpp
+index e9dd2725..4143f949 100644
+--- a/Libraries/LibWebView/WebContentPage.cpp
++++ b/Libraries/LibWebView/WebContentPage.cpp
+@@ -2278,7 +2278,18 @@ Messages::WebContentClient::DidStartDownloadResponse WebContentPage::did_start_d
+     // identifiers preserve the original RequestServer transfer lease, so only the process and navigation that
+     // received that response may claim it, and only while its population is in flight.
+     bool matches_in_flight_navigation = false;
+-    if (auto navigable = population_worker_navigable(navigable_id); navigable.has_value()) {
++    auto navigable = population_worker_navigable(navigable_id);
++    // A navigation to another site is fetched by one process and populated by the one that will host its document,
++    // which is then the process that finds the response to be a download. That process does not display the tab
++    // yet, and never will for this navigation, but the tab's load is over all the same.
++    bool claimed_by_host = false;
++    if (!navigable.has_value()) {
++        if (auto candidate = traversable().top_level_traversable().find(navigable_id); candidate.has_value() && candidate->navigation_host_matches(*this)) {
++            navigable = candidate;
++            claimed_by_host = true;
++        }
++    }
++    if (navigable.has_value()) {
+         auto const& ongoing_navigation = navigable->ongoing_navigation();
+         if (ongoing_navigation.has_value()
+             && ongoing_navigation->navigation_id == navigation_id
+@@ -2286,7 +2297,7 @@ Messages::WebContentClient::DidStartDownloadResponse WebContentPage::did_start_d
+             && ongoing_navigation->loader
+             && ongoing_navigation->loader->response_body_matches(request_server_client_id, request_server_request_id)) {
+             if (navigable->is_top_level_traversable()) {
+-                if (displays_tab())
++                if (displays_tab() || claimed_by_host)
+                     view().did_cancel_loading(ongoing_navigation->navigation_id);
+             }
+             matches_in_flight_navigation = true;
