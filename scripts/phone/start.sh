@@ -12,4 +12,7 @@ export LADYBIRD_SFOS_LOG_FPS=1
 mkdir -p $HOME
 sh /tmp/ladybird/stop.sh
 nohup ./run.sh "$1" > /tmp/ladybird/win.log 2>&1 &
+# Only the newest run's timer may stop the browser; an older one would cut this run short.
+[ -f /tmp/ladybird/timer.pid ] && kill "$(cat /tmp/ladybird/timer.pid)" 2>/dev/null
 ( sleep $(( ${2:-15} * 60 )); sh /tmp/ladybird/stop.sh ) > /dev/null 2>&1 &
+echo $! > /tmp/ladybird/timer.pid
