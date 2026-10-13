@@ -6,6 +6,7 @@ pkg_check_modules(WAYLAND_CLIENT REQUIRED IMPORTED_TARGET wayland-client)
 
 add_executable(ladybird
     main.cpp
+    EmbeddedHost.cpp
     WaylandWindow.cpp
 )
 target_link_libraries(ladybird PRIVATE PkgConfig::WAYLAND_CLIENT)

@@ -14,6 +14,7 @@ for p in "$ROOT"/patches/*.patch; do
     fi
 done
 ln -sfn "$ROOT/ui/SFOS" "$UP/UI/SFOS"
+ln -sfn "$ROOT/ui/protocol" "$UP/UI/protocol"
 
 # CMake >= 3.30 comes from the venv; gcc 14 from the Ubuntu archive.
 export PATH="$ROOT/.venv/bin:$PATH"

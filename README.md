@@ -12,7 +12,12 @@ Not related to the Atlantic repos; nothing here is shipped.
 | `upstream/` | Ladybird checkout (not tracked; commit pinned in `UPSTREAM_COMMIT`) |
 | `ui/SFOS/` | our Qt-free front end, linked into `upstream/UI/SFOS` by the build script |
 | `patches/` | patches applied to `upstream/` |
-| `scripts/build.sh` | native aarch64 build on the build host |
+| `ui/protocol/` | the socket protocol between the engine and the Silica app |
+| `silica/` | the Silica app (Qt 5.6) that embeds the engine: `LadybirdView` + a toolbar |
+| `scripts/build.sh` | native aarch64 build of the engine on the build host |
+| `scripts/build-silica.sh` | builds `silica/` against the SFOS SDK target |
+| `scripts/bundle.sh`, `scripts/deploy.sh` | relocatable bundle, copied to `/tmp/ladybird` on the phone |
+| `scripts/phone/` | start/stop scripts that run on the phone |
 
 ## Build
 
@@ -55,6 +60,21 @@ package, which is in the phone's repos but not installed by default
   orders, which the blit converts. `LADYBIRD_SFOS_CPU_PRESENT=1` forces the old
   wl_shm copy path for comparison.
 - With the package installed no `HYBRIS_*` settings are needed.
+
+## Silica interface
+
+The browser interface is a normal Silica app. It cannot link the engine (Qt 5.6,
+C++11 against C++23) and a separate page surface cannot sit under a Silica window
+on lipstick (see Atlantic's `direct-composite-overlay` investigation), so:
+
+- The app starts the engine with `LADYBIRD_SFOS_EMBED_SOCKET` set; the engine then
+  opens no window and connects back over a `SOCK_SEQPACKET` socket.
+- Each frame arrives as a dma-buf file descriptor. `LadybirdView` maps it and
+  uploads it to a texture in the Qt scene graph. The phone's EGL has no
+  `EGL_EXT_image_dma_buf_import`, so this is a CPU upload per frame for now; the
+  zero-copy route would be Android native buffers
+  (`EGL_ANDROID_image_native_buffer` + `VK_ANDROID_external_memory_android_hardware_buffer`).
+- Touches, the size, and load/back/forward/reload go the other way.
 
 ## Milestones
 
