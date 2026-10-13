@@ -321,9 +321,9 @@ Page {
 
             TextSwitch {
                 //: Keep web pages out of the screen area around the camera notch
-                //% "Hide the notch"
+                //% "Keep pages clear of the notch"
                 text: qsTrId("settings_browser-la-crop_notch")
-                //% "Fill the strip around the camera notch with black and fit the page below it"
+                //% "Fit the page below the camera notch and fill the strip beside it with the page's colour"
                 description: qsTrId("settings_browser-la-crop_notch_description")
                 visible: Screen.hasCutouts
                 checked: cropNotchConfig.value
@@ -504,7 +504,7 @@ Page {
         id: cropNotchConfig
 
         key: "/apps/pacific-browser/settings/crop_notch"
-        defaultValue: false
+        defaultValue: true
     }
 
     ConfigurationValue {

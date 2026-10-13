@@ -665,7 +665,18 @@ void WPEWebPage::applyAdBlockEnabledGlobally(bool enabled)
 
 void WPEWebPage::applyAdBlockAllowlistGlobally(const QString &json)
 {
-    Q_UNUSED(json);
+    // The sites the user switched blocking off for become exception rules on top of the lists: nothing a page of
+    // that site (or of a subdomain) asks for is blocked, and nothing in it is hidden.
+    QString rules;
+    for (const QJsonValue &entry : QJsonDocument::fromJson(json.toUtf8()).array()) {
+        QString host = entry.toString().trimmed().toLower();
+        // NB: A host goes into the rules as it is, so one that could be read as rule syntax is left out.
+        static const QRegularExpression plainHost(QStringLiteral("^[a-z0-9.-]+$"));
+        if (!plainHost.match(host).hasMatch())
+            continue;
+        rules += QStringLiteral("@@*$domain=%1\n@@||%1^$elemhide\n").arg(host);
+    }
+    LadybirdEngine::instance()->send(0, LB_EMBED_SET_BLOCKER_FILTERS, 0, 0, 0, 0, 0, rules.toUtf8());
 }
 
 void WPEWebPage::applyCookieBannerBlockingGlobally(bool enabled)
@@ -1331,4 +1342,15 @@ void WPEWebPage::queryScrollPosition()
 void WPEWebPage::clearEngineDataGlobally(bool cache, bool siteData)
 {
     LadybirdEngine::instance()->send(0, LB_EMBED_CLEAR_DATA, (cache ? LB_EMBED_CLEAR_CACHE : 0) | (siteData ? LB_EMBED_CLEAR_SITE_DATA : 0));
+}
+
+void WPEWebPage::pageColorChanged(int kind, const QString &color)
+{
+    QColor before = surroundColor();
+    if (kind == LB_EMBED_PAGE_COLOR_THEME)
+        m_themeColor = color.isEmpty() ? QColor() : QColor(color);
+    else if (QColor(color).isValid())
+        m_backgroundColor = QColor(color);
+    if (surroundColor() != before)
+        emit surroundColorChanged();
 }

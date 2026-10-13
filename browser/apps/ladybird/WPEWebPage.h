@@ -15,6 +15,7 @@
 #include <QHash>
 #include <QSharedPointer>
 #include <QStringList>
+#include <QColor>
 #include <QTimer>
 #include <QVariant>
 #include <QElapsedTimer>
@@ -160,6 +161,10 @@ private:
 
     // Find-in-page
     Q_PROPERTY(bool findInPageHasResult READ findInPageHasResult NOTIFY findInPageHasResultChanged FINAL)
+
+    // The colour for the parts of the screen around the page that the page is kept out of (the strip beside a
+    // camera notch): the page's theme colour if it names one, otherwise what it paints behind its content.
+    Q_PROPERTY(QColor surroundColor READ surroundColor NOTIFY surroundColorChanged FINAL)
 
     // A page's alert(), confirm() or prompt(): the page waits until resolveJsDialog() is called.
     // jsDialogKind is one of alert|confirm|prompt.
@@ -400,6 +405,8 @@ public:
     QString permissionType() const { return m_permissionType; }
     Q_INVOKABLE void resolvePermission(bool allow);
 
+    QColor surroundColor() const { return m_themeColor.isValid() ? m_themeColor : m_backgroundColor; }
+
     bool jsDialogActive() const { return m_jsDialogKind >= 0; }
     QString jsDialogKind() const;
     QString jsDialogMessage() const { return m_jsDialogMessage; }
@@ -521,6 +528,7 @@ signals:
     void tlsErrorChanged();
     void permissionChanged();
     void jsDialogChanged();
+    void surroundColorChanged();
     void saveLoginChanged();
     void findInPageHasResultChanged();
 
@@ -566,6 +574,7 @@ protected:
     void tapped(const QPointF &position) override;
     void filePickerRequested(bool multiple) override;
     void colorPickerRequested(const QString &color) override;
+    void pageColorChanged(int kind, const QString &color) override;
     void findResult(int current, int total) override;
     void selectMenuRequested(const QByteArray &optionsJson) override;
     void dialogRequested(int kind, const QByteArray &json) override;
@@ -685,6 +694,8 @@ private:
     // The engine's ids of the options in m_selectMenuOptions.
     QList<int> m_selectMenuIds;
     QString m_findText;
+    QColor m_themeColor;
+    QColor m_backgroundColor = QColor(Qt::white);
     int m_jsDialogKind = -1;
     QString m_jsDialogMessage;
     QString m_jsDialogDefaultText;

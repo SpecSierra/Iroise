@@ -125,6 +125,7 @@ protected:
     virtual void tapped(const QPointF&) { }
     virtual void filePickerRequested(bool multiple) { Q_UNUSED(multiple); }
     virtual void colorPickerRequested(const QString& color) { Q_UNUSED(color); }
+    virtual void pageColorChanged(int kind, const QString& color) { Q_UNUSED(kind); Q_UNUSED(color); }
     // What the engine says that only the page class above knows what to do with.
     virtual void findResult(int current, int total) { Q_UNUSED(current); Q_UNUSED(total); }
     virtual void selectMenuRequested(const QByteArray& optionsJson) { Q_UNUSED(optionsJson); }

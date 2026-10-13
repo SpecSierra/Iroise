@@ -23,7 +23,7 @@ proc = subprocess.Popen([sys.argv[1]] + sys.argv[3:], env=env, stdout=open('embe
 srv.settimeout(20); conn, _ = srv.accept()
 conn.send(msg(7, a=1032, b=2110, scale=2.5))                     # create view
 conn.send(msg(1, text=sys.argv[2].encode()))                     # load
-names = {101:'FRAME',102:'URL',103:'TITLE',104:'LOADING',105:'HISTORY',114:'DOWNLOAD',107:'CRASHED'}
+names = {101:'FRAME',102:'URL',103:'TITLE',104:'LOADING',105:'HISTORY',114:'DOWNLOAD',115:'PAGE_COLOR',107:'CRASHED'}
 def pump(seconds):
     end = time.time() + seconds
     while time.time() < end:

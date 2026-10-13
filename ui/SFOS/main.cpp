@@ -449,6 +449,16 @@ private:
         view->on_request_confirm = [send_dialog](Utf16String const& message) { send_dialog(LB_EMBED_DIALOG_CONFIRM, message, {}); };
         view->on_request_prompt = [send_dialog](Utf16String const& message, Utf16String const& default_text) { send_dialog(LB_EMBED_DIALOG_PROMPT, message, default_text); };
 
+        // The app paints the part of the screen it keeps the page out of (around a camera notch) in the page's colour.
+        view->on_theme_color_change = [this, id](Gfx::Color color) {
+            auto text = color.alpha() ? color.to_string_without_alpha() : String {};
+            m_host.send_text(id, LB_EMBED_PAGE_COLOR, text.bytes_as_string_view(), LB_EMBED_PAGE_COLOR_THEME);
+        };
+        view->on_page_background_color_change = [this, id](Gfx::Color color) {
+            auto text = color.to_string_without_alpha();
+            m_host.send_text(id, LB_EMBED_PAGE_COLOR, text.bytes_as_string_view(), LB_EMBED_PAGE_COLOR_BACKGROUND);
+        };
+
         view->on_request_file_picker = [this, id](Web::HTML::FileFilter const&, Web::HTML::AllowMultipleFiles allow_multiple_files) {
             m_host.send_numbers(id, LB_EMBED_FILE_PICKER, allow_multiple_files == Web::HTML::AllowMultipleFiles::Yes);
         };
@@ -541,6 +551,10 @@ private:
             m_dark_mode = header.a != 0;
             for (auto& entry : m_views)
                 entry.value->set_preferred_color_scheme(m_dark_mode ? Web::CSS::PreferredColorScheme::Dark : Web::CSS::PreferredColorScheme::Light);
+            return;
+        }
+        if (header.type == LB_EMBED_SET_BLOCKER_FILTERS) {
+            WebView::Application::settings().set_custom_content_blocker_filters(String::from_utf8_with_replacement_character(text));
             return;
         }
         if (header.type == LB_EMBED_DOWNLOAD_START) {

@@ -40,6 +40,8 @@ enum lb_embed_message_type {
     LB_EMBED_CLEAR_DATA = 24,                 /* a = lb_embed_clear bits */
     LB_EMBED_DOWNLOAD_START = 25,             /* text = URL of a file to save into the downloads folder */
     LB_EMBED_DOWNLOAD_CANCEL = 26,            /* a = the download's id */
+    LB_EMBED_SET_BLOCKER_FILTERS = 27,        /* text = filter rules of the app's own, in the syntax of the
+                                                 lists, applied on top of them */
     /* Back to messages for one view. */
     LB_EMBED_RUN_SCRIPT = 17, /* text = a JavaScript expression, run in the page. If its value is a string, the
                                  string comes back in LB_EMBED_SCRIPT_RESULT; the app puts what it needs to tell
@@ -73,10 +75,17 @@ enum lb_embed_message_type {
                                      LB_EMBED_FILE_PICKER_CLOSED. */
     LB_EMBED_COLOR_PICKER = 113,  /* text = the colour an <input type=color> has now, as #rrggbb. Answered
                                      with LB_EMBED_COLOR_PICKED. */
+    LB_EMBED_PAGE_COLOR = 115,    /* a = lb_embed_page_color; text = the colour as #rrggbb, empty when the page
+                                     no longer names one */
     /* For the whole engine (view 0). Downloads start when a page navigates to something that is not a page, or
        on LB_EMBED_DOWNLOAD_START; either way the engine saves the file itself and only reports. */
     LB_EMBED_DOWNLOAD = 114,      /* a = the download's id; b = lb_embed_download_status;
                                      text = JSON {"url", "path", "received", "total" (-1 if not known), "error"} */
+};
+
+enum lb_embed_page_color {
+    LB_EMBED_PAGE_COLOR_THEME = 0,      /* <meta name=theme-color> */
+    LB_EMBED_PAGE_COLOR_BACKGROUND = 1, /* what the page paints behind its content */
 };
 
 enum lb_embed_download_status {

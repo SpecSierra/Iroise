@@ -125,7 +125,14 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   interface was written against. `WPEWebPage` keeps every property and method the
   QML uses; what the engine protocol cannot do yet is a property that never changes
   or a method that does nothing. Not wired yet: permissions, saved-login autofill,
-  the per-site ad-block allowlist, extensions.
+  extensions.
+- The camera notch: the page is kept out of the band of the screen the notch is in
+  (the `crop_notch` setting, on by default), and that band is painted in the page's
+  `theme-color`, or failing that in the colour the page paints behind its content,
+  both of which the engine reports. So the page reads as reaching the screen's edge.
+- "Block ads on this site" off: the hosts on the interface's allowlist become
+  exception rules (`@@*$domain=host` and `@@||host^$elemhide`) given to the engine as
+  its custom filters, on top of the lists.
 - Downloads: the engine saves a download itself, without asking, into
   `XDG_DOWNLOAD_DIR` (which the interface sets to the Sailfish downloads folder) and
   reports its progress. `LadybirdDownloads` turns those reports into the calls the

@@ -204,7 +204,7 @@ Page {
     ConfigurationValue {
         id: cropNotchConfig
         key: "/apps/pacific-browser/settings/crop_notch"
-        defaultValue: false
+        defaultValue: true
         // Read by _notchInset (webViewFrame). A pure QML binding, so no C++
         // side to restore on startup.
     }
@@ -354,11 +354,12 @@ Page {
         }
     }
 
-    // Crop the web content to the notch-free part of the screen (setting
-    // crop_notch, default OFF). The notch sits at the top of the physical
-    // portrait screen, so after Silica rotates the page it is on a different
-    // page edge per orientation. The whole band is reserved (both sides of the
-    // notch), and the black fill behind the frame shows through it.
+    // Keep the web content out of the band of the screen the camera notch is
+    // in (setting crop_notch, default ON). The notch sits at the top of the
+    // physical portrait screen, so after Silica rotates the page it is on a
+    // different page edge per orientation. The whole band is reserved (both
+    // sides of the notch) and filled with the page's own colour, so that the
+    // page looks as if it reached the edge of the screen.
     // WPEWebContainer sizes itself and its pages from its parent item, so
     // insetting this frame is all it takes. The chrome (Overlay) stays at the
     // page edges, so fullscreenHeight is still the page height.
@@ -367,7 +368,7 @@ Page {
 
     Rectangle {
         anchors.fill: parent
-        color: "black"
+        color: webView.contentItem ? webView.contentItem.surroundColor : "black"
         visible: browserPage._notchInset > 0
     }
 

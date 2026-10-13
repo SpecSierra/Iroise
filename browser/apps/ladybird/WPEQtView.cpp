@@ -219,6 +219,9 @@ void WPEQtView::engineMessage(const lb_embed_header& header, const QString& text
     case LB_EMBED_COLOR_PICKER:
         colorPickerRequested(text);
         break;
+    case LB_EMBED_PAGE_COLOR:
+        pageColorChanged(header.a, text);
+        break;
     case LB_EMBED_LOADING: {
         m_loading = header.a != 0;
         // Answers the old page still owed will not come.
