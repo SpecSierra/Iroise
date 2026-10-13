@@ -6,6 +6,8 @@
 
 #include "WPEQtView.h"
 
+#include "DirectFrameTextures.h"
+
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
 #include <QQuickWindow>
@@ -129,10 +131,13 @@ void WPEQtView::engineFrame(const LadybirdFrame& frame)
     emit frameArrived();
 }
 
-void WPEQtView::engineBufferGone(const uchar* pixels)
+void WPEQtView::engineBufferGone(quint64 bufferId)
 {
-    if (m_frame.pixels == pixels)
+    if (m_frame.bufferId == bufferId)
         m_frame = LadybirdFrame();
+    // Our texture of it is let go of on the render thread, before the buffer could be used again.
+    m_buffersGone.append(bufferId);
+    update();
 }
 
 void WPEQtView::engineMessage(const lb_embed_header& header, const QString& text)
@@ -197,6 +202,45 @@ void WPEQtView::geometryChanged(const QRectF& newGeometry, const QRectF& oldGeom
 QSGNode* WPEQtView::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*)
 {
     QSGSimpleTextureNode* node = static_cast<QSGSimpleTextureNode*>(oldNode);
+
+    // Where the GPU can sample the engine's buffer as it is, the frame is shown from there and nothing is copied.
+    if (!m_directTextures)
+        m_directTextures = new DirectFrameTextures;
+    for (quint64 bufferId : m_buffersGone)
+        m_directTextures->forget(bufferId);
+    m_buffersGone.clear();
+    QSGTexture* direct = m_frame.pixels ? m_directTextures->textureFor(window(), m_frame) : nullptr;
+    if (m_directTextures->generation() != m_directGeneration) {
+        // NB: As with the uploaded texture below, a node must not carry texture coordinates over to a texture
+        //     that happens to be created at the address of one that was deleted.
+        m_directGeneration = m_directTextures->generation();
+        delete node;
+        node = nullptr;
+    }
+    if (m_frame.pixels && !m_loggedPath) {
+        m_loggedPath = true;
+        qWarning("WPEQtView: frames are %s", direct ? "shown from the engine's buffers, without a copy" : "uploaded to a texture");
+    }
+    if (direct) {
+        if (m_texture) {
+            delete node;
+            node = nullptr;
+            delete m_texture;
+            m_texture = nullptr;
+            m_textureId = 0;
+            m_textureSize = QSize();
+        }
+        if (!node) {
+            node = new QSGSimpleTextureNode;
+            node->setFiltering(QSGTexture::Linear);
+        }
+        node->setTexture(direct);
+        node->setSourceRect(QRectF(QPointF(0, 0), QSizeF(m_frame.paintedSize)));
+        node->setRect(QRectF(QPointF(0, 0), QSizeF(m_frame.paintedSize)));
+        node->markDirty(QSGNode::DirtyMaterial);
+        return node;
+    }
+
     if (!m_frame.pixels && !m_texture) {
         delete node;
         return nullptr;
@@ -262,6 +306,10 @@ void WPEQtView::releaseResources()
     m_texture = nullptr;
     m_textureId = 0;
     m_uploadedSerial = 0;
+    if (m_directTextures)
+        m_directTextures->deleteLater();
+    m_directTextures = nullptr;
+    m_directGeneration = 0;
 }
 
 void WPEQtView::touchEvent(QTouchEvent* event)

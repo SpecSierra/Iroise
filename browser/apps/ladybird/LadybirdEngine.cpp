@@ -13,6 +13,7 @@
 #include <QStandardPaths>
 
 #include <errno.h>
+#include <fcntl.h>
 #include <string.h>
 #include <sys/mman.h>
 #include <sys/socket.h>
@@ -45,8 +46,10 @@ LadybirdEngine::~LadybirdEngine()
         ::unlink(m_socketPath.toLocal8Bit().constData());
     m_process.terminate();
     m_process.waitForFinished(2000);
-    for (const Mapping& mapping : m_mappings)
+    for (const Mapping& mapping : m_mappings) {
         ::munmap(mapping.pixels, mapping.length);
+        ::close(mapping.fd);
+    }
 }
 
 void LadybirdEngine::start()
@@ -220,7 +223,7 @@ void LadybirdEngine::receive()
     }
 }
 
-const uchar* LadybirdEngine::mappingFor(int fd, size_t length)
+const LadybirdEngine::Mapping* LadybirdEngine::mappingFor(int fd, size_t length)
 {
     // Every frame message carries a fresh duplicate of the buffer's file descriptor, so recognize the buffer
     // behind it by its inode.
@@ -230,7 +233,7 @@ const uchar* LadybirdEngine::mappingFor(int fd, size_t length)
     for (Mapping& mapping : m_mappings) {
         if (mapping.device == status.st_dev && mapping.inode == status.st_ino && mapping.length == length) {
             mapping.lastUsed = m_frameSerial;
-            return mapping.pixels;
+            return &mapping;
         }
     }
 
@@ -241,24 +244,33 @@ const uchar* LadybirdEngine::mappingFor(int fd, size_t length)
                 oldest = i;
         }
         for (LadybirdEngineClient* client : m_views)
-            client->engineBufferGone(m_mappings[oldest].pixels);
+            client->engineBufferGone(m_mappings[oldest].id);
         ::munmap(m_mappings[oldest].pixels, m_mappings[oldest].length);
+        ::close(m_mappings[oldest].fd);
         m_mappings.remove(oldest);
     }
 
+    // The descriptor that came with the message is closed once the message is handled; the view needs one that
+    // lasts as long as the buffer is in use, to hand to the GPU.
+    int ownFd = ::fcntl(fd, F_DUPFD_CLOEXEC, 0);
+    if (ownFd < 0)
+        return nullptr;
     void* pixels = ::mmap(nullptr, length, PROT_READ, MAP_SHARED, fd, 0);
     if (pixels == MAP_FAILED) {
         qWarning("LadybirdEngine: cannot map a frame: %s", strerror(errno));
+        ::close(ownFd);
         return nullptr;
     }
     Mapping mapping;
+    mapping.fd = ownFd;
+    mapping.id = m_nextBufferId++;
     mapping.device = status.st_dev;
     mapping.inode = status.st_ino;
     mapping.pixels = static_cast<uchar*>(pixels);
     mapping.length = length;
     mapping.lastUsed = m_frameSerial;
     m_mappings.append(mapping);
-    return mapping.pixels;
+    return &m_mappings.last();
 }
 
 void LadybirdEngine::handleFrame(const lb_embed_header& header, int fd)
@@ -267,12 +279,14 @@ void LadybirdEngine::handleFrame(const lb_embed_header& header, int fd)
     if (!client || fd < 0 || header.c < 1 || header.d < 1 || header.e < static_cast<uint32_t>(header.c) * 4)
         return;
     ++m_frameSerial;
-    const uchar* pixels = mappingFor(fd, static_cast<size_t>(header.e) * static_cast<size_t>(header.d));
-    if (!pixels)
+    const Mapping* mapping = mappingFor(fd, static_cast<size_t>(header.e) * static_cast<size_t>(header.d));
+    if (!mapping)
         return;
 
     LadybirdFrame frame;
-    frame.pixels = pixels;
+    frame.pixels = mapping->pixels;
+    frame.bufferFd = mapping->fd;
+    frame.bufferId = mapping->id;
     frame.pitch = static_cast<int>(header.e);
     frame.bufferSize = QSize(header.c, header.d);
     frame.paintedSize = QSize(qMin(header.a, header.c), qMin(header.b, header.d));

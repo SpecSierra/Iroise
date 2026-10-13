@@ -22,6 +22,10 @@ class QSocketNotifier;
 // A frame the engine finished: BGRA pixels in a buffer shared with the engine's GPU process.
 struct LadybirdFrame {
     const uchar* pixels = nullptr;
+    // The buffer itself (a dma-buf, ours for as long as the frame is valid), and a number that names it: the
+    // engine paints its frames into the same few buffers over and over.
+    int bufferFd = -1;
+    quint64 bufferId = 0;
     int pitch = 0;
     QSize bufferSize;
     QSize paintedSize;
@@ -34,8 +38,8 @@ public:
     virtual ~LadybirdEngineClient() { }
     virtual void engineFrame(const LadybirdFrame&) = 0;
     virtual void engineMessage(const lb_embed_header&, const QString& text) = 0;
-    // The buffer behind these pixels is about to be unmapped; a frame that points at it must be dropped.
-    virtual void engineBufferGone(const uchar* pixels) = 0;
+    // This buffer is about to be unmapped and closed; a frame that points at it must be dropped.
+    virtual void engineBufferGone(quint64 bufferId) = 0;
 };
 
 // The one Ladybird engine process behind every tab, and the socket to it. The engine is started on first use and
@@ -67,6 +71,8 @@ private:
         ino_t inode;
         uchar* pixels;
         size_t length;
+        int fd;
+        quint64 id;
         quint64 lastUsed;
     };
     struct Queued {
@@ -80,7 +86,7 @@ private:
     void start();
     void write(const lb_embed_header&, const QByteArray& text);
     void handleFrame(const lb_embed_header&, int fd);
-    const uchar* mappingFor(int fd, size_t length);
+    const Mapping* mappingFor(int fd, size_t length);
 
     QProcess m_process;
     QString m_socketPath;
@@ -94,4 +100,5 @@ private:
     quint32 m_nextView = 1;
     QVector<Mapping> m_mappings;
     quint64 m_frameSerial = 0;
+    quint64 m_nextBufferId = 1;
 };

@@ -80,11 +80,20 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
 - `LadybirdEngine` starts one engine process with `LADYBIRD_SFOS_EMBED_SOCKET` set;
   the engine then opens no window and connects back over a `SOCK_SEQPACKET` socket.
   One engine serves every tab; each tab is a numbered view (`ui/protocol/EmbedProtocol.h`).
-- Each frame arrives as a dma-buf file descriptor, is mapped, and is uploaded to a
-  texture in the Qt scene graph. The phone's EGL has no
-  `EGL_EXT_image_dma_buf_import`, so this is a CPU upload per frame for now; the
-  zero-copy route would be Android native buffers
-  (`EGL_ANDROID_image_native_buffer` + `VK_ANDROID_external_memory_android_hardware_buffer`).
+- Each frame arrives as a dma-buf file descriptor and is shown from that buffer, with
+  no copy (`DirectFrameTextures`). The phone's EGL has no
+  `EGL_EXT_image_dma_buf_import`; it only takes Android buffer handles. So for each
+  new buffer we have gralloc allocate one of the same size through libhybris'
+  `EGL_HYBRIS_native_buffer2`, copy its handle with the engine's dma-buf in place of
+  gralloc's own pixel memory, and bind the resulting `EGLImage` to the texture the
+  scene graph draws. This holds because gralloc's uncompressed BGRA layout (rows
+  padded to 16 pixels, size rounded to a page) is the one the engine allocates with.
+  The gralloc buffer must be asked for with software read/write usage, otherwise the
+  Mali gralloc lays it out as AFBC and the page reads as garbage. Where any of this
+  does not hold, or with `PACIFIC_UPLOAD_FRAMES=1`, the frame is mapped and uploaded
+  with `glTexSubImage2D` as before. Scripted scroll of Hacker News on the Jolla
+  Phone 2: the interface process used 377 CPU ticks against 667 with the upload, at
+  the same frame rate (the engine sets it).
 - Touches, the size, visibility, navigation, and on-screen keyboard text go the other way.
 - `WPEQtView`, `WPEWebPage` and `WPEWebContainer` keep the names and the surface the
   interface was written against. `WPEWebPage` keeps every property and method the

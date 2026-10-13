@@ -15,6 +15,7 @@
 
 #include "LadybirdEngine.h"
 
+class DirectFrameTextures;
 class QSGTexture;
 class WPEQtViewLoadRequest;
 
@@ -104,7 +105,7 @@ protected:
     // LadybirdEngineClient
     void engineFrame(const LadybirdFrame&) override;
     void engineMessage(const lb_embed_header&, const QString& text) override;
-    void engineBufferGone(const uchar* pixels) override;
+    void engineBufferGone(quint64 bufferId) override;
 
     void sendToEngine(lb_embed_message_type type, int a = 0, int b = 0, int c = 0, int d = 0, const QByteArray& text = QByteArray());
     bool hasEngineView() const { return m_view != 0; }
@@ -128,7 +129,14 @@ private:
 
     LadybirdFrame m_frame;
 
-    // Render thread state. The GUI thread is blocked while updatePaintNode runs, so it may read m_frame.
+    // Buffers the engine connection has let go of since the last updatePaintNode.
+    QVector<quint64> m_buffersGone;
+
+    // Render thread state. The GUI thread is blocked while updatePaintNode runs, so it may read m_frame and
+    // m_buffersGone.
+    DirectFrameTextures* m_directTextures = nullptr;
+    quint64 m_directGeneration = 0;
+    bool m_loggedPath = false;
     QSGTexture* m_texture = nullptr;
     uint m_textureId = 0;
     QSize m_textureSize;

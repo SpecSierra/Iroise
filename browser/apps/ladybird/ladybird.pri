@@ -17,3 +17,8 @@ SOURCES += \
     $$PWD/WPEWebContainer.cpp \
     $$PWD/WPEWebPageCreator.cpp
 INCLUDEPATH += $$PWD/shim
+
+# Frames are shown straight from the engine's buffers through libhybris' EGL, see DirectFrameTextures.
+HEADERS += $$PWD/DirectFrameTextures.h
+SOURCES += $$PWD/DirectFrameTextures.cpp
+LIBS += -lEGL
