@@ -1,0 +1,35 @@
+diff --git a/Libraries/LibGfx/CMakeLists.txt b/Libraries/LibGfx/CMakeLists.txt
+index 1373f954..9b980cd7 100644
+--- a/Libraries/LibGfx/CMakeLists.txt
++++ b/Libraries/LibGfx/CMakeLists.txt
+@@ -116,6 +116,12 @@ if (HAS_VULKAN)
+     target_link_libraries(LibGfx PUBLIC Vulkan::Headers)
+     target_link_libraries(LibGfx PRIVATE Vulkan::Vulkan GPUOpen::VulkanMemoryAllocator)
+ 
++    if (LADYBIRD_UI_SFOS OR DEFINED ENV{LADYBIRD_UI_SFOS})
++        # libhybris exports most Vulkan entry points as IFUNCs whose resolvers only work once vkCreateInstance has
++        # loaded the Android driver, so they must not be bound when LibGfx loads.
++        target_link_options(LibGfx PRIVATE LINKER:-z,lazy)
++    endif()
++
+     if (USE_VULKAN_DMABUF_IMAGES)
+         pkg_check_modules(LibDRM REQUIRED libdrm)
+         target_include_directories(LibGfx PUBLIC ${LibDRM_INCLUDE_DIRS})
+diff --git a/Libraries/LibGfx/SkiaVulkanMemoryAllocator.cpp b/Libraries/LibGfx/SkiaVulkanMemoryAllocator.cpp
+index 1efd8410..29dbb835 100644
+--- a/Libraries/LibGfx/SkiaVulkanMemoryAllocator.cpp
++++ b/Libraries/LibGfx/SkiaVulkanMemoryAllocator.cpp
+@@ -164,7 +164,12 @@ sk_sp<skgpu::VulkanMemoryAllocator> create_skia_vulkan_memory_allocator(VulkanCo
+ {
+     VmaVulkanFunctions functions = {};
+     functions.vkGetInstanceProcAddr = vkGetInstanceProcAddr;
+-    functions.vkGetDeviceProcAddr = vkGetDeviceProcAddr;
++    // NB: Call through a wrapper rather than storing the loader's address. libhybris exports this symbol as an
++    //     IFUNC, and a stored address would make the dynamic linker resolve it while the library loads, before
++    //     libhybris can find the Android driver.
++    functions.vkGetDeviceProcAddr = [](VkDevice device, char const* name) VKAPI_ATTR -> PFN_vkVoidFunction {
++        return vkGetDeviceProcAddr(device, name);
++    };
+ 
+     VmaAllocatorCreateInfo info = {};
+     // Skia only ever accesses the memory allocator from the thread that owns the GrDirectContext,
