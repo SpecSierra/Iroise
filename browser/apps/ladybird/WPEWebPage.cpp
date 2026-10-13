@@ -8,12 +8,16 @@
 
 #include "WPEWebPage.h"
 
+#include <QClipboard>
 #include <QCryptographicHash>
 #include <QDir>
 #include <QGuiApplication>
 #include <QImage>
 #include <QInputMethod>
 #include <QInputMethodEvent>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QKeyEvent>
 #include <QQuickItemGrabResult>
 #include <QQuickWindow>
@@ -31,6 +35,52 @@ QList<WPEWebPage *> &livePages()
 
 const int kThumbnailIntervalMs = 4000;
 const int kThumbnailMaxWidth = 540;
+const int kSelectionPollMs = 200;
+// The handles hang below the line they mark and are dragged by their middle, so the text a handle points at is
+// this far above where the finger says it is, in CSS pixels.
+const qreal kHandleToTextCssPx = 24;
+
+// What is under a long press: a link, an image, or text, of which it then selects the word.
+const char kLongPressScript[] =
+    "(function(x,y){"
+    "var r={link:'',image:'',page:location.href,word:false};"
+    "var e=document.elementFromPoint(x,y);if(!e)return r;"
+    "var a=e.closest?e.closest('a[href]'):null;if(a)r.link=a.href;"
+    "if(e.tagName==='IMG')r.image=e.currentSrc||e.src||'';"
+    "if(r.link||r.image)return r;"
+    "var p=document.caretPositionFromPoint?document.caretPositionFromPoint(x,y):null;"
+    "if(!p||!p.offsetNode||p.offsetNode.nodeType!==3)return r;"
+    "var t=p.offsetNode.data,s=p.offset,n=p.offset,w=/[\\s\\u00a0.,;:!?()\\[\\]{}\"<>]/;"
+    "while(s>0&&!w.test(t[s-1]))s--;"
+    "while(n<t.length&&!w.test(t[n]))n++;"
+    "if(n<=s)return r;"
+    "getSelection().setBaseAndExtent(p.offsetNode,s,p.offsetNode,n);"
+    "r.word=true;return r;"
+    "})(%1,%2)";
+
+// The selection's text and where its two ends are on screen: the bottom of the first and of the last line box,
+// in CSS pixels at the zoom the user pinched to.
+const char kSelectionScript[] =
+    "(function(){"
+    "var s=getSelection();if(!s||!s.rangeCount||s.isCollapsed)return {t:''};"
+    "var q=s.getRangeAt(0).getClientRects();if(!q.length)return {t:''};"
+    "var a=q[0],b=q[q.length-1],v=window.visualViewport,z=v?v.scale:1,ox=v?v.offsetLeft:0,oy=v?v.offsetTop:0;"
+    "return {t:s.toString().slice(0,4000),sx:(a.left-ox)*z,sy:(a.bottom-oy)*z,ex:(b.right-ox)*z,ey:(b.bottom-oy)*z};"
+    "})()";
+
+// Moves one end of the selection to the text nearest a point, keeping the other end where it is.
+const char kMoveSelectionScript[] =
+    "(function(x,y,start){"
+    "var v=window.visualViewport;if(v){x=x/v.scale+v.offsetLeft;y=y/v.scale+v.offsetTop;}"
+    "var s=getSelection();if(!s.rangeCount)return 0;"
+    "var p=document.caretPositionFromPoint?document.caretPositionFromPoint(x,y):null;if(!p||!p.offsetNode)return 0;"
+    "var r=s.getRangeAt(0);"
+    "try{"
+    "if(start){if(r.comparePoint(p.offsetNode,p.offset)>0)return 0;s.setBaseAndExtent(r.endContainer,r.endOffset,p.offsetNode,p.offset);}"
+    "else{if(r.comparePoint(p.offsetNode,p.offset)<0)return 0;s.setBaseAndExtent(r.startContainer,r.startOffset,p.offsetNode,p.offset);}"
+    "}catch(e){return 0;}"
+    "return 1;"
+    "})(%1,%2,%3)";
 
 } // namespace
 
@@ -52,6 +102,16 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     // A tab's thumbnail is a scaled copy of what is on screen, refreshed while the tab is the one showing.
     m_thumbnailTimer.setInterval(kThumbnailIntervalMs);
     connect(&m_thumbnailTimer, &QTimer::timeout, this, &WPEWebPage::captureThumbnail);
+
+    // The engine does not tell us when a selection changes or moves with the page, so while there is one, ask.
+    m_selectionPoll.setInterval(kSelectionPollMs);
+    connect(&m_selectionPoll, &QTimer::timeout, this, &WPEWebPage::querySelection);
+    connect(this, &WPEWebPage::textSelectionActiveChanged, this, [this] {
+        if (m_textSelectionActive)
+            m_selectionPoll.start();
+        else
+            m_selectionPoll.stop();
+    });
 }
 
 WPEWebPage::~WPEWebPage()
@@ -154,8 +214,19 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
         m_loaded = finished;
         emit loadedChanged();
     }
-    if (finished)
+    if (finished) {
         m_lastCommittedUrl = url();
+    } else {
+        // What the old page had selected, was searching for or was asking is gone with it.
+        handleJsSelectionClear();
+        m_selectionQueryPending = false;
+        m_findText.clear();
+        setFindInPageHasResult(false);
+        if (m_jsDialogKind >= 0) {
+            m_jsDialogKind = -1;
+            emit jsDialogChanged();
+        }
+    }
 }
 
 void WPEWebPage::onFrameArrived()
@@ -722,39 +793,68 @@ void WPEWebPage::addMessageListener(const QString &name)
 
 void WPEWebPage::clearSelection()
 {
+    handleJsSelectionClear();
+    evaluate(QStringLiteral("getSelection().removeAllRanges(),0"));
 }
 
 void WPEWebPage::selectAll()
 {
+    evaluate(QStringLiteral("getSelection().selectAllChildren(document.body),0"), [this](const QJsonValue &) { querySelection(); });
 }
 
 void WPEWebPage::moveSelectionStart(qreal cssX, qreal cssY)
 {
-    Q_UNUSED(cssX);
-    Q_UNUSED(cssY);
+    moveSelectionEdge(true, cssX, cssY);
 }
 
 void WPEWebPage::moveSelectionEnd(qreal cssX, qreal cssY)
 {
-    Q_UNUSED(cssX);
-    Q_UNUSED(cssY);
+    moveSelectionEdge(false, cssX, cssY);
 }
 
 void WPEWebPage::copyToClipboard()
 {
+    if (!m_selectedText.isEmpty())
+        QGuiApplication::clipboard()->setText(m_selectedText);
 }
 
 void WPEWebPage::handleJsSelectionClear()
 {
+    const bool wasActive = m_textSelectionActive;
+    const bool hadSelection = !m_selectedText.isEmpty();
+    m_selectedText.clear();
+    m_textSelectionActive = false;
+    m_selectionStartX = m_selectionStartY = m_selectionEndX = m_selectionEndY = 0.0;
+    if (hadSelection)
+        emit selectionTextChanged();
+    if (wasActive)
+        emit textSelectionActiveChanged();
+    if (hadSelection || wasActive)
+        emit selectionHandlesUpdated();
 }
 
 void WPEWebPage::handleJsSelectionUpdate(const QString &text, qreal startX, qreal startY, qreal endX, qreal endY)
 {
-    Q_UNUSED(text);
-    Q_UNUSED(startX);
-    Q_UNUSED(startY);
-    Q_UNUSED(endX);
-    Q_UNUSED(endY);
+    if (text.isEmpty()) {
+        handleJsSelectionClear();
+        return;
+    }
+    const bool wasActive = m_textSelectionActive;
+    const bool textChanged = m_selectedText != text;
+    const bool handlesChanged = !qFuzzyCompare(m_selectionStartX + 1, startX + 1) || !qFuzzyCompare(m_selectionStartY + 1, startY + 1)
+        || !qFuzzyCompare(m_selectionEndX + 1, endX + 1) || !qFuzzyCompare(m_selectionEndY + 1, endY + 1);
+    m_selectedText = text;
+    m_textSelectionActive = true;
+    m_selectionStartX = startX;
+    m_selectionStartY = startY;
+    m_selectionEndX = endX;
+    m_selectionEndY = endY;
+    if (textChanged)
+        emit selectionTextChanged();
+    if (!wasActive)
+        emit textSelectionActiveChanged();
+    if (textChanged || handlesChanged || !wasActive)
+        emit selectionHandlesUpdated();
 }
 
 void WPEWebPage::handleSubframeEditableFocus(bool focused)
@@ -775,12 +875,24 @@ void WPEWebPage::sendNativeTextViaKeys(const QString& text, int replaceBefore)
 
 void WPEWebPage::findText(const QString &text, bool backwards)
 {
-    Q_UNUSED(text);
-    Q_UNUSED(backwards);
+    if (text.isEmpty()) {
+        findFinish();
+        return;
+    }
+    if (text != m_findText) {
+        m_findText = text;
+        sendToEngine(LB_EMBED_FIND, LB_EMBED_FIND_START, 0, 0, 0, text.toUtf8());
+    } else {
+        sendToEngine(LB_EMBED_FIND, backwards ? LB_EMBED_FIND_PREVIOUS : LB_EMBED_FIND_NEXT);
+    }
 }
 
 void WPEWebPage::findFinish()
 {
+    if (!m_findText.isEmpty())
+        sendToEngine(LB_EMBED_FIND, LB_EMBED_FIND_END);
+    m_findText.clear();
+    setFindInPageHasResult(false);
 }
 
 void WPEWebPage::setFindInPageHasResult(bool has)
@@ -817,7 +929,11 @@ void WPEWebPage::resolveSaveLogin(bool save)
 
 void WPEWebPage::selectMenuOption(int index)
 {
-    Q_UNUSED(index);
+    if (!m_selectMenuActive)
+        return;
+    sendToEngine(LB_EMBED_SELECT_MENU_CLOSED, index >= 0 && index < m_selectMenuIds.size() ? m_selectMenuIds.at(index) : -1);
+    m_selectMenuActive = false;
+    emit selectMenuActiveChanged();
 }
 
 void WPEWebPage::downloadUrl(const QString &url)
@@ -827,6 +943,7 @@ void WPEWebPage::downloadUrl(const QString &url)
 
 void WPEWebPage::closeSelectMenu()
 {
+    selectMenuOption(-1);
 }
 
 void WPEWebPage::chooseFiles(const QStringList &filePaths)
@@ -840,8 +957,12 @@ void WPEWebPage::cancelFileChooser()
 
 void WPEWebPage::openSelectMenu(const QStringList &options, int selectedIndex)
 {
-    Q_UNUSED(options);
-    Q_UNUSED(selectedIndex);
+    m_selectMenuOptions = options;
+    m_selectMenuSelectedIdx = selectedIndex;
+    m_selectMenuActive = true;
+    emit selectMenuOptionsChanged();
+    emit selectMenuSelectedIndexChanged();
+    emit selectMenuActiveChanged();
 }
 
 void WPEWebPage::resolveInputPicker(const QString &value)
@@ -864,11 +985,19 @@ void WPEWebPage::openInputPicker(const QString &type, const QString &value, cons
 
 void WPEWebPage::openImageLongPress(const QString &imageUrl)
 {
-    Q_UNUSED(imageUrl);
+    if (m_imageLongPressUrl != imageUrl) {
+        m_imageLongPressUrl = imageUrl;
+        emit imageLongPressUrlChanged();
+    }
 }
 
 void WPEWebPage::clearImageLongPress()
 {
+    if (!m_imageLongPressUrl.isEmpty()) {
+        m_imageLongPressUrl.clear();
+        emit imageLongPressUrlChanged();
+    }
+    setContextInfo(QVariantMap());
 }
 
 void WPEWebPage::setContextInfo(const QVariantMap &info)
@@ -901,4 +1030,126 @@ bool WPEWebPage::cookieBannerBlockingEnabled() const
 void WPEWebPage::setCookieBannerBlockingEnabled(bool enabled)
 {
     applyCookieBannerBlockingGlobally(enabled);
+}
+
+// --- Long press, text selection, select menus and page dialogs -------------------------------------------------
+
+void WPEWebPage::longPressed(const QPointF &position)
+{
+    const qreal scale = deviceScaleFactor();
+    QString script = QString::fromLatin1(kLongPressScript).arg(position.x() / scale, 0, 'f', 2).arg(position.y() / scale, 0, 'f', 2);
+    evaluate(script, [this](const QJsonValue &value) {
+        QJsonObject hit = value.toObject();
+        QString link = hit.value(QStringLiteral("link")).toString();
+        QString image = hit.value(QStringLiteral("image")).toString();
+        if (!link.isEmpty() || !image.isEmpty()) {
+            QVariantMap info;
+            info.insert(QStringLiteral("pageUrl"), hit.value(QStringLiteral("page")).toString());
+            info.insert(QStringLiteral("linkUrl"), link);
+            info.insert(QStringLiteral("srcUrl"), image);
+            info.insert(QStringLiteral("mediaType"), image.isEmpty() ? QString() : QStringLiteral("image"));
+            setContextInfo(info);
+            openImageLongPress(image);
+            return;
+        }
+        if (hit.value(QStringLiteral("word")).toBool())
+            querySelection();
+    });
+}
+
+void WPEWebPage::querySelection()
+{
+    // NB: One question at a time: with a slow page the answers would otherwise pile up behind each other.
+    if (m_selectionQueryPending)
+        return;
+    m_selectionQueryPending = true;
+    QTimer::singleShot(1000, this, [this] { m_selectionQueryPending = false; });
+    evaluate(QString::fromLatin1(kSelectionScript), [this](const QJsonValue &value) {
+        m_selectionQueryPending = false;
+        QJsonObject selection = value.toObject();
+        // NB: The interface places the handles in its own pixels, which are the device's; the page answers in
+        //     CSS pixels.
+        const qreal scale = deviceScaleFactor();
+        handleJsSelectionUpdate(selection.value(QStringLiteral("t")).toString(),
+            selection.value(QStringLiteral("sx")).toDouble() * scale, selection.value(QStringLiteral("sy")).toDouble() * scale,
+            selection.value(QStringLiteral("ex")).toDouble() * scale, selection.value(QStringLiteral("ey")).toDouble() * scale);
+    });
+}
+
+void WPEWebPage::moveSelectionEdge(bool start, qreal cssX, qreal cssY)
+{
+    // These arrive in the interface's pixels too, whatever the parameters are called.
+    const qreal scale = deviceScaleFactor();
+    cssX /= scale;
+    cssY /= scale;
+    QString script = QString::fromLatin1(kMoveSelectionScript).arg(cssX, 0, 'f', 2).arg(cssY - kHandleToTextCssPx, 0, 'f', 2).arg(start ? 1 : 0);
+    evaluate(script, [this](const QJsonValue &) { querySelection(); });
+}
+
+void WPEWebPage::findResult(int current, int total)
+{
+    Q_UNUSED(current);
+    setFindInPageHasResult(total != 0);
+}
+
+void WPEWebPage::selectMenuRequested(const QByteArray &optionsJson)
+{
+    // The interface's menu is a plain list, so group headings are left out and an option that cannot be chosen
+    // is too.
+    QStringList labels;
+    int selected = 0;
+    m_selectMenuIds.clear();
+    for (const QJsonValue &entry : QJsonDocument::fromJson(optionsJson).array()) {
+        QJsonObject option = entry.toObject();
+        if (!option.contains(QStringLiteral("id")) || option.value(QStringLiteral("disabled")).toBool())
+            continue;
+        if (option.value(QStringLiteral("selected")).toBool())
+            selected = labels.size();
+        labels.append(option.value(QStringLiteral("label")).toString());
+        m_selectMenuIds.append(option.value(QStringLiteral("id")).toInt());
+    }
+    if (labels.isEmpty()) {
+        sendToEngine(LB_EMBED_SELECT_MENU_CLOSED, -1);
+        return;
+    }
+    openSelectMenu(labels, selected);
+}
+
+void WPEWebPage::dialogRequested(int kind, const QByteArray &json)
+{
+    QJsonObject dialog = QJsonDocument::fromJson(json).object();
+    m_jsDialogKind = kind;
+    m_jsDialogMessage = dialog.value(QStringLiteral("message")).toString();
+    m_jsDialogDefaultText = dialog.value(QStringLiteral("default")).toString();
+    emit jsDialogChanged();
+}
+
+QString WPEWebPage::jsDialogKind() const
+{
+    switch (m_jsDialogKind) {
+    case LB_EMBED_DIALOG_ALERT:
+        return QStringLiteral("alert");
+    case LB_EMBED_DIALOG_CONFIRM:
+        return QStringLiteral("confirm");
+    case LB_EMBED_DIALOG_PROMPT:
+        return QStringLiteral("prompt");
+    default:
+        return QString();
+    }
+}
+
+void WPEWebPage::resolveJsDialog(bool accepted, const QString &text)
+{
+    if (m_jsDialogKind < 0)
+        return;
+    sendToEngine(LB_EMBED_DIALOG_CLOSED, accepted ? 1 : 0, m_jsDialogKind, 0, 0, text.toUtf8());
+    m_jsDialogKind = -1;
+    m_jsDialogMessage.clear();
+    m_jsDialogDefaultText.clear();
+    emit jsDialogChanged();
+}
+
+void WPEWebPage::applyDarkModeGlobally(bool dark)
+{
+    LadybirdEngine::instance()->send(0, LB_EMBED_SET_DARK_MODE, dark ? 1 : 0);
 }

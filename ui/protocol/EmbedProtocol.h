@@ -15,7 +15,7 @@
 #include <stdint.h>
 
 #define LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE "LADYBIRD_SFOS_EMBED_SOCKET"
-#define LB_EMBED_TEXT_MAX 4096
+#define LB_EMBED_TEXT_MAX 32768
 
 enum lb_embed_message_type {
     /* Silica app -> engine. Every message names a view; the app picks the numbers. */
@@ -36,6 +36,17 @@ enum lb_embed_message_type {
     /* These two are for the whole engine, not one view. Both are off until the app says otherwise. */
     LB_EMBED_SET_AD_BLOCKING = 14,            /* a = 1 to block advertising and trackers */
     LB_EMBED_SET_COOKIE_BANNER_BLOCKING = 15, /* a = 1 to block cookie banners */
+    LB_EMBED_SET_DARK_MODE = 16,              /* a = 1 for pages to prefer their dark colours */
+    /* Back to messages for one view. */
+    LB_EMBED_RUN_SCRIPT = 17, /* text = a JavaScript expression, run in the page. If its value is a string, the
+                                 string comes back in LB_EMBED_SCRIPT_RESULT; the app puts what it needs to tell
+                                 answers apart into that string. */
+    LB_EMBED_FIND = 18,       /* a = lb_embed_find; text = what to look for, when starting */
+    LB_EMBED_SELECT_MENU_CLOSED = 19, /* a = the id of the chosen option, or -1 for none */
+    LB_EMBED_DIALOG_CLOSED = 20,      /* a = 1 for OK, 0 for Cancel; b = the lb_embed_dialog being answered;
+                                         text = what was typed into a prompt */
+    LB_EMBED_PINCH = 21,      /* c = x, d = y of the point between the fingers (device pixels); scale = how
+                                 far apart the fingers are now, over how far they were at the last message */
 
     /* engine -> Silica app */
     LB_EMBED_FRAME = 101,   /* a, b = painted size; c, d = buffer size; e = row pitch in bytes; fd = dma-buf (BGRA) */
@@ -45,12 +56,34 @@ enum lb_embed_message_type {
     LB_EMBED_HISTORY = 105, /* a = 1 if the view can go back, b = 1 if it can go forward */
     LB_EMBED_TEXT_INPUT = 106, /* a = 1 while an editable element has focus */
     LB_EMBED_CRASHED = 107,
+    LB_EMBED_SCRIPT_RESULT = 108, /* text = the string an LB_EMBED_RUN_SCRIPT expression evaluated to */
+    LB_EMBED_FIND_RESULT = 109,   /* a = which match is current, counted from 1; b = how many there are, -1 if
+                                     not known */
+    LB_EMBED_SELECT_MENU = 110,   /* text = JSON array of the options of a <select> the user opened:
+                                     {"id", "label", "selected", "disabled"}, or {"group": label} for a heading.
+                                     Answered with LB_EMBED_SELECT_MENU_CLOSED. */
+    LB_EMBED_DIALOG = 111,        /* a = lb_embed_dialog; text = JSON {"message", "default"}. The page waits
+                                     for LB_EMBED_DIALOG_CLOSED. */
+};
+
+enum lb_embed_find {
+    LB_EMBED_FIND_START = 0,
+    LB_EMBED_FIND_NEXT = 1,
+    LB_EMBED_FIND_PREVIOUS = 2,
+    LB_EMBED_FIND_END = 3,
+};
+
+enum lb_embed_dialog {
+    LB_EMBED_DIALOG_ALERT = 0,
+    LB_EMBED_DIALOG_CONFIRM = 1,
+    LB_EMBED_DIALOG_PROMPT = 2,
 };
 
 enum lb_embed_touch_phase {
     LB_EMBED_TOUCH_DOWN = 0,
     LB_EMBED_TOUCH_MOTION = 1,
     LB_EMBED_TOUCH_UP = 2,
+    LB_EMBED_TOUCH_CANCEL = 3, /* the touch ends without being a tap: the app made something else of it */
 };
 
 enum lb_embed_key {

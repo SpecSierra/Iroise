@@ -8,6 +8,11 @@
 
 #include "DirectFrameTextures.h"
 
+#include <QJSEngine>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QLineF>
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
 #include <QQuickWindow>
@@ -18,6 +23,11 @@
 #    define GL_BGRA_EXT 0x80E1
 #endif
 
+// How long a finger rests before it is a long press, and how far it may wander meanwhile (the engine's own
+// distance for telling a tap from a scroll).
+static const int longPressMilliseconds = 500;
+static const qreal touchSlop = 24;
+
 WPEQtView::WPEQtView(QQuickItem* parent)
     : QQuickItem(parent)
 {
@@ -27,6 +37,17 @@ WPEQtView::WPEQtView(QQuickItem* parent)
     qreal scale = qgetenv("PACIFIC_DEVICE_PIXEL_RATIO").toDouble(&ok);
     if (ok && scale >= 1)
         m_deviceScaleFactor = scale;
+
+    m_longPressTimer.setSingleShot(true);
+    m_longPressTimer.setInterval(longPressMilliseconds);
+    connect(&m_longPressTimer, &QTimer::timeout, this, [this] {
+        if (m_touchId < 0 || m_touchConsumed)
+            return;
+        // The engine would make a tap of this touch when the finger lifts.
+        m_touchConsumed = true;
+        sendToEngine(LB_EMBED_TOUCH, LB_EMBED_TOUCH_CANCEL, m_touchId, static_cast<int>(m_touchStart.x()), static_cast<int>(m_touchStart.y()));
+        longPressed(m_touchStart);
+    });
 }
 
 WPEQtView::~WPEQtView()
@@ -104,10 +125,29 @@ void WPEQtView::loadHtml(const QString&, const QUrl&)
     // FIXME: The engine protocol has no way to load a string yet.
 }
 
-void WPEQtView::runJavaScript(const QString&, const QJSValue&)
+void WPEQtView::evaluate(const QString& expression, std::function<void(const QJsonValue&)> callback)
 {
-    // FIXME: The engine protocol has no way to run script in a page yet. Atlantic drove many page features
-    //        (selection handles, pickers, find in page) through injected script; they need engine-side hooks here.
+    if (!m_view)
+        return;
+    quint32 id = m_nextScript++;
+    if (callback)
+        m_scripts.insert(id, callback);
+    // NB: The engine only hands back a string, and answers may be lost with a page that goes away. So the value
+    //     travels as JSON, together with the number that says which question it answers.
+    QString wrapped = QStringLiteral("JSON.stringify({i:%1,v:(%2\n)})").arg(id).arg(expression);
+    sendToEngine(LB_EMBED_RUN_SCRIPT, 0, 0, 0, 0, wrapped.toUtf8());
+}
+
+void WPEQtView::runJavaScript(const QString& script, const QJSValue& callback)
+{
+    if (!callback.isCallable()) {
+        evaluate(script);
+        return;
+    }
+    QJSValue function = callback;
+    evaluate(script, [function](const QJsonValue& value) mutable {
+        function.call(QJSValueList() << function.engine()->toScriptValue(value.toVariant()));
+    });
 }
 
 void WPEQtView::setLoadProgress(int progress)
@@ -157,8 +197,27 @@ void WPEQtView::engineMessage(const lb_embed_header& header, const QString& text
             emit titleChanged();
         }
         break;
+    case LB_EMBED_SCRIPT_RESULT: {
+        QJsonObject answer = QJsonDocument::fromJson(text.toUtf8()).object();
+        auto callback = m_scripts.take(static_cast<quint32>(answer.value(QStringLiteral("i")).toInt()));
+        if (callback)
+            callback(answer.value(QStringLiteral("v")));
+        break;
+    }
+    case LB_EMBED_FIND_RESULT:
+        findResult(header.a, header.b);
+        break;
+    case LB_EMBED_SELECT_MENU:
+        selectMenuRequested(text.toUtf8());
+        break;
+    case LB_EMBED_DIALOG:
+        dialogRequested(header.a, text.toUtf8());
+        break;
     case LB_EMBED_LOADING: {
         m_loading = header.a != 0;
+        // Answers the old page still owed will not come.
+        if (m_loading)
+            m_scripts.clear();
         // The engine does not report how far a load has got, only that it started and that it finished.
         setLoadProgress(m_loading ? 30 : 100);
         WPEQtViewLoadRequest request(m_url, m_loading ? LoadStartedStatus : LoadSucceededStatus);
@@ -312,24 +371,107 @@ void WPEQtView::releaseResources()
     m_directGeneration = 0;
 }
 
+void WPEQtView::abandonTouch()
+{
+    m_longPressTimer.stop();
+    if (m_touchId >= 0 && !m_touchConsumed)
+        sendToEngine(LB_EMBED_TOUCH, LB_EMBED_TOUCH_CANCEL, m_touchId, static_cast<int>(m_touchStart.x()), static_cast<int>(m_touchStart.y()));
+    m_touchId = -1;
+    m_touchConsumed = false;
+    m_pinching = false;
+}
+
+void WPEQtView::touchUngrabEvent()
+{
+    abandonTouch();
+    QQuickItem::touchUngrabEvent();
+}
+
 void WPEQtView::touchEvent(QTouchEvent* event)
 {
-    for (const QTouchEvent::TouchPoint& point : event->touchPoints()) {
-        int phase;
+    event->accept();
+    if (event->type() == QEvent::TouchCancel) {
+        abandonTouch();
+        return;
+    }
+    // A touch we never saw the end of must not swallow this one.
+    if (event->type() == QEvent::TouchBegin)
+        abandonTouch();
+    const QList<QTouchEvent::TouchPoint>& points = event->touchPoints();
+
+    int down = 0;
+    for (const QTouchEvent::TouchPoint& point : points) {
+        if (point.state() != Qt::TouchPointReleased)
+            ++down;
+    }
+
+    // Two fingers zoom the page. The first finger's touch stops being one.
+    if (down >= 2) {
+        QPointF first, second;
+        int found = 0;
+        for (const QTouchEvent::TouchPoint& point : points) {
+            if (point.state() == Qt::TouchPointReleased)
+                continue;
+            (found++ ? second : first) = point.pos();
+            if (found == 2)
+                break;
+        }
+        qreal distance = QLineF(first, second).length();
+        if (!m_pinching) {
+            m_pinching = true;
+            m_pinchDistance = distance;
+            m_longPressTimer.stop();
+            if (m_touchId >= 0 && !m_touchConsumed) {
+                m_touchConsumed = true;
+                sendToEngine(LB_EMBED_TOUCH, LB_EMBED_TOUCH_CANCEL, m_touchId, static_cast<int>(m_touchStart.x()), static_cast<int>(m_touchStart.y()));
+            }
+        } else if (m_pinchDistance > 1 && distance > 1 && !qFuzzyCompare(distance, m_pinchDistance)) {
+            QPointF centre = (first + second) / 2;
+            LadybirdEngine::instance()->send(m_view, LB_EMBED_PINCH, 0, 0, static_cast<int>(centre.x()), static_cast<int>(centre.y()), distance / m_pinchDistance);
+            m_pinchDistance = distance;
+        }
+        return;
+    }
+    if (down == 0) {
+        // Every finger is up; whatever comes next starts afresh.
+        bool wasPinching = m_pinching;
+        m_pinching = false;
+        if (wasPinching) {
+            m_touchId = -1;
+            return;
+        }
+    }
+    if (m_pinching)
+        return;
+
+    for (const QTouchEvent::TouchPoint& point : points) {
         switch (point.state()) {
         case Qt::TouchPointPressed:
-            phase = LB_EMBED_TOUCH_DOWN;
+            if (m_touchId >= 0)
+                continue;
+            m_touchId = point.id();
+            m_touchStart = point.pos();
+            m_touchConsumed = false;
+            m_longPressTimer.start();
+            sendToEngine(LB_EMBED_TOUCH, LB_EMBED_TOUCH_DOWN, point.id(), static_cast<int>(point.pos().x()), static_cast<int>(point.pos().y()));
             break;
         case Qt::TouchPointMoved:
-            phase = LB_EMBED_TOUCH_MOTION;
+            if (point.id() != m_touchId || m_touchConsumed)
+                continue;
+            if (QLineF(m_touchStart, point.pos()).length() > touchSlop)
+                m_longPressTimer.stop();
+            sendToEngine(LB_EMBED_TOUCH, LB_EMBED_TOUCH_MOTION, point.id(), static_cast<int>(point.pos().x()), static_cast<int>(point.pos().y()));
             break;
         case Qt::TouchPointReleased:
-            phase = LB_EMBED_TOUCH_UP;
+            if (point.id() != m_touchId)
+                continue;
+            m_longPressTimer.stop();
+            if (!m_touchConsumed)
+                sendToEngine(LB_EMBED_TOUCH, LB_EMBED_TOUCH_UP, point.id(), static_cast<int>(point.pos().x()), static_cast<int>(point.pos().y()));
+            m_touchId = -1;
             break;
         default:
-            continue;
+            break;
         }
-        sendToEngine(LB_EMBED_TOUCH, phase, point.id(), static_cast<int>(point.pos().x()), static_cast<int>(point.pos().y()));
     }
-    event->accept();
 }

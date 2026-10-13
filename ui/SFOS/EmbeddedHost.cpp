@@ -86,11 +86,22 @@ void EmbeddedHost::send_frame(u32 view, Gfx::LinuxDmaBufHandle const& dmabuf, Gf
     send(header, {}, dmabuf.file.fd());
 }
 
-void EmbeddedHost::send_text(u32 view, lb_embed_message_type type, StringView text)
+void EmbeddedHost::send_numbers(u32 view, lb_embed_message_type type, i32 a, i32 b)
 {
     lb_embed_header header {};
     header.type = type;
     header.view = view;
+    header.a = a;
+    header.b = b;
+    send(header);
+}
+
+void EmbeddedHost::send_text(u32 view, lb_embed_message_type type, StringView text, i32 a)
+{
+    lb_embed_header header {};
+    header.type = type;
+    header.view = view;
+    header.a = a;
     text = text.substring_view(0, min(text.length(), static_cast<size_t>(LB_EMBED_TEXT_MAX)));
     header.text_length = static_cast<u32>(text.length());
     send(header, text);

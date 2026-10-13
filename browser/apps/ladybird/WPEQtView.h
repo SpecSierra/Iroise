@@ -9,9 +9,15 @@
 
 #pragma once
 
+#include <QHash>
 #include <QJSValue>
+#include <QJsonValue>
+#include <QPointF>
+#include <QTimer>
 #include <QQuickItem>
 #include <QUrl>
+
+#include <functional>
 
 #include "LadybirdEngine.h"
 
@@ -67,6 +73,10 @@ public:
     quint32 frameSerial() const { return static_cast<quint32>(m_frame.serial); }
     bool sceneGraphComposited() const { return true; }
 
+    // Runs a JavaScript expression in the page. The callback gets its value, as far as JSON can carry it; it is
+    // not called at all if the expression throws or the page goes away first.
+    void evaluate(const QString& expression, std::function<void(const QJsonValue&)> callback = nullptr);
+
     // True while an editable element in the page has focus.
     bool pageWantsTextInput() const { return m_pageWantsTextInput; }
 
@@ -101,11 +111,20 @@ protected:
     void geometryChanged(const QRectF& newGeometry, const QRectF& oldGeometry) override;
     void releaseResources() override;
     void touchEvent(QTouchEvent*) override;
+    void touchUngrabEvent() override;
+    void abandonTouch();
 
     // LadybirdEngineClient
     void engineFrame(const LadybirdFrame&) override;
     void engineMessage(const lb_embed_header&, const QString& text) override;
     void engineBufferGone(quint64 bufferId) override;
+
+    // A finger that stayed down in one place; the touch is not a tap any more. In item coordinates.
+    virtual void longPressed(const QPointF&) { }
+    // What the engine says that only the page class above knows what to do with.
+    virtual void findResult(int current, int total) { Q_UNUSED(current); Q_UNUSED(total); }
+    virtual void selectMenuRequested(const QByteArray& optionsJson) { Q_UNUSED(optionsJson); }
+    virtual void dialogRequested(int kind, const QByteArray& json) { Q_UNUSED(kind); Q_UNUSED(json); }
 
     void sendToEngine(lb_embed_message_type type, int a = 0, int b = 0, int c = 0, int d = 0, const QByteArray& text = QByteArray());
     bool hasEngineView() const { return m_view != 0; }
@@ -128,6 +147,18 @@ private:
     qreal m_deviceScaleFactor = 2.5;
 
     LadybirdFrame m_frame;
+
+    quint32 m_nextScript = 1;
+    QHash<quint32, std::function<void(const QJsonValue&)>> m_scripts;
+
+    // The one finger we relay to the engine as a touch, and what became of it.
+    int m_touchId = -1;
+    QPointF m_touchStart;
+    bool m_touchConsumed = false;
+    QTimer m_longPressTimer;
+    // Two fingers: how far apart they were at the last pinch message.
+    bool m_pinching = false;
+    qreal m_pinchDistance = 0;
 
     // Buffers the engine connection has let go of since the last updatePaintNode.
     QVector<quint64> m_buffersGone;

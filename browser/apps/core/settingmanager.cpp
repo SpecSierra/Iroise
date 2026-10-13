@@ -63,8 +63,7 @@ void SettingManager::applyColorScheme()
 {
     int scheme = m_colorScheme->value(FollowsAmbience).toInt();
     bool dark = scheme == PrefersDarkMode || (scheme == FollowsAmbience && m_ambienceDark);
-    // FIXME: Tell the engine the preferred colour scheme; the engine protocol has no message for it yet.
-    Q_UNUSED(dark);
+    WPEWebPage::applyDarkModeGlobally(dark);
 }
 
 int SettingManager::toolbarSmall()

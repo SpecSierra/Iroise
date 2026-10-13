@@ -6,6 +6,9 @@
 
 #include <AK/Format.h>
 #include <AK/HashMap.h>
+#include <AK/JsonArray.h>
+#include <AK/JsonObject.h>
+#include <AK/JsonValue.h>
 #include <AK/LexicalPath.h>
 #include <LibCore/ElapsedTimer.h>
 #include <LibCore/Environment.h>
@@ -14,6 +17,8 @@
 #include <LibGfx/Bitmap.h>
 #include <LibGfx/SystemTheme.h>
 #include <LibMain/Main.h>
+#include <LibWebCommon/CSS/PreferredColorScheme.h>
+#include <LibWebCommon/HTML/SelectItem.h>
 #include <LibWebCommon/Page/InputEvent.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/HeadlessWebView.h>
@@ -59,6 +64,7 @@ public:
         Down,
         Motion,
         Up,
+        Cancel,
     };
 
     static NonnullOwnPtr<PresentedWebView> create(Core::AnonymousBuffer theme, Gfx::IntSize size, double device_pixel_ratio)
@@ -117,9 +123,21 @@ public:
             send_mouse_event(Web::MouseEvent::Type::MouseWheel, position, {}, Web::ScrollGesturePhase::Ended);
             return;
         }
+        if (phase == Cancel)
+            return;
         send_mouse_event(Web::MouseEvent::Type::MouseMove, position);
         send_mouse_event(Web::MouseEvent::Type::MouseDown, position);
         send_mouse_event(Web::MouseEvent::Type::MouseUp, position);
+    }
+
+    void handle_pinch(Gfx::IntPoint position, double scale)
+    {
+        if (scale <= 0)
+            return;
+        Web::PinchEvent event {};
+        event.position = position.to_type<Web::DevicePixels>();
+        event.scale_delta = scale - 1.0;
+        enqueue_input_event(move(event));
     }
 
 private:
@@ -313,6 +331,55 @@ private:
         };
         view->on_web_content_crashed = [this, id](auto) { m_host.send_flags(id, LB_EMBED_CRASHED, true); };
 
+        view->on_received_js_console_result = [this, id](JsonValue result) {
+            if (result.is_string())
+                m_host.send_text(id, LB_EMBED_SCRIPT_RESULT, result.as_string().bytes_as_string_view());
+        };
+        view->on_find_in_page = [this, id](size_t current_match_index, Optional<size_t> const& total_match_count) {
+            auto total = total_match_count.has_value() ? static_cast<i32>(*total_match_count) : -1;
+            m_host.send_numbers(id, LB_EMBED_FIND_RESULT, total == 0 ? 0 : static_cast<i32>(current_match_index) + 1, total);
+        };
+        view->on_request_select_dropdown = [this, id](Gfx::IntPoint, i32, Vector<Web::HTML::SelectItem> items) {
+            JsonArray options;
+            auto add_option = [&](Web::HTML::SelectItemOption const& option) {
+                JsonObject entry;
+                entry.set("id"sv, option.id);
+                entry.set("label"sv, option.label.to_utf8());
+                entry.set("selected"sv, option.selected);
+                entry.set("disabled"sv, option.disabled);
+                options.must_append(move(entry));
+            };
+            for (auto const& item : items) {
+                item.visit(
+                    [&](Web::HTML::SelectItemOption const& option) { add_option(option); },
+                    [&](Web::HTML::SelectItemOptionGroup const& group) {
+                        JsonObject heading;
+                        heading.set("group"sv, group.label.to_utf8());
+                        options.must_append(move(heading));
+                        for (auto const& option : group.items)
+                            add_option(option);
+                    },
+                    [](Web::HTML::SelectItemSeparator const&) {});
+            }
+            auto text = options.serialized();
+            m_host.send_text(id, LB_EMBED_SELECT_MENU, text.bytes_as_string_view());
+        };
+
+        // NB: A page that opens one of these waits for the answer, so each of them has to get one. The view we
+        //     derive from only notes that a dialog is open, for WebDriver to answer.
+        auto send_dialog = [this, id](lb_embed_dialog kind, Utf16String const& message, Utf16String const& default_text) {
+            JsonObject dialog;
+            dialog.set("message"sv, message.to_utf8());
+            dialog.set("default"sv, default_text.to_utf8());
+            auto text = dialog.serialized();
+            m_host.send_text(id, LB_EMBED_DIALOG, text.bytes_as_string_view(), kind);
+        };
+        view->on_request_alert = [send_dialog](Utf16String const& message) { send_dialog(LB_EMBED_DIALOG_ALERT, message, {}); };
+        view->on_request_confirm = [send_dialog](Utf16String const& message) { send_dialog(LB_EMBED_DIALOG_CONFIRM, message, {}); };
+        view->on_request_prompt = [send_dialog](Utf16String const& message, Utf16String const& default_text) { send_dialog(LB_EMBED_DIALOG_PROMPT, message, default_text); };
+
+        view->set_preferred_color_scheme(m_dark_mode ? Web::CSS::PreferredColorScheme::Dark : Web::CSS::PreferredColorScheme::Light);
+
         for (auto* action : { &view->navigate_back_action(), &view->navigate_forward_action() }) {
             action->add_observer(make<HistoryObserver>(Function<void()> { [this, id, raw_view] {
                 m_host.send_flags(id, LB_EMBED_HISTORY, raw_view->navigate_back_action().enabled(), raw_view->navigate_forward_action().enabled());
@@ -391,6 +458,12 @@ private:
             }
             return;
         }
+        if (header.type == LB_EMBED_SET_DARK_MODE) {
+            m_dark_mode = header.a != 0;
+            for (auto& entry : m_views)
+                entry.value->set_preferred_color_scheme(m_dark_mode ? Web::CSS::PreferredColorScheme::Dark : Web::CSS::PreferredColorScheme::Light);
+            return;
+        }
         if (header.type == LB_EMBED_CREATE_VIEW) {
             create_view(header.view, { header.a, header.b }, header.scale >= 1 ? header.scale : device_pixel_ratio_from_environment());
             return;
@@ -409,8 +482,13 @@ private:
                 view.load(*url);
             break;
         case LB_EMBED_TOUCH: {
-            auto phase = header.a == LB_EMBED_TOUCH_DOWN ? PresentedWebView::TouchPhase::Down : header.a == LB_EMBED_TOUCH_MOTION ? PresentedWebView::TouchPhase::Motion
-                                                                                                                                 : PresentedWebView::TouchPhase::Up;
+            auto phase = PresentedWebView::TouchPhase::Up;
+            if (header.a == LB_EMBED_TOUCH_DOWN)
+                phase = PresentedWebView::TouchPhase::Down;
+            else if (header.a == LB_EMBED_TOUCH_MOTION)
+                phase = PresentedWebView::TouchPhase::Motion;
+            else if (header.a == LB_EMBED_TOUCH_CANCEL)
+                phase = PresentedWebView::TouchPhase::Cancel;
             view.handle_touch(phase, header.b, { header.c, header.d });
             break;
         }
@@ -433,6 +511,44 @@ private:
         case LB_EMBED_SET_VISIBLE:
             view.set_system_visibility_state(header.a ? Web::HTML::VisibilityState::Visible : Web::HTML::VisibilityState::Hidden);
             view.set_has_system_focus(header.a != 0);
+            break;
+        case LB_EMBED_RUN_SCRIPT:
+            view.js_console_input(String::from_utf8_with_replacement_character(text));
+            break;
+        case LB_EMBED_FIND:
+            switch (header.a) {
+            case LB_EMBED_FIND_START:
+                view.find_in_page(Utf16String::from_utf8(text), CaseSensitivity::CaseInsensitive, true);
+                break;
+            case LB_EMBED_FIND_NEXT:
+                view.find_in_page_next_match();
+                break;
+            case LB_EMBED_FIND_PREVIOUS:
+                view.find_in_page_previous_match();
+                break;
+            default:
+                view.find_in_page_end();
+                break;
+            }
+            break;
+        case LB_EMBED_SELECT_MENU_CLOSED:
+            view.select_dropdown_closed(header.a >= 0 ? Optional<u32> { static_cast<u32>(header.a) } : Optional<u32> {});
+            break;
+        case LB_EMBED_DIALOG_CLOSED:
+            switch (header.b) {
+            case LB_EMBED_DIALOG_ALERT:
+                view.alert_closed();
+                break;
+            case LB_EMBED_DIALOG_CONFIRM:
+                view.confirm_closed(header.a != 0);
+                break;
+            default:
+                view.prompt_closed(header.a != 0 ? Optional<Utf16String> { Utf16String::from_utf8(text) } : Optional<Utf16String> {});
+                break;
+            }
+            break;
+        case LB_EMBED_PINCH:
+            view.handle_pinch({ header.c, header.d }, header.scale);
             break;
         case LB_EMBED_COMMIT_TEXT:
             view.commit_text_from_input_method(Utf16String::from_utf8(text), -header.a, header.a);
@@ -486,6 +602,7 @@ private:
     HashMap<u32, NonnullOwnPtr<PresentedWebView>> m_views;
     bool m_block_ads { false };
     bool m_block_cookie_banners { false };
+    bool m_dark_mode { false };
     RefPtr<Core::Timer> m_restart_list_updates_timer;
     RefPtr<Core::Timer> m_resume_list_updates_timer;
 };

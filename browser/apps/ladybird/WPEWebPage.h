@@ -161,6 +161,13 @@ private:
     // Find-in-page
     Q_PROPERTY(bool findInPageHasResult READ findInPageHasResult NOTIFY findInPageHasResultChanged FINAL)
 
+    // A page's alert(), confirm() or prompt(): the page waits until resolveJsDialog() is called.
+    // jsDialogKind is one of alert|confirm|prompt.
+    Q_PROPERTY(bool jsDialogActive READ jsDialogActive NOTIFY jsDialogChanged FINAL)
+    Q_PROPERTY(QString jsDialogKind READ jsDialogKind NOTIFY jsDialogChanged FINAL)
+    Q_PROPERTY(QString jsDialogMessage READ jsDialogMessage NOTIFY jsDialogChanged FINAL)
+    Q_PROPERTY(QString jsDialogDefaultText READ jsDialogDefaultText NOTIFY jsDialogChanged FINAL)
+
     // HTML <select> dropdown state — property bindings for reliable QML observation
     Q_PROPERTY(bool selectMenuActive READ selectMenuActive NOTIFY selectMenuActiveChanged FINAL)
     Q_PROPERTY(QStringList selectMenuOptions READ selectMenuOptions NOTIFY selectMenuOptionsChanged FINAL)
@@ -393,6 +400,15 @@ public:
     QString permissionType() const { return m_permissionType; }
     Q_INVOKABLE void resolvePermission(bool allow);
 
+    bool jsDialogActive() const { return m_jsDialogKind >= 0; }
+    QString jsDialogKind() const;
+    QString jsDialogMessage() const { return m_jsDialogMessage; }
+    QString jsDialogDefaultText() const { return m_jsDialogDefaultText; }
+    Q_INVOKABLE void resolveJsDialog(bool accepted, const QString &text = QString());
+
+    // For the whole engine: whether pages should prefer their dark colours.
+    static void applyDarkModeGlobally(bool dark);
+
     // Save-password prompt (Phase 3). offerSaveLogin() is called by the
     // loginBridge capture message; resolveSaveLogin() persists on accept.
     // Like fillLoginForFocusedForm(), the origin is taken from the committed
@@ -502,6 +518,7 @@ signals:
     void securityChanged();
     void tlsErrorChanged();
     void permissionChanged();
+    void jsDialogChanged();
     void saveLoginChanged();
     void findInPageHasResultChanged();
 
@@ -541,6 +558,12 @@ protected:
     void inputMethodEvent(QInputMethodEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
     void touchEvent(QTouchEvent *event) override;
+
+    // From the engine view below.
+    void longPressed(const QPointF &position) override;
+    void findResult(int current, int total) override;
+    void selectMenuRequested(const QByteArray &optionsJson) override;
+    void dialogRequested(int kind, const QByteArray &json) override;
 
 private slots:
     void onLoadingChanged(WPEQtViewLoadRequest *loadRequest);
@@ -641,6 +664,17 @@ private:
     qint64 m_lastSoftKeyboardTextTimeMs = 0;
     qint64 m_lastSoftBackspaceTimeMs = 0;
     qint64 m_lastSoftEnterTimeMs = 0;
+    void querySelection();
+    void moveSelectionEdge(bool start, qreal cssX, qreal cssY);
+
+    // The engine's ids of the options in m_selectMenuOptions.
+    QList<int> m_selectMenuIds;
+    QString m_findText;
+    int m_jsDialogKind = -1;
+    QString m_jsDialogMessage;
+    QString m_jsDialogDefaultText;
+    QTimer m_selectionPoll;
+    bool m_selectionQueryPending = false;
     bool m_selectMenuActive = false;
     QStringList m_selectMenuOptions;
     int m_selectMenuSelectedIdx = 0;

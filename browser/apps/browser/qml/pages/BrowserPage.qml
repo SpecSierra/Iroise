@@ -954,6 +954,9 @@ Page {
 
     Browser.SelectMenuOverlay { webView: webView }
 
+    // alert(), confirm() and prompt() from the page.
+    Browser.JsDialogBanner { webView: webView }
+
     // Native Silica pickers for <input type=date|month|week|time|datetime-local|color>.
     Browser.InputPickerOverlay { webView: webView }
 
