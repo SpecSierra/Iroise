@@ -1,0 +1,48 @@
+diff --git a/Libraries/LibGC/PrimitiveStorage.h b/Libraries/LibGC/PrimitiveStorage.h
+index cd71044d..dd57572e 100644
+--- a/Libraries/LibGC/PrimitiveStorage.h
++++ b/Libraries/LibGC/PrimitiveStorage.h
+@@ -30,7 +30,13 @@ public:
+         Yes,
+     };
+ 
++#if AK_IS_ARCH_AARCH64() && !defined(AK_OS_MACOS)
++    // Some AArch64 systems provide only 39 bits of user virtual address space (512 GiB), which also has to hold
++    // the heap region reservation. Keep the cage small enough to fit next to it.
++    static constexpr size_t default_cage_size = 64ull * GiB;
++#else
+     static constexpr size_t default_cage_size = 4ull * TiB;
++#endif
+     static_assert(is_power_of_two(default_cage_size));
+     static constexpr size_t cage_offset_mask = default_cage_size - 1;
+     // NB: JIT code accesses typed array elements at a masked offset plus a
+diff --git a/Libraries/LibJS/Rust/build.rs b/Libraries/LibJS/Rust/build.rs
+index 0ffe9d1d..63364412 100644
+--- a/Libraries/LibJS/Rust/build.rs
++++ b/Libraries/LibJS/Rust/build.rs
+@@ -106,6 +106,16 @@ fn heap_region_size(target: &Target, thread_sanitizer: bool) -> u64 {
+     }
+ }
+ 
++/// Mirrors GC::PrimitiveStorage::default_cage_size in Libraries/LibGC/PrimitiveStorage.h.
++fn primitive_storage_cage_size(target: &Target) -> u64 {
++    let os = env::var("CARGO_CFG_TARGET_OS").expect("CARGO_CFG_TARGET_OS");
++    if matches!(target.architecture, flapc::Architecture::Aarch64) && os != "macos" {
++        64 * GIB
++    } else {
++        4 * TIB
++    }
++}
++
+ fn main() {
+     let manifest_directory = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
+     let output_directory = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
+@@ -130,7 +140,7 @@ fn main() {
+     let configuration = layout_table::LayoutConfiguration {
+         heap_region_offset_mask: heap_region_size(&target, thread_sanitizer) - 1,
+         // Mirrors GC::PrimitiveStorage::default_cage_size.
+-        primitive_storage_cage_offset_mask: 4 * TIB - 1,
++        primitive_storage_cage_offset_mask: primitive_storage_cage_size(&target) - 1,
+         // Instrumented frames need more room before the stack is considered exhausted.
+         vm_stack_space_limit: if address_sanitizer { 96 * KIB } else { 32 * KIB },
+     };
