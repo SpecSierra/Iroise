@@ -43,8 +43,8 @@ package, which is in the phone's repos but not installed by default
   before `main`.
 - Helper processes get a filtered environment; `HYBRIS_*` has to reach the
   compositor (patch 0005).
-- The compositor's seccomp filter kills the Mali driver's ioctls, so GPU runs
-  currently need `--disable-sandbox`.
+- The compositor's seccomp filter has to allow the Mali kernel driver's ioctls
+  (type 0x80, patch 0007); with that, GPU runs work with the sandbox on.
 - The driver imports dma-bufs but cannot export its own memory: `vkGetMemoryFdKHR`
   returns success with fd -1. Shared images are therefore allocated from
   `/dev/dma_heap/system` and imported on both sides (patch 0006). The driver takes
