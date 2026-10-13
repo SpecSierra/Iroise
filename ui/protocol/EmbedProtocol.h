@@ -33,6 +33,9 @@ enum lb_embed_message_type {
                                    caret that it replaces */
     LB_EMBED_COMPOSE_TEXT = 12, /* text = what is being composed; empty to stop composing */
     LB_EMBED_KEY = 13,          /* a = lb_embed_key, sent as a press followed by a release */
+    /* These two are for the whole engine, not one view. Both are off until the app says otherwise. */
+    LB_EMBED_SET_AD_BLOCKING = 14,            /* a = 1 to block advertising and trackers */
+    LB_EMBED_SET_COOKIE_BANNER_BLOCKING = 15, /* a = 1 to block cookie banners */
 
     /* engine -> Silica app */
     LB_EMBED_FRAME = 101,   /* a, b = painted size; c, d = buffer size; e = row pitch in bytes; fd = dma-buf (BGRA) */

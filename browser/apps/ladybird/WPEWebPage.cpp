@@ -501,9 +501,17 @@ bool WPEWebPage::active() const
     return m_active;
 }
 
+// The engine blocks with its own copy of Brave's adblock engine and its own list subscriptions. These two switches
+// are for the whole engine, so they are sent once and not per page.
+static bool s_adBlockEnabled = false;
+static bool s_cookieBannerBlockingEnabled = false;
+
 void WPEWebPage::applyAdBlockEnabledGlobally(bool enabled)
 {
-    Q_UNUSED(enabled);
+    s_adBlockEnabled = enabled;
+    LadybirdEngine::instance()->send(0, LB_EMBED_SET_AD_BLOCKING, enabled ? 1 : 0);
+    for (WPEWebPage *page : livePages())
+        emit page->adBlockEnabledChanged();
 }
 
 void WPEWebPage::applyAdBlockAllowlistGlobally(const QString &json)
@@ -513,7 +521,10 @@ void WPEWebPage::applyAdBlockAllowlistGlobally(const QString &json)
 
 void WPEWebPage::applyCookieBannerBlockingGlobally(bool enabled)
 {
-    Q_UNUSED(enabled);
+    s_cookieBannerBlockingEnabled = enabled;
+    LadybirdEngine::instance()->send(0, LB_EMBED_SET_COOKIE_BANNER_BLOCKING, enabled ? 1 : 0);
+    for (WPEWebPage *page : livePages())
+        emit page->cookieBannerBlockingEnabledChanged();
 }
 
 void WPEWebPage::applySiteUaOverridesGlobally(const QString &json)
@@ -874,20 +885,20 @@ void WPEWebPage::clearContextInfo()
 
 bool WPEWebPage::adBlockEnabled() const
 {
-    return false;
+    return s_adBlockEnabled;
 }
 
 void WPEWebPage::setAdBlockEnabled(bool enabled)
 {
-    Q_UNUSED(enabled);
+    applyAdBlockEnabledGlobally(enabled);
 }
 
 bool WPEWebPage::cookieBannerBlockingEnabled() const
 {
-    return false;
+    return s_cookieBannerBlockingEnabled;
 }
 
 void WPEWebPage::setCookieBannerBlockingEnabled(bool enabled)
 {
-    Q_UNUSED(enabled);
+    applyCookieBannerBlockingGlobally(enabled);
 }

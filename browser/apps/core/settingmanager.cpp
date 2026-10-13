@@ -163,11 +163,11 @@ void SettingManager::handleObserve(const QString &, const QVariant &)
 
 bool SettingManager::isAdBlockEnabled() const
 {
-    // FIXME: Content blocking is the engine's own for now; this switch does nothing.
-    return false;
+    const QList<WPEWebPage *> &pages = WPEWebPage::liveInstances();
+    return !pages.isEmpty() && pages.first()->adBlockEnabled();
 }
 
 void SettingManager::setAdBlockEnabled(bool enabled)
 {
-    Q_UNUSED(enabled);
+    WPEWebPage::applyAdBlockEnabledGlobally(enabled);
 }

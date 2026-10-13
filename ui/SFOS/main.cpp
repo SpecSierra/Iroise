@@ -10,6 +10,7 @@
 #include <LibCore/ElapsedTimer.h>
 #include <LibCore/Environment.h>
 #include <LibCore/EventLoop.h>
+#include <LibCore/Timer.h>
 #include <LibGfx/Bitmap.h>
 #include <LibGfx/SystemTheme.h>
 #include <LibMain/Main.h>
@@ -17,6 +18,7 @@
 #include <LibWebView/Application.h>
 #include <LibWebView/HeadlessWebView.h>
 #include <LibWebView/Menu.h>
+#include <LibWebView/Settings.h>
 #include <LibWebView/URL.h>
 #include <LibWebView/Utilities.h>
 #include <UI/SFOS/EmbeddedHost.h>
@@ -33,9 +35,17 @@ class Application final : public WebView::Application {
 private:
     Application() = default;
 
-    // Each run is a throwaway probe: never hand off to an already running instance.
+    // Never hand off to an already running instance: a windowed run is a throwaway probe, and an embedded engine
+    // belongs to the app that started it.
     virtual bool should_coordinate_browser_process() const override { return false; }
-    virtual bool should_use_temporary_profile_by_default() const override { return true; }
+    // A windowed run leaves nothing behind. An embedded engine is somebody's browser: its settings, its filter
+    // lists and its site data have to be there next time.
+    virtual bool should_use_temporary_profile_by_default() const override { return !is_embedded(); }
+
+public:
+    static bool is_embedded() { return Core::Environment::has(StringView { LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE, strlen(LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE) }); }
+
+private:
 
     // We only say how far the finger moved and when it lifted; the compositor makes the fling.
     virtual bool platform_reports_scroll_momentum() const override { return false; }
@@ -324,8 +334,63 @@ private:
         }
     }
 
+    // The engine has Brave's adblock engine and a set of filter list subscriptions built in, all switched off
+    // until someone asks. These turn the app's two switches into which of those lists are on.
+    void apply_content_blocking()
+    {
+        auto& settings = WebView::Application::settings();
+
+        // The lists for a language's sites are worth having only for someone who reads that language.
+        static constexpr Array<Array<StringView, 2>, 9> language_lists { {
+            { "fr"sv, "listeFR"sv },
+            { "de"sv, "easyListGermany"sv },
+            { "it"sv, "easyListItaly"sv },
+            { "es"sv, "easyListSpanish"sv },
+            { "nl"sv, "easyListDutch"sv },
+            { "pl"sv, "easyListPolish"sv },
+            { "pt"sv, "easyListPortuguese"sv },
+            { "ru"sv, "ruAdList"sv },
+            { "uk"sv, "ruAdList"sv },
+        } };
+        auto language = Core::Environment::get("LANG"sv).value_or({});
+
+        for (auto list : { "easyList"sv, "easyPrivacy"sv, "adblockWarningRemoval"sv })
+            settings.set_content_blocker_list_enabled(list, m_block_ads);
+        for (auto const& entry : language_lists)
+            settings.set_content_blocker_list_enabled(entry[1], m_block_ads && language.starts_with(entry[0]));
+        settings.set_content_blocker_list_enabled("easyListCookie"sv, m_block_cookie_banners);
+        settings.set_content_blocker_enabled(m_block_ads || m_block_cookie_banners);
+
+        // NB: A list that was just switched on has never been downloaded. The engine fetches lists when updates
+        //     are switched on, and then daily, so switching updates off and on again fetches what is missing
+        //     (lists fetched within the last day are left alone). Switching off cancels a download in progress,
+        //     and the engine only clears that up on a later turn of the event loop, where a request to start
+        //     again would be dropped. So the two halves are spread over two timers, which also folds the app's
+        //     two switches arriving together into one round of downloads.
+        if (!m_restart_list_updates_timer) {
+            m_restart_list_updates_timer = Core::Timer::create_single_shot(500, [this] {
+                WebView::Application::settings().set_filter_list_updates_enabled(false);
+                m_resume_list_updates_timer->restart();
+            });
+            m_resume_list_updates_timer = Core::Timer::create_single_shot(500, [this] {
+                if (m_block_ads || m_block_cookie_banners)
+                    WebView::Application::settings().set_filter_list_updates_enabled(true);
+            });
+        }
+        m_resume_list_updates_timer->stop();
+        m_restart_list_updates_timer->restart();
+    }
+
     void handle(lb_embed_header const& header, StringView text)
     {
+        if (header.type == LB_EMBED_SET_AD_BLOCKING || header.type == LB_EMBED_SET_COOKIE_BANNER_BLOCKING) {
+            auto& flag = header.type == LB_EMBED_SET_AD_BLOCKING ? m_block_ads : m_block_cookie_banners;
+            if (flag != (header.a != 0)) {
+                flag = header.a != 0;
+                apply_content_blocking();
+            }
+            return;
+        }
         if (header.type == LB_EMBED_CREATE_VIEW) {
             create_view(header.view, { header.a, header.b }, header.scale >= 1 ? header.scale : device_pixel_ratio_from_environment());
             return;
@@ -419,6 +484,10 @@ private:
     EmbeddedHost& m_host;
     Core::AnonymousBuffer m_theme;
     HashMap<u32, NonnullOwnPtr<PresentedWebView>> m_views;
+    bool m_block_ads { false };
+    bool m_block_cookie_banners { false };
+    RefPtr<Core::Timer> m_restart_list_updates_timer;
+    RefPtr<Core::Timer> m_resume_list_updates_timer;
 };
 #endif
 

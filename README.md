@@ -90,9 +90,16 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   interface was written against. `WPEWebPage` keeps every property and method the
   QML uses; what the engine protocol cannot do yet is a property that never changes
   or a method that does nothing. Not wired yet: text selection, find in page,
-  pickers and select menus, permissions, downloads, saved-login autofill, ad
-  blocking switches, extensions, clearing engine data, dark mode, scroll-driven
-  toolbar hiding, pinch zoom.
+  pickers and select menus, permissions, downloads, saved-login autofill,
+  the per-site ad-block allowlist, extensions, clearing engine data, dark mode,
+  scroll-driven toolbar hiding, pinch zoom.
+- Ad blocking is the engine's own: Ladybird ships Brave's `adblock` crate with
+  request blocking, cosmetic filtering and built-in list subscriptions, all off by
+  default. The interface's "Adblock" switch turns on EasyList, EasyPrivacy, the
+  anti-adblock-warning list and the list for the system language; its cookie-banner
+  switch turns on the EasyList cookie list. The engine downloads the lists into its
+  profile and refreshes them daily. An embedded engine therefore keeps a real
+  profile instead of a temporary one.
 
 On the phone: `sh /tmp/ladybird/start-browser.sh [url] [minutes]`.
 
