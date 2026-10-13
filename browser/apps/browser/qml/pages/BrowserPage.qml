@@ -192,7 +192,13 @@ Page {
     ConfigurationValue {
         id: viewportInsetConfig
         key: "/apps/pacific-browser/settings/viewport_inset_toolbar"
-        defaultValue: true
+        // NB: Off by default. With it on the page changes height whenever the
+        // toolbar hides or shows, and the engine lays the whole page out again
+        // for a new height: about 70 ms on a light page, over 700 ms measured on
+        // a heavy one, during which the strip the toolbar uncovered has nothing
+        // in it. Off, the page always reaches the bottom of the screen and the
+        // toolbar only covers it.
+        defaultValue: false
         // The live value is applied by webView._desiredContentBottomInset's
         // change handler (fires whenever this flag, the chrome state, or the
         // toolbar height changes). This restores the inset on startup, when no
@@ -417,7 +423,7 @@ Page {
                      && overlay.animator.state === "chromeVisible"
                      // The toolbar is about to go: the page gets its strip now and
                      // paints it while the toolbar still covers it.
-                     && !(webView.contentItem && webView.contentItem.chromeHidePending)
+                     && !overlay.animator.hidePending
                      && !contentFullscreen)
                     ? overlay.toolBar.rowHeight : 0,
                     contentFullscreen ? 0 : virtualKeyboardObserver.contentInset)

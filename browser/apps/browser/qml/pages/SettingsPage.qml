@@ -310,7 +310,7 @@ Page {
                 //: Reserve room for the toolbar so page content is never hidden behind it
                 //% "Keep content clear of the toolbar"
                 text: qsTrId("settings_browser-la-viewport_inset_toolbar")
-                //% "Shrink the page so bottom buttons sit above the address bar instead of behind it"
+                //% "Shrink the page so bottom buttons sit above the address bar instead of behind it. The page is laid out again each time the toolbar hides or shows, which is slow on heavy pages"
                 description: qsTrId("settings_browser-la-viewport_inset_toolbar_description")
                 checked: viewportInsetConfig.value
                 leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
@@ -497,7 +497,7 @@ Page {
         id: viewportInsetConfig
 
         key: "/apps/pacific-browser/settings/viewport_inset_toolbar"
-        defaultValue: true
+        defaultValue: false
     }
 
     ConfigurationValue {

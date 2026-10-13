@@ -166,11 +166,6 @@ private:
     // camera notch): the page's theme colour if it names one, otherwise what it paints behind its content.
     Q_PROPERTY(QColor surroundColor READ surroundColor NOTIFY surroundColorChanged FINAL)
 
-    // True from the moment scrolling asks for the toolbar to go until the page has painted the strip the toolbar
-    // covers. The interface gives the page that strip while this is set, and only then does `chrome` turn false
-    // and the toolbar slide away, over a page that is already there.
-    Q_PROPERTY(bool chromeHidePending READ chromeHidePending NOTIFY chromeHidePendingChanged FINAL)
-
     // A page's alert(), confirm() or prompt(): the page waits until resolveJsDialog() is called.
     // jsDialogKind is one of alert|confirm|prompt.
     Q_PROPERTY(bool jsDialogActive READ jsDialogActive NOTIFY jsDialogChanged FINAL)
@@ -412,7 +407,9 @@ public:
 
     QColor surroundColor() const { return m_themeColor.isValid() ? m_themeColor : m_backgroundColor; }
 
-    bool chromeHidePending() const { return m_chromeHidePending; }
+    // Whether the newest frame covers the whole view. It does not right after the view grew, until the engine
+    // has laid the page out for the new size and painted it.
+    Q_INVOKABLE bool paintedFullHeight() const { return paintedSize().height() >= static_cast<int>(height()) - 1; }
 
     bool jsDialogActive() const { return m_jsDialogKind >= 0; }
     QString jsDialogKind() const;
@@ -536,7 +533,6 @@ signals:
     void permissionChanged();
     void jsDialogChanged();
     void surroundColorChanged();
-    void chromeHidePendingChanged();
     void saveLoginChanged();
     void findInPageHasResultChanged();
 
@@ -686,10 +682,6 @@ private:
     qint64 m_lastSoftKeyboardTextTimeMs = 0;
     qint64 m_lastSoftBackspaceTimeMs = 0;
     qint64 m_lastSoftEnterTimeMs = 0;
-    void beginChromeHide();
-    void finishChromeHide(bool hide);
-    bool m_chromeHidePending = false;
-    QTimer m_chromeHideGuard;
     void querySelection();
     void queryScrollPosition();
     void closeInputPicker();

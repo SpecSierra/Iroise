@@ -42,6 +42,8 @@
 #include <QQuickView>
 #include <QQuickWindow>
 #include <QScreen>
+#include <QElapsedTimer>
+#include <QFile>
 #include <QTimer>
 #include <QUrl>
 #include <QWindow>
@@ -276,16 +278,29 @@ extern "C" Q_DECL_EXPORT bool pacificBrowserRuntimeStart(QQuickView *view,
 
     browser->load();
     // PACIFIC_GRAB_DIR=<dir> saves what the window shows once a second, as <dir>/grab-<n>.jpg (the last 20 are
-    // kept). The system screenshot service only writes under the home directory, which test runs stay out of.
+    // kept). PACIFIC_GRAB_INTERVAL_MS makes that more often, to catch a transition; the files are then named by
+    // the millisecond they were taken at, to set beside the log, and the last 80 are kept. The system screenshot service only writes under the home directory, which test runs stay out of.
     const QString grabDirectory = QString::fromLocal8Bit(qgetenv("PACIFIC_GRAB_DIR"));
     if (!grabDirectory.isEmpty()) {
         QTimer *grabTimer = new QTimer(view);
         QObject::connect(grabTimer, &QTimer::timeout, view, [view, grabDirectory]() {
             static int count = 0;
-            view->grabWindow().scaledToWidth(516).save(QStringLiteral("%1/grab-%2.jpg").arg(grabDirectory).arg(count % 20, 2, 10, QLatin1Char('0')), "JPG", 70);
+            static QElapsedTimer clock;
+            static QStringList fastGrabs;
+            if (!clock.isValid())
+                clock.start();
+            if (qEnvironmentVariableIsSet("PACIFIC_GRAB_INTERVAL_MS")) {
+                QString name = QStringLiteral("%1/grab-%2.jpg").arg(grabDirectory).arg(clock.elapsed(), 7, 10, QLatin1Char('0'));
+                view->grabWindow().scaledToWidth(344).save(name, "JPG", 60);
+                fastGrabs.append(name);
+                if (fastGrabs.size() > 80)
+                    QFile::remove(fastGrabs.takeFirst());
+            } else {
+                view->grabWindow().scaledToWidth(516).save(QStringLiteral("%1/grab-%2.jpg").arg(grabDirectory).arg(count % 20, 2, 10, QLatin1Char('0')), "JPG", 70);
+            }
             ++count;
         });
-        grabTimer->start(1000);
+        grabTimer->start(qMax(50, qEnvironmentVariableIsSet("PACIFIC_GRAB_INTERVAL_MS") ? qEnvironmentVariableIntValue("PACIFIC_GRAB_INTERVAL_MS") : 1000));
     }
 
     view->setProperty("pacificBrowserRuntimeLoaded", true);

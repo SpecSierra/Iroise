@@ -63,8 +63,51 @@ Item {
         updateState(_certOverlay, immediate || false)
     }
 
+    // The toolbar is about to slide away and uncover the strip of the page
+    // beneath it. With the viewport inset on, that strip is not part of the
+    // page while the toolbar is up, so the page has to be given it, laid out
+    // and painted first; otherwise the toolbar uncovers nothing but the
+    // page's colour. While this is set BrowserPage's inset is dropped, and the
+    // state only changes once the page has painted at its new height (or
+    // after hideGuard, for a page that takes long over it).
+    property bool hidePending
+
     function showFullscreen() {
+        if (state === _chromeVisible && !hidePending && webView && webView.contentItem
+                && webView.contentItem.paintedFullHeight) {
+            hidePending = true
+            if (webView.contentItem && webView.contentItem.paintedFullHeight()) {
+                _finishHide()
+            } else {
+                hideGuard.restart()
+            }
+            return
+        }
+        if (hidePending) {
+            return
+        }
         updateState(_fullscreenWebPage)
+    }
+
+    function _finishHide() {
+        if (hidePending) {
+            updateState(_fullscreenWebPage)
+        }
+    }
+
+    Timer {
+        id: hideGuard
+        interval: 700
+        onTriggered: animator._finishHide()
+    }
+
+    Connections {
+        target: animator.hidePending && animator.webView ? animator.webView.contentItem : null
+        onFrameArrived: {
+            if (animator.webView.contentItem.paintedFullHeight()) {
+                animator._finishHide()
+            }
+        }
     }
 
     function drag() {
@@ -102,6 +145,10 @@ Item {
         }
 
         state = newState
+        // Whatever was asked for, a hide that was waiting for the page is
+        // either done now or overtaken.
+        hideGuard.stop()
+        hidePending = false
     }
 
     state: _chromeVisible
@@ -177,7 +224,7 @@ Item {
             if (webView.needChrome) {
                 updateState(_chromeVisible)
             } else {
-                updateState(_fullscreenWebPage)
+                showFullscreen()
             }
         }
     }
