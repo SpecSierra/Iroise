@@ -23,6 +23,7 @@
 #include <LibWebCommon/HTML/SelectItem.h>
 #include <LibWebCommon/HTML/SelectedFile.h>
 #include <LibWebCommon/Page/InputEvent.h>
+#include <LibWebCommon/WebView/ConsoleOutput.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/FileDownloader.h>
 #include <LibWebView/HeadlessWebView.h>
@@ -308,6 +309,15 @@ private:
         };
         view->on_web_content_crashed = [this, id](auto) { m_host.send_flags(id, LB_EMBED_CRASHED, true); };
 
+        // The app's scripts in the page talk back through the console, the one way a page reaches us unasked.
+        view->on_console_message = [this, id](WebView::ConsoleOutput output) {
+            auto const* log = output.output.get_pointer<WebView::ConsoleLog>();
+            if (!log || log->arguments.size() != 2 || !log->arguments[0].is_string() || !log->arguments[1].is_string())
+                return;
+            if (log->arguments[0].as_string() != LB_EMBED_PAGE_MESSAGE_MARKER ""sv)
+                return;
+            m_host.send_text(id, LB_EMBED_PAGE_MESSAGE, log->arguments[1].as_string().bytes_as_string_view());
+        };
         view->on_received_js_console_result = [this, id](JsonValue result) {
             if (result.is_string())
                 m_host.send_text(id, LB_EMBED_SCRIPT_RESULT, result.as_string().bytes_as_string_view());

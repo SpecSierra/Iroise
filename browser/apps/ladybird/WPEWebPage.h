@@ -682,15 +682,9 @@ private:
     qint64 m_lastSoftKeyboardTextTimeMs = 0;
     qint64 m_lastSoftBackspaceTimeMs = 0;
     qint64 m_lastSoftEnterTimeMs = 0;
-    void querySelection();
-    void queryScrollPosition();
+    void pageMessage(const QString &kind, const QJsonValue &data) override;
     void closeInputPicker();
 
-    // Where the page is scrolled to is asked for while a finger is on it and for a moment after, see
-    // queryScrollPosition().
-    QTimer m_scrollPoll;
-    int m_scrollPollsLeft = 0;
-    bool m_scrollQueryPending = false;
     // The picker that is open belongs to the engine (a colour) rather than to our own script (dates and times).
     bool m_inputPickerIsEngineColor = false;
     void moveSelectionEdge(bool start, qreal cssX, qreal cssY);
@@ -703,8 +697,6 @@ private:
     int m_jsDialogKind = -1;
     QString m_jsDialogMessage;
     QString m_jsDialogDefaultText;
-    QTimer m_selectionPoll;
-    bool m_selectionQueryPending = false;
     bool m_selectMenuActive = false;
     QStringList m_selectMenuOptions;
     int m_selectMenuSelectedIdx = 0;

@@ -138,14 +138,15 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   engine's console input, the one path that hands a value back. Only strings come
   back intact, so `WPEQtView::evaluate` wraps the expression in `JSON.stringify`
   together with a number that says which question the answer belongs to.
-- Text selection is built on that. A finger held for half a second is a long press
-  (detected in the interface, which then cancels the touch so the engine makes no
-  tap of it). A script looks at what is under it: a link or an image opens the
-  action panel; text gets its word selected. While something is selected the page
-  is asked five times a second for the text and for where its two ends are, since
-  the engine reports neither. The page answers in CSS pixels and the handles are
-  placed in device pixels, so the answer is scaled by the device pixel ratio, and
-  by the visual viewport when the page is pinched.
+- Page messages: the engine reports neither scrolling nor selections, so a small script of ours (the page agent,
+  `kPageAgentScript`) runs in every page and posts them, at most once a frame, through `console.log` with a marker.
+  The engine forwards those as `LB_EMBED_PAGE_MESSAGE`. Any script in the page could post the same, so they are
+  hints for the interface (where to put the toolbar, the selection handles), never grounds for trust.
+- Text selection: a finger held for half a second is a long press (detected in the interface, which then cancels
+  the touch so the engine makes no tap of it). A script looks at what is under it: a link or an image opens the
+  action panel; text gets its word selected, and the agent reports the selection and where its two ends are. The
+  page answers in CSS pixels and the handles are placed in device pixels, so the answer is scaled by the device
+  pixel ratio, and by the visual viewport when the page is pinched.
 - Find in page, `<select>` menus, `alert`/`confirm`/`prompt`, the dark colour
   scheme and pinch zoom use the engine's own API, each through its own message.
   A page waits for its dialog to be answered; before this, one `alert()` blocked
@@ -154,9 +155,8 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   the interface's own pickers. Date and time inputs have no engine request: a tap
   that lands on one (checked by a script) opens the interface's picker, which writes
   the value back and fires `input` and `change`.
-- The toolbar hides when the page scrolls down and returns when it scrolls up or
-  reaches the top. The engine does not report scrolling, so the page is asked for
-  its position while a finger is on it and for about two seconds after.
+- The toolbar hides when the page scrolls down and returns when it scrolls up or reaches the top, going by the
+  agent's scroll messages.
 - Clearing the cache and clearing cookies and site data in Settings go to the
   engine's `clear_browsing_data`.
 - Permission prompts are not wired because the engine only ever asks for the

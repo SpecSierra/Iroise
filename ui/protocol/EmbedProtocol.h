@@ -16,6 +16,7 @@
 
 #define LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE "LADYBIRD_SFOS_EMBED_SOCKET"
 #define LB_EMBED_TEXT_MAX 32768
+#define LB_EMBED_PAGE_MESSAGE_MARKER "\001pacific"
 
 enum lb_embed_message_type {
     /* Silica app -> engine. Every message names a view; the app picks the numbers. */
@@ -75,6 +76,9 @@ enum lb_embed_message_type {
                                      LB_EMBED_FILE_PICKER_CLOSED. */
     LB_EMBED_COLOR_PICKER = 113,  /* text = the colour an <input type=color> has now, as #rrggbb. Answered
                                      with LB_EMBED_COLOR_PICKED. */
+    LB_EMBED_PAGE_MESSAGE = 116,  /* text = what a script of the app's posted from the page, by calling
+                                     console.log(LB_EMBED_PAGE_MESSAGE_MARKER, text). Any script in the page can
+                                     post one too, so the app treats these as hints, never as proof. */
     LB_EMBED_PAGE_COLOR = 115,    /* a = lb_embed_page_color; text = the colour as #rrggbb, empty when the page
                                      no longer names one */
     /* For the whole engine (view 0). Downloads start when a page navigates to something that is not a page, or

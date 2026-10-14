@@ -37,10 +37,31 @@ QList<WPEWebPage *> &livePages()
 
 const int kThumbnailIntervalMs = 4000;
 const int kThumbnailMaxWidth = 540;
-const int kSelectionPollMs = 200;
-const int kScrollPollMs = 120;
-// How long after the finger lifts the page is still asked where it is: a fling takes about this long.
-const int kScrollPollsAfterTouch = 15;
+
+// The engine reports neither scrolling nor selections. This script, run in each page, does: it posts where the page
+// is scrolled to and what is selected, at most once a frame, as page messages (LB_EMBED_PAGE_MESSAGE). Running it
+// again does nothing. If the page replaced console.log, a hidden frame lends us a working one.
+const char kPageAgentScript[] =
+    "(function(){"
+    "if(window.__pacificAgent)return 0;window.__pacificAgent=1;"
+    "var log=console.log;"
+    "if(!/\\[native code\\]/.test(Function.prototype.toString.call(log))){"
+    "var f=document.createElement('iframe');f.style.display='none';document.documentElement.appendChild(f);log=f.contentWindow.console.log;}"
+    "function post(k,d){log('\\u0001pacific',JSON.stringify([k,d]));}"
+    "function selection(){"
+    "var s=getSelection();if(!s||!s.rangeCount||s.isCollapsed)return {t:''};"
+    "var q=s.getRangeAt(0).getClientRects();if(!q.length)return {t:''};"
+    "var a=q[0],b=q[q.length-1],v=window.visualViewport,z=v?v.scale:1,ox=v?v.offsetLeft:0,oy=v?v.offsetTop:0;"
+    "return {t:s.toString().slice(0,4000),sx:(a.left-ox)*z,sy:(a.bottom-oy)*z,ex:(b.right-ox)*z,ey:(b.bottom-oy)*z};}"
+    "var pending={},had=false;"
+    "function soon(k,f){if(pending[k])return;pending[k]=requestAnimationFrame(function(){pending[k]=0;f();});}"
+    "function sendSelection(){var s=selection();if(s.t||had)post('selection',s);had=!!s.t;}"
+    "addEventListener('scroll',function(e){"
+    "if(e.target===document)soon('scroll',function(){var r=document.scrollingElement||document.documentElement;post('scroll',[scrollY,r.scrollHeight,innerHeight]);});"
+    "if(had)soon('selection',sendSelection);"
+    "},{passive:true,capture:true});"
+    "document.addEventListener('selectionchange',function(){soon('selection',sendSelection);});"
+    "return 0;})()";
 
 // The kinds of <input> the interface has a picker of its own for. A tap on one hands it over.
 const char kInputPickerScript[] =
@@ -87,13 +108,6 @@ const char kLongPressScript[] =
 
 // The selection's text and where its two ends are on screen: the bottom of the first and of the last line box,
 // in CSS pixels at the zoom the user pinched to.
-const char kSelectionScript[] =
-    "(function(){"
-    "var s=getSelection();if(!s||!s.rangeCount||s.isCollapsed)return {t:''};"
-    "var q=s.getRangeAt(0).getClientRects();if(!q.length)return {t:''};"
-    "var a=q[0],b=q[q.length-1],v=window.visualViewport,z=v?v.scale:1,ox=v?v.offsetLeft:0,oy=v?v.offsetTop:0;"
-    "return {t:s.toString().slice(0,4000),sx:(a.left-ox)*z,sy:(a.bottom-oy)*z,ex:(b.right-ox)*z,ey:(b.bottom-oy)*z};"
-    "})()";
 
 // Moves one end of the selection to the text nearest a point, keeping the other end where it is.
 const char kMoveSelectionScript[] =
@@ -130,9 +144,6 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     m_thumbnailTimer.setInterval(kThumbnailIntervalMs);
     connect(&m_thumbnailTimer, &QTimer::timeout, this, &WPEWebPage::captureThumbnail);
 
-    // Nor does it say where the page is scrolled to, which is what hides and shows the toolbar.
-    m_scrollPoll.setInterval(kScrollPollMs);
-    connect(&m_scrollPoll, &QTimer::timeout, this, &WPEWebPage::queryScrollPosition);
     m_chromeGestureDebounceTimer.setSingleShot(true);
     m_chromeGestureDebounceTimer.setInterval(150);
     connect(&m_chromeGestureDebounceTimer, &QTimer::timeout, this, [this] {
@@ -171,16 +182,6 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             }
         }
         m_lastScrollY = scrollY;
-    });
-
-    // The engine does not tell us when a selection changes or moves with the page, so while there is one, ask.
-    m_selectionPoll.setInterval(kSelectionPollMs);
-    connect(&m_selectionPoll, &QTimer::timeout, this, &WPEWebPage::querySelection);
-    connect(this, &WPEWebPage::textSelectionActiveChanged, this, [this] {
-        if (m_textSelectionActive)
-            m_selectionPoll.start();
-        else
-            m_selectionPoll.stop();
     });
 }
 
@@ -286,10 +287,10 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
     }
     if (finished) {
         m_lastCommittedUrl = url();
+        evaluate(QString::fromLatin1(kPageAgentScript));
     } else {
         // What the old page had selected, was searching for or was asking is gone with it.
         handleJsSelectionClear();
-        m_selectionQueryPending = false;
         m_findText.clear();
         setFindInPageHasResult(false);
         if (m_jsDialogKind >= 0) {
@@ -538,15 +539,10 @@ void WPEWebPage::keyPressEvent(QKeyEvent *event)
 
 void WPEWebPage::touchEvent(QTouchEvent *event)
 {
-    if (event->type() == QEvent::TouchBegin)
+    if (event->type() == QEvent::TouchBegin) {
         emit touched();
-    // While a finger is down the page may be scrolling, and for a while after it lifts.
-    if (event->type() == QEvent::TouchEnd || event->type() == QEvent::TouchCancel) {
-        m_scrollPollsLeft = kScrollPollsAfterTouch;
-    } else {
-        m_scrollPollsLeft = -1;
-        if (!m_scrollPoll.isActive())
-            m_scrollPoll.start();
+        // A page still loading has not had the agent yet.
+        evaluate(QString::fromLatin1(kPageAgentScript));
     }
     WPEQtView::touchEvent(event);
 }
@@ -891,7 +887,7 @@ void WPEWebPage::clearSelection()
 
 void WPEWebPage::selectAll()
 {
-    evaluate(QStringLiteral("getSelection().selectAllChildren(document.body),0"), [this](const QJsonValue &) { querySelection(); });
+    evaluate(QStringLiteral("getSelection().selectAllChildren(document.body),0"));
 }
 
 void WPEWebPage::moveSelectionStart(qreal cssX, qreal cssY)
@@ -1177,28 +1173,27 @@ void WPEWebPage::longPressed(const QPointF &position)
             openImageLongPress(image);
             return;
         }
-        if (hit.value(QStringLiteral("word")).toBool())
-            querySelection();
     });
 }
 
-void WPEWebPage::querySelection()
+void WPEWebPage::pageMessage(const QString &kind, const QJsonValue &data)
 {
-    // NB: One question at a time: with a slow page the answers would otherwise pile up behind each other.
-    if (m_selectionQueryPending)
-        return;
-    m_selectionQueryPending = true;
-    QTimer::singleShot(1000, this, [this] { m_selectionQueryPending = false; });
-    evaluate(QString::fromLatin1(kSelectionScript), [this](const QJsonValue &value) {
-        m_selectionQueryPending = false;
-        QJsonObject selection = value.toObject();
+    static const bool log = !qgetenv("PACIFIC_LOG_ENGINE").isEmpty();
+    if (log)
+        qWarning("WPEWebPage: page message %s", qPrintable(kind));
+    if (kind == QLatin1String("scroll")) {
+        QJsonArray position = data.toArray();
+        if (position.size() == 3)
+            emit scrollPositionChanged(position.at(0).toDouble(), position.at(1).toDouble(), position.at(2).toDouble());
+    } else if (kind == QLatin1String("selection")) {
         // NB: The interface places the handles in its own pixels, which are the device's; the page answers in
         //     CSS pixels.
+        QJsonObject selection = data.toObject();
         const qreal scale = deviceScaleFactor();
         handleJsSelectionUpdate(selection.value(QStringLiteral("t")).toString(),
             selection.value(QStringLiteral("sx")).toDouble() * scale, selection.value(QStringLiteral("sy")).toDouble() * scale,
             selection.value(QStringLiteral("ex")).toDouble() * scale, selection.value(QStringLiteral("ey")).toDouble() * scale);
-    });
+    }
 }
 
 void WPEWebPage::moveSelectionEdge(bool start, qreal cssX, qreal cssY)
@@ -1208,7 +1203,7 @@ void WPEWebPage::moveSelectionEdge(bool start, qreal cssX, qreal cssY)
     cssX /= scale;
     cssY /= scale;
     QString script = QString::fromLatin1(kMoveSelectionScript).arg(cssX, 0, 'f', 2).arg(cssY - kHandleToTextCssPx, 0, 'f', 2).arg(start ? 1 : 0);
-    evaluate(script, [this](const QJsonValue &) { querySelection(); });
+    evaluate(script);
 }
 
 void WPEWebPage::findResult(int current, int total)
@@ -1319,27 +1314,6 @@ void WPEWebPage::filePickerRequested(bool multiple)
     }
     m_fileChooserActive = true;
     emit fileChooserActiveChanged();
-}
-
-void WPEWebPage::queryScrollPosition()
-{
-    if (m_scrollPollsLeft == 0) {
-        m_scrollPoll.stop();
-        return;
-    }
-    if (m_scrollPollsLeft > 0)
-        --m_scrollPollsLeft;
-    // NB: One question at a time, and a lost answer must not stop the asking for good.
-    if (m_scrollQueryPending)
-        return;
-    m_scrollQueryPending = true;
-    QTimer::singleShot(1000, this, [this] { m_scrollQueryPending = false; });
-    evaluate(QStringLiteral("[window.scrollY,document.documentElement.scrollHeight,window.innerHeight]"), [this](const QJsonValue &value) {
-        m_scrollQueryPending = false;
-        QJsonArray position = value.toArray();
-        if (position.size() == 3)
-            emit scrollPositionChanged(position.at(0).toDouble(), position.at(1).toDouble(), position.at(2).toDouble());
-    });
 }
 
 void WPEWebPage::clearEngineDataGlobally(bool cache, bool siteData)

@@ -132,6 +132,8 @@ protected:
     virtual void findResult(int current, int total) { Q_UNUSED(current); Q_UNUSED(total); }
     virtual void selectMenuRequested(const QByteArray& optionsJson) { Q_UNUSED(optionsJson); }
     virtual void dialogRequested(int kind, const QByteArray& json) { Q_UNUSED(kind); Q_UNUSED(json); }
+    // A message from the page agent (see WPEWebPage): a kind and what came with it.
+    virtual void pageMessage(const QString& kind, const QJsonValue& data) { Q_UNUSED(kind); Q_UNUSED(data); }
 
     void sendToEngine(lb_embed_message_type type, int a = 0, int b = 0, int c = 0, int d = 0, const QByteArray& text = QByteArray());
     bool hasEngineView() const { return m_view != 0; }
