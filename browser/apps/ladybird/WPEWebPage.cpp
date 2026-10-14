@@ -291,6 +291,8 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
     } else {
         // What the old page had selected, was searching for or was asking is gone with it.
         handleJsSelectionClear();
+        if (!m_permissionQuestions.isEmpty())
+            answerPermissions(QString(), false);
         m_findText.clear();
         setFindInPageHasResult(false);
         if (m_jsDialogKind >= 0) {
@@ -999,9 +1001,59 @@ void WPEWebPage::acceptTlsCertificate()
 {
 }
 
+// Shared by every non-private tab, for as long as the browser runs.
+static QHash<QString, bool> &sessionPermissionDecisions()
+{
+    static QHash<QString, bool> decisions;
+    return decisions;
+}
+
+void WPEWebPage::permissionRequested(int question, const QString &name, const QString &origin)
+{
+    const QString key = origin + QLatin1Char('|') + name;
+    QHash<QString, bool> &decisions = privateBrowsing() ? m_permissionDecisions : sessionPermissionDecisions();
+    if (decisions.contains(key)) {
+        sendToEngine(LB_EMBED_PERMISSION_DECIDED, question, decisions.value(key) ? 1 : 0);
+        return;
+    }
+    m_permissionQuestions.append(qMakePair(question, key));
+    if (!m_permissionPending)
+        showNextPermissionQuestion();
+}
+
+void WPEWebPage::showNextPermissionQuestion()
+{
+    m_permissionPending = !m_permissionQuestions.isEmpty();
+    if (m_permissionPending) {
+        const QString key = m_permissionQuestions.first().second;
+        const int separator = key.lastIndexOf(QLatin1Char('|'));
+        m_permissionHost = QUrl(key.left(separator)).host();
+        m_permissionType = key.mid(separator + 1);
+    } else {
+        m_permissionHost.clear();
+        m_permissionType.clear();
+    }
+    emit permissionChanged();
+}
+
+void WPEWebPage::answerPermissions(const QString &key, bool allow)
+{
+    for (int i = m_permissionQuestions.size() - 1; i >= 0; --i) {
+        if (!key.isEmpty() && m_permissionQuestions.at(i).second != key)
+            continue;
+        sendToEngine(LB_EMBED_PERMISSION_DECIDED, m_permissionQuestions.at(i).first, allow ? 1 : 0);
+        m_permissionQuestions.removeAt(i);
+    }
+    showNextPermissionQuestion();
+}
+
 void WPEWebPage::resolvePermission(bool allow)
 {
-    Q_UNUSED(allow);
+    if (m_permissionQuestions.isEmpty())
+        return;
+    const QString key = m_permissionQuestions.first().second;
+    (privateBrowsing() ? m_permissionDecisions : sessionPermissionDecisions()).insert(key, allow);
+    answerPermissions(key, allow);
 }
 
 void WPEWebPage::offerSaveLogin(const QString &username, const QString &password)

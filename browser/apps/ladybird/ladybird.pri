@@ -25,3 +25,7 @@ LIBS += -lEGL
 
 HEADERS += $$PWD/LadybirdDownloads.h
 SOURCES += $$PWD/LadybirdDownloads.cpp
+
+QT += positioning
+HEADERS += $$PWD/LadybirdGeolocation.h
+SOURCES += $$PWD/LadybirdGeolocation.cpp

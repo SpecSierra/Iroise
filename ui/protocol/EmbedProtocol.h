@@ -43,6 +43,10 @@ enum lb_embed_message_type {
     LB_EMBED_DOWNLOAD_CANCEL = 26,            /* a = the download's id */
     LB_EMBED_SET_BLOCKER_FILTERS = 27,        /* text = filter rules of the app's own, in the syntax of the
                                                  lists, applied on top of them */
+    LB_EMBED_GEOLOCATION_POSITION = 29,       /* a = the request's id (LB_EMBED_GEOLOCATION_START); b = 0, or why
+                                                 there is no position (1 denied, 2 unavailable, 3 timed out);
+                                                 text = JSON {"latitude", "longitude", "accuracy" (metres), and
+                                                 if known "altitude", "altitudeAccuracy", "heading", "speed"} */
     /* Back to messages for one view. */
     LB_EMBED_RUN_SCRIPT = 17, /* text = a JavaScript expression, run in the page. If its value is a string, the
                                  string comes back in LB_EMBED_SCRIPT_RESULT; the app puts what it needs to tell
@@ -55,6 +59,7 @@ enum lb_embed_message_type {
                                  far apart the fingers are now, over how far they were at the last message */
     LB_EMBED_FILE_PICKER_CLOSED = 22, /* text = the chosen files' paths, one per line; empty for none */
     LB_EMBED_COLOR_PICKED = 23,       /* a = 1 if a colour was chosen; text = it, as #rrggbb */
+    LB_EMBED_PERMISSION_DECIDED = 28, /* a = the question's id (LB_EMBED_PERMISSION); b = 1 to grant */
 
     /* engine -> Silica app */
     LB_EMBED_FRAME = 101,   /* a, b = painted size; c, d = buffer size; e = row pitch in bytes; fd = dma-buf (BGRA) */
@@ -79,12 +84,18 @@ enum lb_embed_message_type {
     LB_EMBED_PAGE_MESSAGE = 116,  /* text = what a script of the app's posted from the page, by calling
                                      console.log(LB_EMBED_PAGE_MESSAGE_MARKER, text). Any script in the page can
                                      post one too, so the app treats these as hints, never as proof. */
-    LB_EMBED_PAGE_COLOR = 115,    /* a = lb_embed_page_color; text = the colour as #rrggbb, empty when the page
+    LB_EMBED_PAGE_COLOR = 115,
+    LB_EMBED_PERMISSION = 117,    /* a = an id for the answer, LB_EMBED_PERMISSION_DECIDED; text = JSON {"name"
+                                     ("geolocation" or "microphone"), "origin"}. The page waits for the answer. */    /* a = lb_embed_page_color; text = the colour as #rrggbb, empty when the page
                                      no longer names one */
     /* For the whole engine (view 0). Downloads start when a page navigates to something that is not a page, or
        on LB_EMBED_DOWNLOAD_START; either way the engine saves the file itself and only reports. */
     LB_EMBED_DOWNLOAD = 114,      /* a = the download's id; b = lb_embed_download_status;
                                      text = JSON {"url", "path", "received", "total" (-1 if not known), "error"} */
+    LB_EMBED_GEOLOCATION_START = 118, /* a = a request id; b = 1 to keep reporting (a watch), 0 for one position.
+                                         Answered with LB_EMBED_GEOLOCATION_POSITION. Only sent for pages the user
+                                         let have their location. */
+    LB_EMBED_GEOLOCATION_STOP = 119,  /* a = the request id that is no longer wanted */
 };
 
 enum lb_embed_page_color {

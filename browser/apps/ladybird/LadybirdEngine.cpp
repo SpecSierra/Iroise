@@ -7,6 +7,7 @@
 #include "LadybirdEngine.h"
 
 #include "LadybirdDownloads.h"
+#include "LadybirdGeolocation.h"
 #include "browserpaths.h"
 
 #include <QCoreApplication>
@@ -234,6 +235,10 @@ void LadybirdEngine::receive()
             } else if (header.type == LB_EMBED_DOWNLOAD) {
                 size_t textLength = qMin(static_cast<size_t>(header.text_length), static_cast<size_t>(length) - sizeof(lb_embed_header));
                 LadybirdDownloads::instance()->report(header.a, header.b, QByteArray(buffer.text, static_cast<int>(textLength)));
+            } else if (header.type == LB_EMBED_GEOLOCATION_START) {
+                LadybirdGeolocation::instance()->start(header.a, header.b != 0);
+            } else if (header.type == LB_EMBED_GEOLOCATION_STOP) {
+                LadybirdGeolocation::instance()->stop(header.a);
             } else if (LadybirdEngineClient* client = m_views.value(header.view)) {
                 size_t textLength = qMin(static_cast<size_t>(header.text_length), static_cast<size_t>(length) - sizeof(lb_embed_header));
                 client->engineMessage(header, QString::fromUtf8(buffer.text, static_cast<int>(textLength)));

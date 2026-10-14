@@ -12,12 +12,14 @@
 #include <AK/LexicalPath.h>
 #include <LibCore/ElapsedTimer.h>
 #include <LibCore/Environment.h>
+#include <LibCore/GeolocationProvider.h>
 #include <LibCore/EventLoop.h>
 #include <LibCore/Timer.h>
 #include <LibGfx/Bitmap.h>
 #include <LibGfx/SystemTheme.h>
 #include <LibMain/Main.h>
 #include <LibWebCommon/CSS/PreferredColorScheme.h>
+#include <LibWebCommon/Geolocation/GeolocationPositionErrorCode.h>
 #include <LibWebCommon/HTML/ColorPickerUpdateState.h>
 #include <LibWebCommon/HTML/FileFilter.h>
 #include <LibWebCommon/HTML/SelectItem.h>
@@ -31,6 +33,7 @@
 #include <LibWebView/Settings.h>
 #include <LibWebView/URL.h>
 #include <LibWebView/Utilities.h>
+#include <LibWebView/WebContentPage.h>
 #include <UI/SFOS/EmbeddedHost.h>
 
 namespace Ladybird {
@@ -195,6 +198,97 @@ static ErrorOr<Core::AnonymousBuffer> load_theme()
     auto theme_path = LexicalPath::join(WebView::s_ladybird_resource_root, "themes"sv, "Default.ini"sv);
     return Gfx::load_system_theme(theme_path.string());
 }
+
+// Positions come from the app, which reads the phone's location service. One provider serves every view; the
+// views only ask it for pages the user let have their location (see EmbeddedViews::create_view).
+class AppGeolocationProvider final : public Core::GeolocationProvider {
+public:
+    AK_ALLOC_WITH_KMALLOC;
+
+    static inline EmbeddedHost* s_host { nullptr };
+    static inline AppGeolocationProvider* s_the { nullptr };
+
+    static ErrorOr<NonnullOwnPtr<Core::GeolocationProvider>> create() { return adopt_nonnull_own_or_enomem(new (nothrow) AppGeolocationProvider); }
+    static bool is_available() { return true; }
+
+    AppGeolocationProvider() { s_the = this; }
+    virtual ~AppGeolocationProvider() override { s_the = nullptr; }
+
+    virtual ErrorOr<RequestId, Core::GeolocationError> request_current_position(SuccessCallback on_success, ErrorCallback on_error) override
+    {
+        return start(move(on_success), move(on_error), false);
+    }
+    virtual ErrorOr<WatchId, Core::GeolocationError> start_watching_position(SuccessCallback on_success, ErrorCallback on_error) override
+    {
+        return start(move(on_success), move(on_error), true);
+    }
+    virtual void cancel_current_position_request(RequestId id) override { stop(id); }
+    virtual void stop_watching_position(WatchId id) override { stop(id); }
+
+    void position_arrived(i32 id, i32 error, StringView text)
+    {
+        // NB: Out of the map while it is called back: the page may stop the very request it is told about.
+        auto request = m_requests.take(static_cast<u64>(id));
+        if (!request.has_value())
+            return;
+        auto& callbacks = *request;
+        m_delivering = static_cast<u64>(id);
+        m_delivering_stopped = false;
+        if (error) {
+            auto type = error == 1 ? Core::GeolocationError::Type::PermissionDenied
+                : error == 3       ? Core::GeolocationError::Type::Timeout
+                                   : Core::GeolocationError::Type::PositionUnavailable;
+            callbacks.on_error({ type, {} });
+        } else if (auto json = JsonValue::from_string(text); !json.is_error() && json.value().is_object()) {
+            auto const& position = json.value().as_object();
+            Core::GeolocationCoordinates coordinates;
+            coordinates.latitude = position.get_double_with_precision_loss("latitude"sv).value_or(0);
+            coordinates.longitude = position.get_double_with_precision_loss("longitude"sv).value_or(0);
+            coordinates.accuracy = position.get_double_with_precision_loss("accuracy"sv).value_or(0);
+            coordinates.altitude = position.get_double_with_precision_loss("altitude"sv);
+            coordinates.altitude_accuracy = position.get_double_with_precision_loss("altitudeAccuracy"sv);
+            coordinates.heading = position.get_double_with_precision_loss("heading"sv);
+            coordinates.speed = position.get_double_with_precision_loss("speed"sv);
+            callbacks.on_success(coordinates);
+        }
+        if (callbacks.is_watch && !m_delivering_stopped)
+            m_requests.set(static_cast<u64>(id), move(callbacks));
+        m_delivering = 0;
+    }
+
+private:
+    struct Callbacks {
+        SuccessCallback on_success;
+        ErrorCallback on_error;
+        bool is_watch { false };
+    };
+
+    ErrorOr<u64, Core::GeolocationError> start(SuccessCallback on_success, ErrorCallback on_error, bool is_watch)
+    {
+        if (!s_host)
+            return Core::GeolocationError { Core::GeolocationError::Type::PositionUnavailable, {} };
+        auto id = m_next_id++;
+        m_requests.set(id, Callbacks { move(on_success), move(on_error), is_watch });
+        s_host->send_numbers(0, LB_EMBED_GEOLOCATION_START, static_cast<i32>(id), is_watch);
+        return id;
+    }
+
+    void stop(u64 id)
+    {
+        bool known = m_requests.remove(id);
+        if (id == m_delivering) {
+            m_delivering_stopped = true;
+            known = true;
+        }
+        if (known && s_host)
+            s_host->send_numbers(0, LB_EMBED_GEOLOCATION_STOP, static_cast<i32>(id));
+    }
+
+    HashMap<u64, Callbacks> m_requests;
+    u64 m_next_id { 1 };
+    u64 m_delivering { 0 };
+    bool m_delivering_stopped { false };
+};
 
 // A Silica app shows our frames and sends us input over a socket. It has one view per tab.
 class EmbeddedViews final : private WebView::FileDownloaderObserver {
@@ -383,6 +477,28 @@ private:
             m_host.send_text(id, LB_EMBED_COLOR_PICKER, text.bytes_as_string_view());
         };
 
+        view->on_request_permission = [this, id](Utf16String const& name, URL::Origin const& origin, Function<void(bool)> on_decided) {
+            ask_permission(id, name.to_utf8(), origin, move(on_decided));
+        };
+
+        // NB: The engine grants geolocation to any page that asks, and the view then wants a position from the
+        //     provider. So the user is asked here, before the view's own handler runs.
+        auto gate_geolocation = [this, id, raw_view](Function<void(WebView::WebContentPage&, u64)>& handler) {
+            auto native = adopt_ref(*new SharedGeolocationHandler(move(handler)));
+            handler = [this, id, raw_view, native](WebView::WebContentPage& page, u64 request_id) {
+                ask_permission(id, "geolocation"_string, raw_view->url().origin(), [native, page = NonnullRefPtr(page), request_id](bool granted) {
+                    if (!page->is_open())
+                        return;
+                    if (granted)
+                        native->call(*page, request_id);
+                    else
+                        page->async_geolocation_position_response(request_id, {}, to_underlying(Web::Geolocation::GeolocationPositionErrorCode::PermissionDenied));
+                });
+            };
+        };
+        gate_geolocation(view->on_request_geolocation_position);
+        gate_geolocation(view->on_start_geolocation_position_watch);
+
         view->set_preferred_color_scheme(m_dark_mode ? Web::CSS::PreferredColorScheme::Dark : Web::CSS::PreferredColorScheme::Light);
 
         for (auto* action : { &view->navigate_back_action(), &view->navigate_forward_action() }) {
@@ -392,6 +508,26 @@ private:
         }
 
         m_views.set(id, move(view));
+    }
+
+    // The view's own handler for a geolocation request, kept for when the user said yes.
+    struct SharedGeolocationHandler final : RefCounted<SharedGeolocationHandler> {
+        explicit SharedGeolocationHandler(Function<void(WebView::WebContentPage&, u64)> handler)
+            : call(move(handler))
+        {
+        }
+        Function<void(WebView::WebContentPage&, u64)> call;
+    };
+
+    void ask_permission(u32 view, String const& name, URL::Origin const& origin, Function<void(bool)> on_decided)
+    {
+        auto question = m_next_permission_question++;
+        m_permission_answers.set(question, move(on_decided));
+        JsonObject text;
+        text.set("name"sv, name);
+        text.set("origin"sv, origin.serialize());
+        auto serialized = text.serialized();
+        m_host.send_text(view, LB_EMBED_PERMISSION, serialized.bytes_as_string_view(), question);
     }
 
     void send_key(PresentedWebView& view, Web::UIEvents::KeyCode key, u32 code_point)
@@ -488,6 +624,16 @@ private:
             if (header.a & LB_EMBED_CLEAR_SITE_DATA)
                 options.delete_site_data = WebView::Application::ClearBrowsingDataOptions::Delete::Yes;
             (void)WebView::Application::the().clear_browsing_data(options);
+            return;
+        }
+        if (header.type == LB_EMBED_PERMISSION_DECIDED) {
+            if (auto on_decided = m_permission_answers.take(header.a); on_decided.has_value())
+                (*on_decided)(header.b != 0);
+            return;
+        }
+        if (header.type == LB_EMBED_GEOLOCATION_POSITION) {
+            if (AppGeolocationProvider::s_the)
+                AppGeolocationProvider::s_the->position_arrived(header.a, header.b, text);
             return;
         }
         if (header.type == LB_EMBED_CREATE_VIEW) {
@@ -647,6 +793,9 @@ private:
     HashMap<u64, MonotonicTime> m_reported_downloads;
     RefPtr<Core::Timer> m_restart_list_updates_timer;
     RefPtr<Core::Timer> m_resume_list_updates_timer;
+    // What to do with the user's answer to each question still open.
+    HashMap<i32, Function<void(bool)>> m_permission_answers;
+    i32 m_next_permission_question { 1 };
 };
 
 }
@@ -654,6 +803,9 @@ private:
 ErrorOr<int> ladybird_main(Main::Arguments arguments)
 {
     AK::set_rich_debug_enabled(true);
+
+    // NB: Before the application reads its settings, which only keep geolocation on with a provider in place.
+    Core::GeolocationProvider::set_provider_functions(Ladybird::AppGeolocationProvider::create, Ladybird::AppGeolocationProvider::is_available);
 
     auto app = TRY(Ladybird::Application::create(arguments));
 
@@ -666,6 +818,9 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
 
     auto host = TRY(Ladybird::EmbeddedHost::connect(ByteString { *socket_path }));
     host->on_disconnect = [] { Core::EventLoop::current().quit(0); };
+    Ladybird::AppGeolocationProvider::s_host = host.ptr();
+    // Pages still ask the user first, each time (see the gate in create_view).
+    WebView::Application::settings().set_geolocation_enabled(true);
     Ladybird::EmbeddedViews views { *host, TRY(Ladybird::load_theme()) };
     return app->execute();
 }

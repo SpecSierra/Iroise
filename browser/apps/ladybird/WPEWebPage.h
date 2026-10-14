@@ -142,10 +142,9 @@ private:
     Q_PROPERTY(QString tlsErrorHost READ tlsErrorHost NOTIFY tlsErrorChanged FINAL)
     Q_PROPERTY(QString tlsErrorMessage READ tlsErrorMessage NOTIFY tlsErrorChanged FINAL)
 
-    // Permission request (geolocation, camera, microphone) — QML shows a
-    // banner and resolves it via resolvePermission(). Decisions are
-    // remembered per host+type for the session. permissionType is one of
-    // "geolocation", "camera", "microphone", "camera+microphone".
+    // A page asks for the location or the microphone: QML shows a banner and answers with resolvePermission().
+    // The answer holds for that site and kind until the browser closes (until the tab closes, in private mode).
+    // permissionType is "geolocation" or "microphone".
     Q_PROPERTY(bool permissionPending READ permissionPending NOTIFY permissionChanged FINAL)
     Q_PROPERTY(QString permissionHost READ permissionHost NOTIFY permissionChanged FINAL)
     Q_PROPERTY(QString permissionType READ permissionType NOTIFY permissionChanged FINAL)
@@ -718,7 +717,12 @@ private:
     QString m_tlsErrorMessage;
     QString m_permissionHost;
     QString m_permissionType;
+    // The engine's questions not answered yet, the one showing first, as (question id, origin|kind).
+    QList<QPair<int, QString>> m_permissionQuestions;
     QHash<QString, bool> m_permissionDecisions;
+    void permissionRequested(int question, const QString &name, const QString &origin) override;
+    void answerPermissions(const QString &key, bool allow);
+    void showNextPermissionQuestion();
     QHash<QString, qint64> m_preconnectSeen;
     bool m_saveLoginPending = false;
     QString m_saveLoginHost;
