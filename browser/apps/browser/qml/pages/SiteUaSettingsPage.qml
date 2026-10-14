@@ -9,9 +9,9 @@ import Sailfish.Silica.Background 1.0 as SilicaBackground
 
 // Per-site user-agent overrides. Entries are stored in dconf as a JSON
 // object { "host": "profile-id" }; BrowserPage.qml pushes the key into the
-// engine (WPEWebPage::applySiteUaOverridesGlobally), where an entry for
+// engine (WebPage::applySiteUaOverridesGlobally), where an entry for
 // example.com also covers every subdomain. Profile ids must match
-// uaForProfile() in WPEWebPage.cpp.
+// uaForProfile() in WebPage.cpp.
 Page {
     id: page
 

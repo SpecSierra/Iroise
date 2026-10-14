@@ -35,7 +35,7 @@ public:
     void forget(quint64 bufferId);
 
     // Changes whenever a texture is created or deleted. A node must not outlive the generation it was made in, see
-    // WPEQtView::updatePaintNode.
+    // EngineView::updatePaintNode.
     quint64 generation() const { return m_generation; }
 
 private:

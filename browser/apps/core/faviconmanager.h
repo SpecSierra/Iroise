@@ -18,7 +18,7 @@
 #include <QSize>
 #include <QStringList>
 
-class WPEWebPage;
+class WebPage;
 
 class FaviconManager : public QObject
 {
@@ -33,7 +33,7 @@ public:
 
     Q_INVOKABLE QString get(const QString &type, const QString &hostname);
 
-    Q_INVOKABLE void grabIcon(const QString &type, WPEWebPage *webPage, const QSize &size);
+    Q_INVOKABLE void grabIcon(const QString &type, WebPage *webPage, const QSize &size);
     Q_INVOKABLE void clear(const QString &type);
 
     static QString defaultDesktopBookmarkIcon();
@@ -52,9 +52,9 @@ private:
     void load(const QString &type);
 
     void fetchCandidate(const QString &type, const QString &pageUrl, const QStringList &candidates,
-                        int index, QPointer<WPEWebPage> webPage, const QSize &size,
+                        int index, QPointer<WebPage> webPage, const QSize &size,
                         bool allowThumbnailFallback);
-    void grabThumbnailFallback(const QString &type, QPointer<WPEWebPage> webPage, const QSize &size);
+    void grabThumbnailFallback(const QString &type, QPointer<WebPage> webPage, const QSize &size);
 
     struct Favicon {
         QString favicon;

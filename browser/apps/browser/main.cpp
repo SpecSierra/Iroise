@@ -5,8 +5,7 @@
  */
 
 // Pacific: the launcher. It shows the splash, then loads the browser runtime library, which registers the QML
-// types and loads the real interface. Atlantic's launcher also configured WPE WebKit's processes from here; the
-// Ladybird engine process configures itself.
+// types and loads the real interface.
 
 #include <QGuiApplication>
 #include <QLibrary>

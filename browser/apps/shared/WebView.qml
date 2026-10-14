@@ -28,7 +28,7 @@ WebContainer {
     readonly property bool moving: contentItem && contentItem.moving
     property bool portrait: true
     property bool contentFullscreen: contentItem && contentItem.fullscreen
-    // needChrome is provided as FINAL by WPEWebContainer C++ (cannot override)
+    // needChrome is provided as FINAL by WebContainer C++ (cannot override)
     property real fullscreenHeight
     property bool imOpened
     property real toolbarHeight
@@ -46,18 +46,6 @@ WebContainer {
         resourceController._htmlAudioActive = contentItem ? contentItem.mediaAudioActive : false
         resourceController._htmlVideoActive = contentItem ? contentItem.mediaVideoActive : false
         resourceController.calculateStatus()
-
-        // A preview belongs to the tab it was captured in: drop it, and the
-        // URL-bar hold that goes with it, when the active page changes.
-        if (typeof historyPreview !== "undefined" && historyPreview) {
-            historyPreview.navigating = false
-            historyPreview.dismiss()
-        }
-    }
-
-    property var _webPageCreator: WebPageCreator {
-        activeWebPage: contentItem
-        model: tabModel
     }
 
     property Component _selectionUIComponent: Component {
@@ -93,7 +81,7 @@ WebContainer {
         }
     }
 
-    // Pages are created in C++ (WPEWebContainer::getOrCreatePage), not from
+    // Pages are created in C++ (WebContainer::getOrCreatePage), not from
     // webPageComponent, so bindings inside that component never apply. Push
     // the fixed-toolbar setting onto whichever page is active.
     Binding {
@@ -165,7 +153,7 @@ WebContainer {
         }
     }
 
-    // foreground is owned by WPEWebContainer C++ (tracks the real window
+    // foreground is owned by WebContainer C++ (tracks the real window
     // visibility); the old binding here evaluated false at startup and never
     // re-fired (fakeVisibility has no notify), which kept pages hidden.
     readyToPaint: resourceController.videoActive ? webView.visible && !resourceController.displayOff
@@ -181,7 +169,7 @@ WebContainer {
     // Refresh the active tab's thumbnail when the browser leaves the
     // foreground, so the cover shows the page as it was left (scroll position
     // included) rather than as it looked when it finished loading. The page
-    // keeps its own thumbnail current while it is on screen (WPEWebPage, "Tab
+    // keeps its own thumbnail current while it is on screen (WebPage, "Tab
     // thumbnails"), so this only catches what was drawn in the last seconds,
     // and only if the window is still being rendered.
     onForegroundChanged: {
@@ -194,213 +182,7 @@ WebContainer {
 
     onForwardButtonPressed: webView.goForward()
 
-    // ── History preview ("instant Back") ───────────────────────────────────
-    // During a back/forward navigation the engine keeps presenting the OUTGOING
-    // page's last frame until the incoming page paints, while the chrome
-    // switches to the destination URL at once — so the viewport shows one page
-    // and the URL bar names another. On edition.cnn.com that gap is the whole
-    // load (DCL ~15 s, load ~24 s, measured 2026-08-19) because bfcache is
-    // capacity 0 under PACIFIC_CACHE_MODEL=viewer.
-    //
-    // Cover the gap with the destination entry's own last-seen pixels. This
-    // buys no load time; it stops the browser showing a page it has left.
-    Item {
-        id: historyPreview
-
-        // Cover exactly the live web content rect, not the whole container.
-        // The page item is parented at the container's top-left and shortened
-        // by the bottom inset (WPEWebContainer::insetPageHeight), so a preview
-        // filling the container is taller than the pixels it replaces: with
-        // PreserveAspectFit centring the shorter capture, the picture sat half
-        // a toolbar too low and its bottom ran under the URL bar. Track the
-        // page item instead — top-anchored, ending where the content does.
-        anchors {
-            left: parent.left
-            right: parent.right
-            top: parent.top
-        }
-        height: webView.contentItem ? webView.contentItem.height : parent.height
-        clip: true                  // crop the surplus, never letterbox it
-
-        z: 90
-        opacity: 0
-        visible: opacity > 0
-
-        // Stall watchdog, NOT a lifetime. A flat 10 s ceiling expired mid-load
-        // on exactly the navigations this exists for — Back to CNN is ~15 s to
-        // DCL — and the failure was worse than no preview: the picture of the
-        // destination (n-1) faded out, uncovering the compositor's held frame
-        // of the page we had just left (n), and n-1 painted seconds after that.
-        // The user saw destination, then source, then destination. So restart
-        // this on every load-progress tick: it fires only when nothing at all
-        // is happening (dead network, blocked main document).
-        readonly property int stallMs: 10000
-        // Absolute ceiling, for a load that keeps reporting progress forever.
-        readonly property int maxHoldMs: 45000
-
-        // The URL bar has to be on screen for the whole covered navigation:
-        // the preview exists so that chrome and viewport agree, which is only
-        // true if the chrome is actually visible. Held from the moment the
-        // preview appears until the load ends — the picture is dismissed at
-        // DOMContentLoaded, long before the page has finished.
-        property bool navigating
-        property bool holdingChrome
-        // Remember which page was pinned: switching tabs mid-load must not
-        // leave the outgoing page's toolbar forced open forever.
-        property var chromeHeldPage: null
-        readonly property bool wantsChrome: navigating || opacity > 0
-        onWantsChromeChanged: setChromeHold(wantsChrome)
-
-        function setChromeHold(hold) {
-            if (hold === holdingChrome)
-                return
-            holdingChrome = hold
-            if (hold) {
-                chromeHeldPage = webView.contentItem
-                if (chromeHeldPage)
-                    chromeHeldPage.forceChrome(true)
-                return
-            }
-            var page = chromeHeldPage
-            chromeHeldPage = null
-            // Find-in-page pins the toolbar through the same flag; releasing
-            // here while it is up would drop its hold too.
-            if (page && !page.findInPageHasResult)
-                page.forceChrome(false)
-        }
-
-        function showPreview(path) {
-            previewImage.source = "file://" + path
-            navigating = true
-            opacity = 1
-            stallTimer.restart()
-            holdTimer.restart()
-            chromeHoldGuard.restart()
-        }
-
-        // Called on every load-progress tick: a load that is still moving must
-        // not trip the stall watchdog.
-        function noteProgress() {
-            if (opacity > 0)
-                stallTimer.restart()
-        }
-
-        function dismiss() {
-            stallTimer.stop()
-            holdTimer.stop()
-            opacity = 0
-        }
-
-        // Release the pixmap only once faded out, or the preview vanishes
-        // instantly instead of fading.
-        onOpacityChanged: {
-            if (opacity === 0)
-                previewImage.source = ""
-        }
-
-        Behavior on opacity { NumberAnimation { duration: 150 } }
-
-        Image {
-            id: previewImage
-
-            anchors {
-                left: parent.left
-                right: parent.right
-                top: parent.top    // glued to the top: never re-centre
-            }
-            // Fit the width and let the aspect decide the height, so the
-            // capture is never squashed. It matches the viewport exactly in
-            // the normal case; if the viewport changed between capture and
-            // replay (rotation, toolbar inset, keyboard) the difference is
-            // clipped off the bottom, where the user is not looking.
-            height: sourceSize.width > 0
-                    ? parent.width * sourceSize.height / sourceSize.width
-                    : parent.height
-            fillMode: Image.PreserveAspectFit
-            asynchronous: true
-            cache: false            // one-shot, and the file is rewritten in place
-        }
-
-        // Swallow touches while the preview is up, and do NOT dismiss on one.
-        // Dismissing was worse than useless: it uncovered a page that has not
-        // painted yet, so an accidental brush of the screen threw away the only
-        // honest picture on offer. Forwarding is not an option either — the
-        // preview is a different document from the one loading, so replaying
-        // the tap would hit whatever happens to sit at those coordinates.
-        // The user is not trapped: the URL bar is pinned visible for the whole
-        // load (separate chrome window, above this), so back, reload, tabs and
-        // the address field all still work.
-        MouseArea {
-            anchors.fill: parent
-            enabled: historyPreview.opacity > 0
-        }
-
-        Timer {
-            id: stallTimer
-            interval: historyPreview.stallMs
-            onTriggered: historyPreview.dismiss()
-        }
-
-        Timer {
-            id: holdTimer
-            interval: historyPreview.maxHoldMs
-            onTriggered: historyPreview.dismiss()
-        }
-
-        // Ceiling on the URL-bar hold as well. The hold is normally released by
-        // loadingChanged, but a load that never reports an end (killed process,
-        // stalled main document) must not pin the toolbar for the session.
-        Timer {
-            id: chromeHoldGuard
-            // Must outlast the preview's own ceiling, or the URL bar would be
-            // released while the picture is still up.
-            interval: historyPreview.maxHoldMs + 15000
-            onTriggered: historyPreview.navigating = false
-        }
-    }
-
-    // Not plain onLoadingChanged/onLoadProgressChanged handlers — BrowserPage.qml
-    // declares onLoadingChanged on this same instance, which would override one
-    // written here.
-    Connections {
-        target: webView
-        // Same-document history traversals change the URL without starting a
-        // main-frame load or firing DOMContentLoaded. The live page is already
-        // restored, so the preview must no longer block touch input.
-        onUrlChanged: {
-            if (historyPreview.navigating && !webView.loading) {
-                historyPreview.navigating = false
-                historyPreview.dismiss()
-            }
-        }
-        onLoadingChanged: {
-            if (webView.loading)
-                return
-            // The load this preview covers has ended: the live page is whatever
-            // it is going to be, so stop covering it and stop pinning the bar.
-            historyPreview.navigating = false
-            historyPreview.dismiss()
-        }
-        // Progress is the proof that the load is alive; it holds off the stall
-        // watchdog for as long as the page keeps moving.
-        onLoadProgressChanged: historyPreview.noteProgress()
-    }
-
-    Connections {
-        target: webView.contentItem
-        onHistoryPreviewReady: historyPreview.showPreview(imagePath)
-        // First real milestone of the incoming document. Not first paint —
-        // WPEWebPage.painted is a one-shot "has ever painted" flag and
-        // QQuickWindow::frameSwapped counts window frames, not web frames, so
-        // neither can gate this. DCL is the earliest per-navigation signal the
-        // page already exposes.
-        onDomContentLoadedChanged: {
-            if (webView.contentItem && webView.contentItem.domContentLoaded)
-                historyPreview.dismiss()
-        }
-    }
-
-    // WPE selection drag handles (at container level so contentItem is available)
+    // Selection drag handles (at container level so contentItem is available)
     Item {
         id: selHandles
         visible: webView.contentItem && webView.contentItem.textSelectionActive

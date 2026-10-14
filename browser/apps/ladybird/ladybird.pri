@@ -1,30 +1,23 @@
-# Pacific: the page and tab-container classes, backed by a Ladybird engine process.
+# Pacific: the browser's pages and tabs, backed by one Ladybird engine process.
 INCLUDEPATH += $$PWD
 
-QT += network
-
-HEADERS += \
-    $$PWD/LadybirdEngine.h \
-    $$PWD/WPEQtView.h \
-    $$PWD/WPEWebPage.h \
-    $$PWD/WPEWebContainer.h \
-    $$PWD/WPEWebPageCreator.h
-
-SOURCES += \
-    $$PWD/LadybirdEngine.cpp \
-    $$PWD/WPEQtView.cpp \
-    $$PWD/WPEWebPage.cpp \
-    $$PWD/WPEWebContainer.cpp \
-    $$PWD/WPEWebPageCreator.cpp
-
-# Frames are shown straight from the engine's buffers through libhybris' EGL, see DirectFrameTextures.
-HEADERS += $$PWD/DirectFrameTextures.h
-SOURCES += $$PWD/DirectFrameTextures.cpp
+QT += network positioning
 LIBS += -lEGL
 
-HEADERS += $$PWD/DownloadModel.h
-SOURCES += $$PWD/DownloadModel.cpp
+HEADERS += \
+    $$PWD/DirectFrameTextures.h \
+    $$PWD/DownloadModel.h \
+    $$PWD/EngineView.h \
+    $$PWD/LadybirdEngine.h \
+    $$PWD/LadybirdGeolocation.h \
+    $$PWD/WebContainer.h \
+    $$PWD/WebPage.h
 
-QT += positioning
-HEADERS += $$PWD/LadybirdGeolocation.h
-SOURCES += $$PWD/LadybirdGeolocation.cpp
+SOURCES += \
+    $$PWD/DirectFrameTextures.cpp \
+    $$PWD/DownloadModel.cpp \
+    $$PWD/EngineView.cpp \
+    $$PWD/LadybirdEngine.cpp \
+    $$PWD/LadybirdGeolocation.cpp \
+    $$PWD/WebContainer.cpp \
+    $$PWD/WebPage.cpp

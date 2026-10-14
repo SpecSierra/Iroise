@@ -1,6 +1,6 @@
 /*
- * WPE WebKit engine replacement for Sailfish Browser
- * WPEWebContainer - replaces DeclarativeWebContainer with a QQuickItem-based tab manager
+ * Pacific: the tabs. Keeps a WebPage per live tab (discarding the least recently used ones beyond a budget or under
+ * memory pressure), shows the active one, and relays its state to the interface.
  * SPDX-License-Identifier: LGPL-2.1+
  */
 
@@ -15,19 +15,19 @@
 
 
 class QTimer;
-class WPEWebPage;
+class WebPage;
 class DeclarativeTabModel;
 class DeclarativeHistoryModel;
 class PersistentTabModel;
 class PrivateTabModel;
 
-class WPEWebContainer : public QQuickItem
+class WebContainer : public QQuickItem
 {
     Q_OBJECT
     Q_INTERFACES(QQmlParserStatus)
 
     Q_PROPERTY(QQuickItem *rotationHandler MEMBER m_rotationHandler NOTIFY rotationHandlerChanged FINAL)
-    Q_PROPERTY(WPEWebPage *contentItem READ contentItem NOTIFY contentItemChanged FINAL)
+    Q_PROPERTY(WebPage *contentItem READ contentItem NOTIFY contentItemChanged FINAL)
     Q_PROPERTY(DeclarativeTabModel *tabModel READ tabModel NOTIFY tabModelChanged FINAL)
     Q_PROPERTY(DeclarativeTabModel *persistentTabModel READ persistentTabModel CONSTANT)
     Q_PROPERTY(DeclarativeTabModel *privateTabModel READ privateTabModel CONSTANT)
@@ -58,10 +58,10 @@ class WPEWebContainer : public QQuickItem
     Q_PROPERTY(bool needChrome READ needChrome NOTIFY needChromeChanged FINAL)
 
 public:
-    explicit WPEWebContainer(QQuickItem *parent = nullptr);
-    ~WPEWebContainer() override;
+    explicit WebContainer(QQuickItem *parent = nullptr);
+    ~WebContainer() override;
 
-    WPEWebPage *contentItem() const;
+    WebPage *contentItem() const;
     DeclarativeTabModel *tabModel() const;
     DeclarativeTabModel *persistentTabModel() const;
     DeclarativeTabModel *privateTabModel() const;
@@ -107,7 +107,7 @@ public:
     Q_INVOKABLE void setSiteUaOverrides(const QString &json);
     // Per-site "Enable JavaScript" toggle: JSON array of hosts where JS is off.
     Q_INVOKABLE void setJavaScriptBlocklist(const QString &json);
-    // Reserve `inset` device-independent px at the bottom of the WebKit layout
+    // Reserve `inset` device-independent px at the bottom of the page's layout
     // viewport for the (bottom) URL bar, so position:fixed bottom content lays
     // out above the chrome instead of behind it. Driven from BrowserPage.qml
     // off the *settled* chrome state (one relayout per show/hide, not per
@@ -183,13 +183,13 @@ private:
     QSizeF preferredPageSize(const QSizeF &screenSize) const;
     qreal initialPageDeviceScaleFactor(const QSizeF &screenSize) const;
     // Base page height minus the reserved bottom inset (never negative). This is
-    // the height handed to every WPEWebPage → the WebKit layout viewport.
+    // the height handed to every WebPage → the page's layout viewport.
     qreal insetPageHeight(qreal baseHeight) const;
-    void configurePageGeometry(WPEWebPage *page, const QSizeF &screenSize);
-    WPEWebPage *getOrCreatePage(int tabId);
+    void configurePageGeometry(WebPage *page, const QSizeF &screenSize);
+    WebPage *getOrCreatePage(int tabId);
     void activatePage(int tabId);
     void setActiveTabRendered(bool r);
-    void connectPage(WPEWebPage *page);
+    void connectPage(WebPage *page);
     // A view the engine opened for a page, waiting for the tab that shows it to be created.
     quint32 m_viewForNextPage = 0;
 
@@ -203,12 +203,12 @@ private:
     void checkMemoryPressure();            // poll MemFree, tighten cap if low
     int effectiveLiveTabCap() const;       // current cap (shrinks under pressure)
 
-    WPEWebPage *m_contentItem = nullptr;
+    WebPage *m_contentItem = nullptr;
     PersistentTabModel *m_persistentTabModel = nullptr;
     PrivateTabModel *m_privateTabModel = nullptr;
     DeclarativeTabModel *m_tabModel = nullptr;
     DeclarativeHistoryModel *m_historyModel = nullptr;
-    QMap<int, WPEWebPage *> m_pages;
+    QMap<int, WebPage *> m_pages;
     qreal m_bottomInset = 0.0;              // reserved bottom URL-bar strip (dip); see setContentBottomInset
     QList<int> m_mruTabs;                   // most-recently-used first; front = active
     QTimer *m_memoryPressureTimer = nullptr;
@@ -232,4 +232,4 @@ private:
     QString m_initialUrl;
 };
 
-QML_DECLARE_TYPE(WPEWebContainer)
+QML_DECLARE_TYPE(WebContainer)

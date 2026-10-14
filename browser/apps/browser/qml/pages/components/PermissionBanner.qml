@@ -7,7 +7,7 @@ import Sailfish.Silica 1.0
 
 // Shown when a page asks for the user's location, camera or microphone.
 // Allow/deny is remembered per host+type for the session (see
-// WPEWebPage::resolvePermission). Driven entirely by the bound webView's
+// WebPage::resolvePermission). Driven entirely by the bound webView's
 // contentItem.
 Rectangle {
     id: permissionBanner

@@ -1,8 +1,6 @@
 /*
- * Pacific: the page view the browser interface is written against, backed by a Ladybird engine view.
- *
- * It keeps the name and the surface of the WPE WebKit view Atlantic used, so the interface code above it did not
- * have to change.
+ * Pacific: one engine view (LadybirdEngine) as a Qt Quick item: it shows the view's frames and passes it input,
+ * size, visibility and navigation. WebPage builds the browser's page on top of it.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -23,11 +21,11 @@
 
 class DirectFrameTextures;
 class QSGTexture;
-class WPEQtViewLoadRequest;
+class EngineViewLoadRequest;
 
-class WPEQtView : public QQuickItem, public LadybirdEngineClient {
+class EngineView : public QQuickItem, public LadybirdEngineClient {
     Q_OBJECT
-    Q_DISABLE_COPY(WPEQtView)
+    Q_DISABLE_COPY(EngineView)
     Q_PROPERTY(QUrl url READ url WRITE setUrl NOTIFY urlChanged)
     Q_PROPERTY(bool loading READ isLoading NOTIFY loadingChanged)
     Q_PROPERTY(int loadProgress READ loadProgress NOTIFY loadProgressChanged)
@@ -44,8 +42,8 @@ public:
         LoadFailedStatus
     };
 
-    WPEQtView(QQuickItem* parent = nullptr);
-    ~WPEQtView() override;
+    EngineView(QQuickItem* parent = nullptr);
+    ~EngineView() override;
 
     QSGNode* updatePaintNode(QSGNode*, UpdatePaintNodeData*) final;
     void triggerUpdate() { QMetaObject::invokeMethod(this, "update"); }
@@ -64,7 +62,7 @@ public:
     qreal deviceScaleFactor() const { return m_deviceScaleFactor; }
 
     // Whether the page counts as on screen: a hidden page stops animating and painting.
-    void setWebKitVisible(bool visible);
+    void setEngineVisible(bool visible);
     bool webKitVisible() const { return m_engineVisible; }
 
     void setPrivateBrowsing(bool p) { m_privateBrowsing = p; }
@@ -96,7 +94,7 @@ Q_SIGNALS:
     void closeRequested();
     void urlChanged();
     void titleChanged();
-    void loadingChanged(WPEQtViewLoadRequest* loadRequest);
+    void loadingChanged(EngineViewLoadRequest* loadRequest);
     void loadProgressChanged();
     void backForwardChanged();
     void scrollPositionChanged(qreal scrollY, qreal scrollHeight, qreal innerHeight);
@@ -133,7 +131,7 @@ protected:
     virtual void findResult(int current, int total) { Q_UNUSED(current); Q_UNUSED(total); }
     virtual void selectMenuRequested(const QByteArray& optionsJson) { Q_UNUSED(optionsJson); }
     virtual void dialogRequested(int kind, const QByteArray& json) { Q_UNUSED(kind); Q_UNUSED(json); }
-    // A message from the page agent (see WPEWebPage): a kind and what came with it.
+    // A message from the page agent (see WebPage): a kind and what came with it.
     virtual void pageMessage(const QString& kind, const QJsonValue& data) { Q_UNUSED(kind); Q_UNUSED(data); }
     virtual void pageFullscreenChanged(bool fullscreen) { Q_UNUSED(fullscreen); }
     virtual void mediaStateChanged(bool playsAudio, bool keepsScreenOn) { Q_UNUSED(playsAudio); Q_UNUSED(keepsScreenOn); }
@@ -189,14 +187,14 @@ private:
     quint64 m_uploadedSerial = 0;
 };
 
-class WPEQtViewLoadRequest : public QObject {
+class EngineViewLoadRequest : public QObject {
     Q_OBJECT
     Q_PROPERTY(QUrl url READ url)
-    Q_PROPERTY(WPEQtView::LoadStatus status READ status)
+    Q_PROPERTY(EngineView::LoadStatus status READ status)
     Q_PROPERTY(QString errorString READ errorString)
 
 public:
-    WPEQtViewLoadRequest(const QUrl& url, WPEQtView::LoadStatus status, const QString& errorString = QString())
+    EngineViewLoadRequest(const QUrl& url, EngineView::LoadStatus status, const QString& errorString = QString())
         : m_url(url)
         , m_status(status)
         , m_errorString(errorString)
@@ -204,11 +202,11 @@ public:
     }
 
     QUrl url() const { return m_url; }
-    WPEQtView::LoadStatus status() const { return m_status; }
+    EngineView::LoadStatus status() const { return m_status; }
     QString errorString() const { return m_errorString; }
 
 private:
     QUrl m_url;
-    WPEQtView::LoadStatus m_status;
+    EngineView::LoadStatus m_status;
     QString m_errorString;
 };

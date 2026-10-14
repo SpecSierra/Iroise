@@ -1,9 +1,8 @@
 /*
  * Copyright (c) 2024 Jolla Ltd.
  *
- * Pacific: this is Atlantic's page class with the WPE WebKit implementation taken out. The declarations the
- * browser interface relies on are kept, on top of a Ladybird engine view. What the engine protocol cannot do
- * yet is a property that never changes or a method that does nothing.
+ * Pacific: a browser tab's page, as the interface's QML sees it, on top of an EngineView: text selection, find,
+ * dialogs, pickers, permissions, logins, certificates, the toolbar's reaction to scrolling.
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
@@ -21,13 +20,13 @@
 #include <QElapsedTimer>
 #include <qqml.h>
 
-#include "WPEQtView.h"
+#include "EngineView.h"
 
 class QQuickItemGrabResult;
 class QInputMethodEvent;
 
 // Lightweight security info exposed to QML (mirrors QMozSecurity interface)
-class WPESecurityInfo : public QObject
+class SecurityInfo : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(bool validState READ validState NOTIFY changed)
@@ -44,7 +43,7 @@ class WPESecurityInfo : public QObject
     Q_PROPERTY(QString subjectOrganization READ subjectOrganization NOTIFY changed)
     Q_PROPERTY(QString errorDescription READ errorDescription NOTIFY changed)
 public:
-    explicit WPESecurityInfo(QObject *parent = nullptr) : QObject(parent) {}
+    explicit SecurityInfo(QObject *parent = nullptr) : QObject(parent) {}
     bool validState() const { return m_valid; }
     bool allGood() const { return m_valid && !m_hasErrors; }
     QString subjectDisplayName() const { return m_subject; }
@@ -87,7 +86,7 @@ private:
     QString m_errorDesc;
 };
 
-class WPEWebPage : public WPEQtView
+class WebPage : public EngineView
 {
     Q_OBJECT
 
@@ -168,10 +167,7 @@ private:
     Q_PROPERTY(bool selectMenuActive READ selectMenuActive NOTIFY selectMenuActiveChanged FINAL)
     Q_PROPERTY(QStringList selectMenuOptions READ selectMenuOptions NOTIFY selectMenuOptionsChanged FINAL)
     Q_PROPERTY(int selectMenuSelectedIndex READ selectMenuSelectedIndex NOTIFY selectMenuSelectedIndexChanged FINAL)
-    // Image long-press state — property binding (not recvAsyncMessage) because the
-    // WebKit script-message callback runs outside the QML JS context, so a plain
-    // signal to onRecvAsyncMessage never fires. A NOTIFY property is observed
-    // reliably via QML bindings (same approach as selectMenu* above).
+    // Image long-press state, observed through QML bindings like selectMenu* above.
     Q_PROPERTY(QString imageLongPressUrl READ imageLongPressUrl NOTIFY imageLongPressUrlChanged FINAL)
     // What the last long press landed on: pageUrl, linkUrl, srcUrl,
     // selectionText, editable, mediaType. Feeds browser.contextMenus.
@@ -181,8 +177,7 @@ private:
     Q_PROPERTY(bool fileChooserSelectMultiple READ fileChooserSelectMultiple NOTIFY fileChooserSelectMultipleChanged FINAL)
 
     // HTML5 date/time/color input pickers — same JS-bridge + NOTIFY-property
-    // pattern as selectMenu* above. WebKit has no native WPE picker for these,
-    // so QML drives the Silica DatePicker/TimePicker/ColorPicker dialogs.
+    // pattern as selectMenu* above: QML drives the Silica DatePicker/TimePicker/ColorPicker dialogs.
     // inputPickerType is one of date|month|week|time|datetime-local|color;
     // value/min/max/step are the raw HTML string values.
     Q_PROPERTY(bool inputPickerActive READ inputPickerActive NOTIFY inputPickerActiveChanged FINAL)
@@ -194,7 +189,7 @@ private:
 
     Q_PROPERTY(bool crashed READ crashed NOTIFY crashedChanged FINAL)
 
-    // Pinch zoom visual scale — compositor-level transform during gesture; WebKit zoom committed on end
+    // Pinch zoom visual scale, as the engine reports it
     Q_PROPERTY(qreal visualScale READ visualScale NOTIFY visualScaleChanged)
     Q_PROPERTY(qreal pinchCenterX READ pinchCenterX NOTIFY pinchCenterChanged)
     Q_PROPERTY(qreal pinchCenterY READ pinchCenterY NOTIFY pinchCenterChanged)
@@ -204,8 +199,8 @@ private:
     Q_PROPERTY(bool cookieBannerBlockingEnabled READ cookieBannerBlockingEnabled WRITE setCookieBannerBlockingEnabled NOTIFY cookieBannerBlockingEnabledChanged FINAL)
 
 public:
-    explicit WPEWebPage(QQuickItem *parent = nullptr);
-    ~WPEWebPage() override;
+    explicit WebPage(QQuickItem *parent = nullptr);
+    ~WebPage() override;
 
     int tabId() const;
     void setTabId(int tabId);
@@ -241,18 +236,18 @@ public:
     void setActive(bool active);
 
     // App-level foreground state (window maximized + application active),
-    // pushed down by WPEWebContainer. Combined with the per-tab active flag
-    // to decide whether WebKit should treat the page as visible.
+    // pushed down by WebContainer. Combined with the per-tab active flag
+    // to decide whether the engine should treat the page as visible.
     void setAppForeground(bool foreground);
 
-    // All live WPEWebPage instances. Pages get only a visual parent
+    // All live WebPage instances. Pages get only a visual parent
     // (setParentItem), never a QObject parent, so findChildren() on the view
     // cannot discover them — the render-recovery code must use this instead.
-    static const QList<WPEWebPage *> &liveInstances();
+    static const QList<WebPage *> &liveInstances();
 
     // Apply the ad-block toggle process-wide: flips the UI-process cosmetic
     // gate and notifies every live page's WebProcess extension. Driven by the
-    // dconf binding in BrowserPage.qml (via WPEWebContainer::setAdBlockEnabled),
+    // dconf binding in BrowserPage.qml (via WebContainer::setAdBlockEnabled),
     // so it works with any number of tabs (or none) open.
     static void applyAdBlockEnabledGlobally(bool enabled);
     static void applyAdBlockAllowlistGlobally(const QString &json);
@@ -308,8 +303,8 @@ public:
     // PACIFIC_CACHE_MODEL=viewer. These overrides capture the page being left
     // and hand the UI the destination entry's last-seen pixels to cover the gap.
     //
-    // Deliberately NOT virtual in the base: WPEWebContainer calls through a
-    // WPEWebPage*, so name hiding is enough and the engine plugin stays untouched.
+    // Deliberately NOT virtual in the base: WebContainer calls through a
+    // WebPage*, so name hiding is enough and the engine plugin stays untouched.
     Q_INVOKABLE void goBack();
     Q_INVOKABLE void goForward();
     // Cached preview file for a history entry, or empty when none was stored.
@@ -320,7 +315,7 @@ public:
     Q_INVOKABLE void resumeView();
     // Scroll the focused editable back into view after the layout viewport
     // shrank under it (virtual keyboard opening). No-op when nothing editable
-    // is focused. See WPEWebContainer::setContentBottomInset().
+    // is focused. See WebContainer::setContentBottomInset().
     Q_INVOKABLE void revealFocusedEditable();
     Q_INVOKABLE void clearSelection();
     Q_INVOKABLE void selectAll();
@@ -468,7 +463,7 @@ signals:
     void draggingChanged();
     void desktopModeChanged();
     // Fired on every new touch sequence (TouchBegin); forwarded by
-    // WPEWebContainer::touched() for the active page so QML can track
+    // WebContainer::touched() for the active page so QML can track
     // user activity (fullscreen close button, toolbar auto-hide).
     void touched();
 
@@ -535,7 +530,7 @@ protected:
     void dialogRequested(int kind, const QByteArray &json) override;
 
 private slots:
-    void onLoadingChanged(WPEQtViewLoadRequest *loadRequest);
+    void onLoadingChanged(EngineViewLoadRequest *loadRequest);
     void onFrameArrived();
     void onPageWantsTextInputChanged();
     void captureThumbnail();
@@ -582,7 +577,7 @@ private:
     qreal m_selectionEndY = 0.0;
     bool m_findInPageHasResult = false;
     bool m_findInitialized = false;
-    WPESecurityInfo *m_security = nullptr;
+    SecurityInfo *m_security = nullptr;
     bool m_pinchZoomActive = false;
     qint64 m_pinchPendingSinceMs = 0;
     bool m_pagePinchConsumerHint = false;

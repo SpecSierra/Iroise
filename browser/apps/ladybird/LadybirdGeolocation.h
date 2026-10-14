@@ -13,7 +13,7 @@ class QGeoPositionInfo;
 class QGeoPositionInfoSource;
 
 // Answers the engine's LB_EMBED_GEOLOCATION_START with the location service's positions. The engine only asks for
-// pages the user already said yes to (WPEWebPage::permissionRequested).
+// pages the user already said yes to (WebPage::permissionRequested).
 class LadybirdGeolocation : public QObject {
     Q_OBJECT
 

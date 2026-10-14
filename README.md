@@ -112,10 +112,9 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   Phone 2: the interface process used 377 CPU ticks against 667 with the upload, at
   the same frame rate (the engine sets it).
 - Touches, the size, visibility, navigation, and on-screen keyboard text go the other way.
-- `WPEQtView`, `WPEWebPage` and `WPEWebContainer` keep the names and the surface the
-  interface was written against. `WPEWebPage` keeps every property and method the
-  QML uses; what the engine protocol cannot do yet is a property that never changes
-  or a method that does nothing. Not wired yet: extensions (waiting for upstream support).
+- `EngineView` is one engine view as a Qt Quick item (frames, input, size, visibility, navigation); `WebPage`
+  builds a tab's page on it (what the QML reads and calls); `WebContainer` keeps the tabs' pages. Not wired yet:
+  extensions (waiting for upstream support).
 - The camera notch: the page is kept out of the band of the screen the notch is in
   (the `crop_notch` setting, on by default), and that band is painted in the page's
   `theme-color`, or failing that in the colour the page paints behind its content,
@@ -133,7 +132,7 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   to the download was refused.
 - Scripts: `LB_EMBED_RUN_SCRIPT` evaluates an expression in the page through the
   engine's console input, the one path that hands a value back. Only strings come
-  back intact, so `WPEQtView::evaluate` wraps the expression in `JSON.stringify`
+  back intact, so `EngineView::evaluate` wraps the expression in `JSON.stringify`
   together with a number that says which question the answer belongs to.
 - Page messages: the engine reports neither scrolling nor selections, so a small script of ours (the page agent,
   `kPageAgentScript`) runs in every page and posts them, at most once a frame, through `console.log` with a marker.

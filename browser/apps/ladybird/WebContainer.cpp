@@ -1,13 +1,12 @@
 /*
- * WPE WebKit engine replacement for Sailfish Browser
- * WPEWebContainer implementation
+ * Pacific: the tabs (see WebContainer.h).
  * SPDX-License-Identifier: LGPL-2.1+
  */
 
-#include "WPEWebContainer.h"
+#include "WebContainer.h"
 
 #include "LadybirdEngine.h"
-#include "WPEWebPage.h"
+#include "WebPage.h"
 #include "declarativehistorymodel.h"
 #include "declarativetabmodel.h"
 #include "persistenttabmodel.h"
@@ -52,7 +51,7 @@ QSizeF screenSizeOrFallback(QScreen *screen)
 } // namespace
 
 
-WPEWebContainer::WPEWebContainer(QQuickItem *parent)
+WebContainer::WebContainer(QQuickItem *parent)
     : QQuickItem(parent)
 {
     // A page that opens a window (a link with a target, window.open) gets a new tab, showing the engine's view.
@@ -79,7 +78,7 @@ WPEWebContainer::WPEWebContainer(QQuickItem *parent)
         m_pressureKeepMin = qMax(1, qEnvironmentVariableIntValue("PACIFIC_TAB_DISCARD_KEEP_MIN"));
     if (qEnvironmentVariableIsSet("PACIFIC_TAB_DISCARD_MEMFREE_MB"))
         m_memFreeThresholdMb = qMax(0, qEnvironmentVariableIntValue("PACIFIC_TAB_DISCARD_MEMFREE_MB"));
-    qInfo() << "[WPE-DISCARD] enabled=" << m_tabDiscardEnabled
+    qInfo() << "[DISCARD] enabled=" << m_tabDiscardEnabled
             << "maxLive=" << m_maxLiveTabCount
             << "keepMin=" << m_pressureKeepMin
             << "memFreeThreshMB=" << m_memFreeThresholdMb;
@@ -88,7 +87,7 @@ WPEWebContainer::WPEWebContainer(QQuickItem *parent)
     m_memoryPressureTimer = new QTimer(this);
     m_memoryPressureTimer->setInterval(8000);
     connect(m_memoryPressureTimer, &QTimer::timeout,
-            this, &WPEWebContainer::checkMemoryPressure);
+            this, &WebContainer::checkMemoryPressure);
     if (m_tabDiscardEnabled)
         m_memoryPressureTimer->start();
 
@@ -98,24 +97,24 @@ WPEWebContainer::WPEWebContainer(QQuickItem *parent)
     // fakeVisibility()/Qt.application.state evaluated false at startup and
     // never re-fired, so it cannot be trusted for page visibility.)
     connect(this, &QQuickItem::windowChanged,
-            this, &WPEWebContainer::onWindowChangedForForeground);
+            this, &WebContainer::onWindowChangedForForeground);
 }
 
-void WPEWebContainer::onWindowChangedForForeground(QQuickWindow *win)
+void WebContainer::onWindowChangedForForeground(QQuickWindow *win)
 {
     if (m_foregroundWindow) {
         disconnect(m_foregroundWindow.data(), &QWindow::visibilityChanged,
-                   this, &WPEWebContainer::updateForegroundFromWindow);
+                   this, &WebContainer::updateForegroundFromWindow);
     }
     m_foregroundWindow = win;
     if (win) {
         connect(win, &QWindow::visibilityChanged,
-                this, &WPEWebContainer::updateForegroundFromWindow);
+                this, &WebContainer::updateForegroundFromWindow);
     }
     updateForegroundFromWindow();
 }
 
-void WPEWebContainer::updateForegroundFromWindow()
+void WebContainer::updateForegroundFromWindow()
 {
     // Fail towards visible: only an explicit Minimized/Hidden report counts
     // as background. No window yet (startup) or an unexpected visibility
@@ -123,17 +122,17 @@ void WPEWebContainer::updateForegroundFromWindow()
     const QQuickWindow *win = m_foregroundWindow.data();
     const QWindow::Visibility vis = win ? win->visibility() : QWindow::AutomaticVisibility;
     const bool fg = vis != QWindow::Minimized && vis != QWindow::Hidden;
-    qDebug() << "[WPE-VIS] window visibility="
+    qDebug() << "[VIS] window visibility="
              << (win ? static_cast<int>(win->visibility()) : -1)
              << "-> foreground" << fg;
     setForeground(fg);
 }
 
-WPEWebContainer::~WPEWebContainer()
+WebContainer::~WebContainer()
 {
     qDeleteAll(m_pages);
 }
-void WPEWebContainer::trackParentSize()
+void WebContainer::trackParentSize()
 {
     QQuickItem *p = parentItem();
     if (!p) {
@@ -152,7 +151,7 @@ void WPEWebContainer::trackParentSize()
     });
 }
 
-void WPEWebContainer::ensureContainerHasUsableSize()
+void WebContainer::ensureContainerHasUsableSize()
 {
     if (width() != 0 && height() != 0) {
         return;
@@ -168,13 +167,13 @@ void WPEWebContainer::ensureContainerHasUsableSize()
     trackParentSize();
 }
 
-QSizeF WPEWebContainer::preferredPageSize(const QSizeF &screenSize) const
+QSizeF WebContainer::preferredPageSize(const QSizeF &screenSize) const
 {
     return QSizeF(width() > 0 ? width() : screenSize.width(),
                   height() > 0 ? height() : screenSize.height());
 }
 
-qreal WPEWebContainer::initialPageDeviceScaleFactor(const QSizeF &screenSize) const
+qreal WebContainer::initialPageDeviceScaleFactor(const QSizeF &screenSize) const
 {
     // Scale from the Silica UI pixel ratio, so web content matches the size of
     // the system UI (and follows the user's display-scale setting). The screen
@@ -190,12 +189,12 @@ qreal WPEWebContainer::initialPageDeviceScaleFactor(const QSizeF &screenSize) co
     return screenSize.width() / kReferenceViewportWidth;
 }
 
-qreal WPEWebContainer::insetPageHeight(qreal baseHeight) const
+qreal WebContainer::insetPageHeight(qreal baseHeight) const
 {
     return qMax(qreal(0), baseHeight - m_bottomInset);
 }
 
-void WPEWebContainer::configurePageGeometry(WPEWebPage *page, const QSizeF &screenSize)
+void WebContainer::configurePageGeometry(WebPage *page, const QSizeF &screenSize)
 {
     if (!page) {
         return;
@@ -208,7 +207,7 @@ void WPEWebContainer::configurePageGeometry(WPEWebPage *page, const QSizeF &scre
     connect(this, &QQuickItem::heightChanged, page, [this, page]() { page->setHeight(insetPageHeight(height())); });
 }
 
-void WPEWebContainer::setContentBottomInset(qreal inset)
+void WebContainer::setContentBottomInset(qreal inset)
 {
     if (inset < 0.0) {
         inset = 0.0;
@@ -218,10 +217,10 @@ void WPEWebContainer::setContentBottomInset(qreal inset)
     }
     const bool grew = inset > m_bottomInset;
     m_bottomInset = inset;
-    // Re-lay out every live page's WebKit viewport (not just the active one) so
+    // Re-lay out every live page's layout viewport (not just the active one) so
     // returning to a background tab already reflects the reserved strip.
     const qreal base = height();
-    for (WPEWebPage *page : m_pages) {
+    for (WebPage *page : m_pages) {
         if (page) {
             page->setHeight(insetPageHeight(base));
         }
@@ -235,7 +234,7 @@ void WPEWebContainer::setContentBottomInset(qreal inset)
     // it on the active page only — a background tab has no keyboard. The
     // relayout is async (dispatch_set_size), so retry across a couple of frames
     // rather than racing it; the script is a no-op once the element is visible.
-    QPointer<WPEWebPage> page(m_contentItem);
+    QPointer<WebPage> page(m_contentItem);
     for (int delayMs : { 0, 150, 350 }) {
         QTimer::singleShot(delayMs, page, [page]() {
             if (page) {
@@ -245,7 +244,7 @@ void WPEWebContainer::setContentBottomInset(qreal inset)
     }
 }
 
-void WPEWebContainer::initializeTabModels(int nextTabId)
+void WebContainer::initializeTabModels(int nextTabId)
 {
     m_persistentTabModel = new PersistentTabModel(nextTabId);
     // Private ids live in their own range: both models share m_pages keyed by
@@ -259,13 +258,13 @@ void WPEWebContainer::initializeTabModels(int nextTabId)
     emit tabModelChanged();
 }
 
-void WPEWebContainer::restoreInitialContent()
+void WebContainer::restoreInitialContent()
 {
     if (!m_persistentTabModel) {
         return;
     }
 
-    qDebug() << "[WPE-INIT] persistentLoaded: initialUrl=" << m_initialUrl
+    qDebug() << "[INIT] persistentLoaded: initialUrl=" << m_initialUrl
              << "tabCount=" << m_persistentTabModel->count();
     if (!m_initialUrl.isEmpty()) {
         load(m_initialUrl);
@@ -275,13 +274,13 @@ void WPEWebContainer::restoreInitialContent()
     if (m_persistentTabModel->count() == 0) {
         // DeclarativeTabModel::newTab() refuses about:blank when tabs are empty,
         // so create a page directly without going through the tab model.
-        WPEWebPage *page = getOrCreatePage(1);
+        WebPage *page = getOrCreatePage(1);
         page->setActive(true);
         page->setVisible(true);
         m_contentItem = page;
         emit contentItemChanged();
         emit needChromeChanged();
-        qDebug() << "[WPE-INIT] created initial empty page directly";
+        qDebug() << "[INIT] created initial empty page directly";
         return;
     }
 
@@ -293,62 +292,62 @@ void WPEWebContainer::restoreInitialContent()
     }
 }
 
-WPEWebPage *WPEWebContainer::contentItem() const
+WebPage *WebContainer::contentItem() const
 {
     return m_contentItem;
 }
 
-bool WPEWebContainer::needChrome() const
+bool WebContainer::needChrome() const
 {
     return !m_contentItem || (m_contentItem->chrome() && !m_contentItem->fullscreen());
 }
 
-bool WPEWebContainer::selectionActive() const
+bool WebContainer::selectionActive() const
 {
     return m_contentItem && m_contentItem->textSelectionActive();
 }
 
-DeclarativeTabModel *WPEWebContainer::tabModel() const
+DeclarativeTabModel *WebContainer::tabModel() const
 {
     return m_tabModel;
 }
 
-DeclarativeTabModel *WPEWebContainer::persistentTabModel() const
+DeclarativeTabModel *WebContainer::persistentTabModel() const
 {
     return m_persistentTabModel;
 }
 
-DeclarativeTabModel *WPEWebContainer::privateTabModel() const
+DeclarativeTabModel *WebContainer::privateTabModel() const
 {
     return m_privateTabModel;
 }
 
-bool WPEWebContainer::loading() const
+bool WebContainer::loading() const
 {
     return m_contentItem ? m_contentItem->isLoading() : false;
 }
 
-int WPEWebContainer::loadProgress() const
+int WebContainer::loadProgress() const
 {
     return m_contentItem ? m_contentItem->loadProgress() : 0;
 }
 
-bool WPEWebContainer::canGoForward() const
+bool WebContainer::canGoForward() const
 {
     return m_contentItem ? m_contentItem->canGoForward() : false;
 }
 
-bool WPEWebContainer::canGoBack() const
+bool WebContainer::canGoBack() const
 {
     return m_contentItem ? m_contentItem->canGoBack() : false;
 }
 
-int WPEWebContainer::tabId() const
+int WebContainer::tabId() const
 {
     return m_tabModel ? m_tabModel->activeTabId() : 0;
 }
 
-QString WPEWebContainer::title() const
+QString WebContainer::title() const
 {
     if (!m_contentItem)
         return QString();
@@ -360,16 +359,16 @@ QString WPEWebContainer::title() const
     return pageTitle.isEmpty() ? m_contentItem->url().toString() : pageTitle;
 }
 
-QString WPEWebContainer::url() const
+QString WebContainer::url() const
 {
     return m_contentItem ? m_contentItem->url().toString() : QString();
 }
 
-void WPEWebContainer::setForeground(bool f)
+void WebContainer::setForeground(bool f)
 {
     if (m_foreground != f) {
         m_foreground = f;
-        // Tell every page about the app-level state so WebKit can throttle
+        // Tell every page about the app-level state so the engine can throttle
         // pages while the app is minimized (and resume them on return).
         for (auto it = m_pages.constBegin(); it != m_pages.constEnd(); ++it) {
             if (it.value()) {
@@ -380,7 +379,7 @@ void WPEWebContainer::setForeground(bool f)
     }
 }
 
-void WPEWebContainer::setPrivateMode(bool p)
+void WebContainer::setPrivateMode(bool p)
 {
     if (m_privateMode != p) {
         m_privateMode = p;
@@ -422,7 +421,7 @@ void WPEWebContainer::setPrivateMode(bool p)
         emit privateModeChanged();
     }
 }
-void WPEWebContainer::setChromeWindow(QObject *w)
+void WebContainer::setChromeWindow(QObject *w)
 {
     if (m_chromeWindow != w) {
         m_chromeWindow = w;
@@ -431,7 +430,7 @@ void WPEWebContainer::setChromeWindow(QObject *w)
     }
 }
 
-void WPEWebContainer::setReadyToPaint(bool r)
+void WebContainer::setReadyToPaint(bool r)
 {
     if (m_readyToPaint != r) {
         m_readyToPaint = r;
@@ -439,7 +438,7 @@ void WPEWebContainer::setReadyToPaint(bool r)
     }
 }
 
-void WPEWebContainer::setHistoryModel(DeclarativeHistoryModel *m)
+void WebContainer::setHistoryModel(DeclarativeHistoryModel *m)
 {
     if (m_historyModel != m) {
         m_historyModel = m;
@@ -447,21 +446,19 @@ void WPEWebContainer::setHistoryModel(DeclarativeHistoryModel *m)
     }
 }
 
-void WPEWebContainer::classBegin()
+void WebContainer::classBegin()
 {
 }
 
-void WPEWebContainer::componentComplete()
+void WebContainer::componentComplete()
 {
-    // Configure WebKit process sandbox paths before any web view is created.
-    // bubblewrap requires explicit allowlisting of paths needed by the subprocesses.
 
     // Previews of pages from an earlier run can never be shown again (the
     // back/forward list does not survive a restart) and are page screenshots.
 
     // Qt Quick routes input events based on item bounding-box.  If the
     // container has size 0×0 (no QML anchor/size binding from the page),
-    // touch events are never delivered to WPEQtView children.  Initialise
+    // touch events are never delivered to EngineView children.  Initialise
     // to screen size here; the OverlayAnimator may later animate height.
     ensureContainerHasUsableSize();
 
@@ -477,68 +474,68 @@ void WPEWebContainer::componentComplete()
     // If an initial URL was requested, load it; otherwise activate the persisted tab, or
     // fall back to a blank page if there are no saved tabs.
     if (m_persistentTabModel->loaded()) {
-        QTimer::singleShot(0, this, &WPEWebContainer::restoreInitialContent);
+        QTimer::singleShot(0, this, &WebContainer::restoreInitialContent);
     } else {
-        connect(m_persistentTabModel, &DeclarativeTabModel::loadedChanged, this, &WPEWebContainer::restoreInitialContent);
+        connect(m_persistentTabModel, &DeclarativeTabModel::loadedChanged, this, &WebContainer::restoreInitialContent);
     }
 
     if (!m_initialUrl.isEmpty())
         emit hasInitialUrlChanged();
 }
 
-void WPEWebContainer::load(const QString &url, const QString &title, bool newTab)
+void WebContainer::load(const QString &url, const QString &title, bool newTab)
 {
     Q_UNUSED(title)
-    qDebug() << "[WPE-LOAD] load() url=" << url << "completed=" << m_completed
+    qDebug() << "[LOAD] load() url=" << url << "completed=" << m_completed
              << "tabModel=" << (m_tabModel ? m_tabModel->count() : -1)
              << "contentItem=" << m_contentItem
              << "newTab=" << newTab;
 
     if (!m_completed) {
-        qDebug() << "[WPE-LOAD] not completed, saving as initialUrl";
+        qDebug() << "[LOAD] not completed, saving as initialUrl";
         m_initialUrl = url;
         emit hasInitialUrlChanged();
         return;
     }
 
-    if (!m_tabModel) { qDebug() << "[WPE-LOAD] no tabModel!"; return; }
+    if (!m_tabModel) { qDebug() << "[LOAD] no tabModel!"; return; }
 
     if (newTab || m_tabModel->count() == 0) {
-        qDebug() << "[WPE-LOAD] newTab for" << url;
+        qDebug() << "[LOAD] newTab for" << url;
         m_tabModel->newTab(url, newTab);
     } else {
         if (m_contentItem) {
             const QUrl targetUrl(url);
             if (m_contentItem->url() == targetUrl) {
-                qDebug() << "[WPE-LOAD] reload active contentItem:" << url;
+                qDebug() << "[LOAD] reload active contentItem:" << url;
                 m_contentItem->reload();
             } else {
-                qDebug() << "[WPE-LOAD] setUrl on contentItem:" << url;
+                qDebug() << "[LOAD] setUrl on contentItem:" << url;
                 m_contentItem->setUrl(targetUrl);
             }
         } else {
-            qDebug() << "[WPE-LOAD] contentItem is NULL, cannot load!";
+            qDebug() << "[LOAD] contentItem is NULL, cannot load!";
         }
     }
 }
 
-void WPEWebContainer::reload(bool force)
+void WebContainer::reload(bool force)
 {
     Q_UNUSED(force)
     if (m_contentItem) m_contentItem->reload();
 }
 
-void WPEWebContainer::goForward()
+void WebContainer::goForward()
 {
     if (m_contentItem) m_contentItem->goForward();
 }
 
-void WPEWebContainer::goBack()
+void WebContainer::goBack()
 {
     if (m_contentItem) m_contentItem->goBack();
 }
 
-int WPEWebContainer::activateTab(int tabId, const QString &url)
+int WebContainer::activateTab(int tabId, const QString &url)
 {
     if (!m_tabModel) return -1;
     m_tabModel->activateTabById(tabId);
@@ -548,53 +545,53 @@ int WPEWebContainer::activateTab(int tabId, const QString &url)
     return tabId;
 }
 
-void WPEWebContainer::closeTab(int tabId)
+void WebContainer::closeTab(int tabId)
 {
     if (!m_tabModel) return;
     bool isActive = (tabId == this->tabId());
     m_tabModel->removeTabById(tabId, isActive);
 }
-void WPEWebContainer::updateContentOrientation(Qt::ScreenOrientation orientation)
+void WebContainer::updateContentOrientation(Qt::ScreenOrientation orientation)
 {
     emit webContentOrientationChanged(orientation);
 }
 
-void WPEWebContainer::applyContentOrientation(Qt::ScreenOrientation orientation)
+void WebContainer::applyContentOrientation(Qt::ScreenOrientation orientation)
 {
     updateContentOrientation(orientation);
 }
 
-void WPEWebContainer::setAdBlockEnabled(bool enabled)
+void WebContainer::setAdBlockEnabled(bool enabled)
 {
-    WPEWebPage::applyAdBlockEnabledGlobally(enabled);
+    WebPage::applyAdBlockEnabledGlobally(enabled);
 }
 
-void WPEWebContainer::setCookieBannerBlockingEnabled(bool enabled)
+void WebContainer::setCookieBannerBlockingEnabled(bool enabled)
 {
-    WPEWebPage::applyCookieBannerBlockingGlobally(enabled);
+    WebPage::applyCookieBannerBlockingGlobally(enabled);
 }
 
-void WPEWebContainer::setAdBlockAllowlist(const QString &json)
+void WebContainer::setAdBlockAllowlist(const QString &json)
 {
-    WPEWebPage::applyAdBlockAllowlistGlobally(json);
+    WebPage::applyAdBlockAllowlistGlobally(json);
 }
 
-void WPEWebContainer::setSiteUaOverrides(const QString &json)
+void WebContainer::setSiteUaOverrides(const QString &json)
 {
-    WPEWebPage::applySiteUaOverridesGlobally(json);
+    WebPage::applySiteUaOverridesGlobally(json);
 }
 
-void WPEWebContainer::setJavaScriptBlocklist(const QString &json)
+void WebContainer::setJavaScriptBlocklist(const QString &json)
 {
-    WPEWebPage::applyJavaScriptBlocklistGlobally(json);
+    WebPage::applyJavaScriptBlocklistGlobally(json);
 }
 
-void WPEWebContainer::onActiveTabChanged(int activeTabId)
+void WebContainer::onActiveTabChanged(int activeTabId)
 {
     activatePage(activeTabId);
 }
 
-void WPEWebContainer::onTabAdded(int tabId)
+void WebContainer::onTabAdded(int tabId)
 {
     // Pre-create the page so it's ready
     getOrCreatePage(tabId);
@@ -603,10 +600,10 @@ void WPEWebContainer::onTabAdded(int tabId)
     enforceLiveTabBudget();
 }
 
-void WPEWebContainer::onTabClosed(int tabId)
+void WebContainer::onTabClosed(int tabId)
 {
     m_mruTabs.removeAll(tabId);
-    WPEWebPage *page = m_pages.take(tabId);
+    WebPage *page = m_pages.take(tabId);
     const bool wasPrivate = page && page->privateBrowsing();
     if (page) {
         page->setVisible(false);
@@ -635,19 +632,19 @@ void WPEWebContainer::onTabClosed(int tabId)
     // re-entering private mode later in the same run starts with no cookies or
     // storage. (Everything was in-memory only; this just drops it eagerly.)
     if (wasPrivate && m_privateTabModel && m_privateTabModel->count() == 0)
-        WPEQtView::clearPrivateBrowsingData();
+        EngineView::clearPrivateBrowsingData();
 }
 
-void WPEWebContainer::activatePage(int tabId)
+void WebContainer::activatePage(int tabId)
 {
-    qDebug() << "[WPE-ACTIVATE] tabId=" << tabId << "currentContent=" << m_contentItem;
+    qDebug() << "[ACTIVATE] tabId=" << tabId << "currentContent=" << m_contentItem;
     if (m_contentItem) {
         m_contentItem->setActive(false);
         m_contentItem->setVisible(false);
     }
 
     // Get or create new page
-    WPEWebPage *page = getOrCreatePage(tabId);
+    WebPage *page = getOrCreatePage(tabId);
 
     // Load the tab's URL if page is new (empty)
     if (m_tabModel) {
@@ -680,13 +677,13 @@ void WPEWebContainer::activatePage(int tabId)
     enforceLiveTabBudget();
 }
 
-void WPEWebContainer::touchMru(int tabId)
+void WebContainer::touchMru(int tabId)
 {
     m_mruTabs.removeAll(tabId);
     m_mruTabs.prepend(tabId);
 }
 
-int WPEWebContainer::effectiveLiveTabCap() const
+int WebContainer::effectiveLiveTabCap() const
 {
     // Normally keep the active tab + (m_maxLiveTabCount-1) MRU tabs. Under
     // memory pressure, shrink toward m_pressureKeepMin so we shed aggressively.
@@ -695,12 +692,12 @@ int WPEWebContainer::effectiveLiveTabCap() const
     return m_maxLiveTabCount;
 }
 
-void WPEWebContainer::discardPage(int tabId)
+void WebContainer::discardPage(int tabId)
 {
     // Never discard the tab the user is looking at.
     if (m_contentItem && m_pages.value(tabId) == m_contentItem)
         return;
-    WPEWebPage *page = m_pages.take(tabId);
+    WebPage *page = m_pages.take(tabId);
     if (!page)
         return;
     // Keep the tab-model entry (URL/title/thumbnail) — only the live page and
@@ -709,11 +706,11 @@ void WPEWebContainer::discardPage(int tabId)
     page->setVisible(false);
     // Destroying the page destroys its engine view, and with it the page's processes.
     page->deleteLater();
-    qInfo() << "[WPE-DISCARD] discarded tab" << tabId
+    qInfo() << "[DISCARD] discarded tab" << tabId
             << "livePages=" << m_pages.size();
 }
 
-void WPEWebContainer::enforceLiveTabBudget()
+void WebContainer::enforceLiveTabBudget()
 {
     if (!m_tabDiscardEnabled)
         return;
@@ -745,7 +742,7 @@ void WPEWebContainer::enforceLiveTabBudget()
     }
 }
 
-void WPEWebContainer::checkMemoryPressure()
+void WebContainer::checkMemoryPressure()
 {
     if (!m_tabDiscardEnabled)
         return;
@@ -769,23 +766,23 @@ void WPEWebContainer::checkMemoryPressure()
     const bool nowPressure = (memFreeKb / 1024) < m_memFreeThresholdMb;
     if (nowPressure != m_underMemoryPressure) {
         m_underMemoryPressure = nowPressure;
-        qInfo() << "[WPE-DISCARD] memory pressure" << (nowPressure ? "ON" : "OFF")
+        qInfo() << "[DISCARD] memory pressure" << (nowPressure ? "ON" : "OFF")
                 << "MemFree=" << (memFreeKb / 1024) << "MB cap=" << effectiveLiveTabCap();
     }
     if (nowPressure)
         enforceLiveTabBudget();
 }
 
-WPEWebPage *WPEWebContainer::getOrCreatePage(int tabId)
+WebPage *WebContainer::getOrCreatePage(int tabId)
 {
-    qDebug() << "[WPE-PAGE] getOrCreatePage tabId=" << tabId << "exists=" << m_pages.contains(tabId);
+    qDebug() << "[PAGE] getOrCreatePage tabId=" << tabId << "exists=" << m_pages.contains(tabId);
     if (m_pages.contains(tabId)) {
         return m_pages[tabId];
     }
 
-    // Create with nullptr parent so windowChanged fires AFTER WPEQtView's connect() is set up,
+    // Create with nullptr parent so windowChanged fires AFTER EngineView's connect() is set up,
     // then reparent via setParentItem() to trigger configureWindow() correctly.
-    WPEWebPage *page = new WPEWebPage(nullptr);
+    WebPage *page = new WebPage(nullptr);
     page->setTabId(tabId);
     if (m_viewForNextPage) {
         page->adoptEngineView(m_viewForNextPage);
@@ -811,31 +808,30 @@ WPEWebPage *WPEWebContainer::getOrCreatePage(int tabId)
     m_pages[tabId] = page;
 
     // Reparent after all connections are set up — this fires windowChanged which triggers
-    // WPEQtView::configureWindow() → createWebView().
+    // EngineView::configureWindow() → createWebView().
     page->setParentItem(this);
     return page;
 }
 
-void WPEWebContainer::connectPage(WPEWebPage *page)
+void WebContainer::connectPage(WebPage *page)
 {
-    connect(page, &WPEQtView::closeRequested, this, [this, page] { closeTab(page->tabId()); });
+    connect(page, &EngineView::closeRequested, this, [this, page] { closeTab(page->tabId()); });
     // Keep tab metadata (URL/title/mode) in sync with the tab model that created this page.
     // Using the model captured at page-creation time avoids cross-updating when switching
     // between persistent/private models later.
     DeclarativeTabModel *pageModel = m_tabModel;
     if (pageModel) {
-        connect(page, &WPEQtView::urlChanged, pageModel, &DeclarativeTabModel::onUrlChanged);
-        connect(page, &WPEQtView::titleChanged, pageModel, &DeclarativeTabModel::onTitleChanged);
-        connect(page, &WPEWebPage::desktopModeChanged, pageModel, &DeclarativeTabModel::onDesktopModeChanged);
+        connect(page, &EngineView::urlChanged, pageModel, &DeclarativeTabModel::onUrlChanged);
+        connect(page, &EngineView::titleChanged, pageModel, &DeclarativeTabModel::onTitleChanged);
     }
 
     // Not tied to the tab model: icons are stored per host, for every page.
-    connect(page, &WPEWebPage::faviconChanged, this, &WPEWebContainer::onPageFaviconChanged);
+    connect(page, &WebPage::faviconChanged, this, &WebContainer::onPageFaviconChanged);
 
-    connect(page, &WPEQtView::urlChanged, this, &WPEWebContainer::onPageUrlChanged);
-    connect(page, &WPEQtView::titleChanged, this, &WPEWebContainer::onPageTitleChanged);
-    // WPEQtView::loadingChanged carries a WPEQtViewLoadRequest* — use a lambda to adapt
-    connect(page, &WPEQtView::loadingChanged, this, [this, page](WPEQtViewLoadRequest *) {
+    connect(page, &EngineView::urlChanged, this, &WebContainer::onPageUrlChanged);
+    connect(page, &EngineView::titleChanged, this, &WebContainer::onPageTitleChanged);
+    // EngineView::loadingChanged carries a EngineViewLoadRequest* — use a lambda to adapt
+    connect(page, &EngineView::loadingChanged, this, [this, page](EngineViewLoadRequest *) {
         if (page == m_contentItem) {
             emit loadingChanged();
             emit canGoBackChanged();
@@ -845,34 +841,34 @@ void WPEWebContainer::connectPage(WPEWebPage *page)
     // Same-document navigations (SPA pushState) emit no load change, so without
     // this the toolbar's back/forward state stayed stale mid-SPA and the button
     // kept rendering the home glyph.
-    connect(page, &WPEQtView::backForwardChanged, this, [this, page]() {
+    connect(page, &EngineView::backForwardChanged, this, [this, page]() {
         if (page == m_contentItem) {
             emit canGoBackChanged();
             emit canGoForwardChanged();
         }
     });
-    connect(page, &WPEQtView::loadProgressChanged, this, &WPEWebContainer::onPageLoadProgressChanged);
-    connect(page, &WPEWebPage::paintedChanged, this, &WPEWebContainer::onPagePaintedChanged);
-    connect(page, &WPEWebPage::chromeChanged, this, &WPEWebContainer::needChromeChanged);
-    connect(page, &WPEWebPage::fullscreenChanged, this, &WPEWebContainer::needChromeChanged);
-    connect(page, &WPEWebPage::fileGrabWritten, this, [this, page](const QString &filePath) {
+    connect(page, &EngineView::loadProgressChanged, this, &WebContainer::onPageLoadProgressChanged);
+    connect(page, &WebPage::paintedChanged, this, &WebContainer::onPagePaintedChanged);
+    connect(page, &WebPage::chromeChanged, this, &WebContainer::needChromeChanged);
+    connect(page, &WebPage::fullscreenChanged, this, &WebContainer::needChromeChanged);
+    connect(page, &WebPage::fileGrabWritten, this, [this, page](const QString &filePath) {
         if (m_tabModel)
             m_tabModel->updateThumbnailPath(page->tabId(), filePath);
     });
-    connect(page, &WPEWebPage::touched, this, [this, page]() {
+    connect(page, &WebPage::touched, this, [this, page]() {
         if (page == m_contentItem)
             emit touched();
     });
-    connect(page, &WPEWebPage::crashedChanged, this, [page]() {
+    connect(page, &WebPage::crashedChanged, this, [page]() {
         if (page->crashed())
-            qWarning() << "[WPE] WebProcess crashed for tab" << page->tabId()
+            qWarning() << "[tabs] engine view crashed for tab" << page->tabId()
                        << "— tab isolated, browser alive";
     });
 }
 
-void WPEWebContainer::onPageUrlChanged()
+void WebContainer::onPageUrlChanged()
 {
-    WPEWebPage *page = qobject_cast<WPEWebPage *>(sender());
+    WebPage *page = qobject_cast<WebPage *>(sender());
     if (!page || page != m_contentItem) return;
 
     QString newUrl = page->url().toString();
@@ -895,9 +891,9 @@ void WPEWebContainer::onPageUrlChanged()
 // Favicon discovery has to be driven from here: the QML webPageComponent that
 // used to call FaviconManager.grabIcon() is never instantiated (pages are
 // created in getOrCreatePage above), so every handler inside it is dead code.
-void WPEWebContainer::onPageFaviconChanged()
+void WebContainer::onPageFaviconChanged()
 {
-    WPEWebPage *page = qobject_cast<WPEWebPage *>(sender());
+    WebPage *page = qobject_cast<WebPage *>(sender());
     if (!page || page->privateBrowsing() || page->faviconCandidates().isEmpty())
         return;
 
@@ -906,9 +902,9 @@ void WPEWebContainer::onPageFaviconChanged()
     FaviconManager::instance()->grabIcon(QStringLiteral("history"), page, QSize(96, 96));
 }
 
-void WPEWebContainer::onPageTitleChanged()
+void WebContainer::onPageTitleChanged()
 {
-    WPEWebPage *page = qobject_cast<WPEWebPage *>(sender());
+    WebPage *page = qobject_cast<WebPage *>(sender());
     if (!page || page != m_contentItem) return;
     m_waitingForFreshTitle = page->title().isEmpty();
     emit titleChanged();
@@ -921,23 +917,23 @@ void WPEWebContainer::onPageTitleChanged()
     }
 }
 
-void WPEWebContainer::onPageLoadProgressChanged()
+void WebContainer::onPageLoadProgressChanged()
 {
-    WPEWebPage *page = qobject_cast<WPEWebPage *>(sender());
+    WebPage *page = qobject_cast<WebPage *>(sender());
     if (!page || page != m_contentItem) return;
     emit loadProgressChanged();
 }
 
-void WPEWebContainer::onPagePaintedChanged()
+void WebContainer::onPagePaintedChanged()
 {
-    WPEWebPage *page = qobject_cast<WPEWebPage *>(sender());
+    WebPage *page = qobject_cast<WebPage *>(sender());
     if (!page || page != m_contentItem) return;
     if (page->painted() && !m_activeTabRendered) {
         setActiveTabRendered(true);
     }
 }
 
-void WPEWebContainer::setActiveTabRendered(bool r)
+void WebContainer::setActiveTabRendered(bool r)
 {
     if (m_activeTabRendered != r) {
         m_activeTabRendered = r;

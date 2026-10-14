@@ -3,10 +3,10 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * Pacific: Atlantic's page class on top of a Ladybird engine view. See WPEWebPage.h.
+ * Pacific: Atlantic's page class on top of a Ladybird engine view. See WebPage.h.
  */
 
-#include "WPEWebPage.h"
+#include "WebPage.h"
 
 #include "credentialstore.h"
 #include "DownloadModel.h"
@@ -33,9 +33,9 @@
 
 namespace {
 
-QList<WPEWebPage *> &livePages()
+QList<WebPage *> &livePages()
 {
-    static QList<WPEWebPage *> pages;
+    static QList<WebPage *> pages;
     return pages;
 }
 
@@ -156,30 +156,30 @@ const char kMoveSelectionScript[] =
 
 } // namespace
 
-WPEWebPage::WPEWebPage(QQuickItem *parent)
-    : WPEQtView(parent)
+WebPage::WebPage(QQuickItem *parent)
+    : EngineView(parent)
 {
     livePages().append(this);
-    m_security = new WPESecurityInfo(this);
+    m_security = new SecurityInfo(this);
     setFlag(ItemAcceptsInputMethod, false);
 
-    connect(this, &WPEQtView::loadingChanged, this, &WPEWebPage::onLoadingChanged);
-    connect(this, &WPEQtView::frameArrived, this, &WPEWebPage::onFrameArrived);
-    connect(this, &WPEQtView::pageWantsTextInputChanged, this, &WPEWebPage::onPageWantsTextInputChanged);
-    connect(this, &WPEQtView::engineCrashed, this, [this] {
+    connect(this, &EngineView::loadingChanged, this, &WebPage::onLoadingChanged);
+    connect(this, &EngineView::frameArrived, this, &WebPage::onFrameArrived);
+    connect(this, &EngineView::pageWantsTextInputChanged, this, &WebPage::onPageWantsTextInputChanged);
+    connect(this, &EngineView::engineCrashed, this, [this] {
         m_crashed = true;
         emit crashedChanged();
     });
 
     // A tab's thumbnail is a scaled copy of what is on screen, refreshed while the tab is the one showing.
     m_thumbnailTimer.setInterval(kThumbnailIntervalMs);
-    connect(&m_thumbnailTimer, &QTimer::timeout, this, &WPEWebPage::captureThumbnail);
+    connect(&m_thumbnailTimer, &QTimer::timeout, this, &WebPage::captureThumbnail);
 
     // A login sent on a page that stays where it is (a script-driven sign-in) is offered after a moment.
     m_offerLoginTimer.setSingleShot(true);
     m_offerLoginTimer.setInterval(4000);
-    connect(&m_offerLoginTimer, &QTimer::timeout, this, &WPEWebPage::offerCapturedLogin);
-    connect(this, &WPEQtView::urlChanged, this, &WPEWebPage::offerCapturedLogin);
+    connect(&m_offerLoginTimer, &QTimer::timeout, this, &WebPage::offerCapturedLogin);
+    connect(this, &EngineView::urlChanged, this, &WebPage::offerCapturedLogin);
     connect(CredentialStore::instance(), &CredentialStore::lockedChanged, this, [this] {
         if (m_saveLoginWaitsForVault && CredentialStore::instance()->isUnlocked())
             storePendingLogin();
@@ -192,7 +192,7 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
             setChrome(m_pendingChrome);
         m_chromeGestureArmed = false;
     });
-    connect(this, &WPEQtView::scrollPositionChanged, this, [this](qreal scrollY, qreal scrollHeight, qreal innerHeight) {
+    connect(this, &EngineView::scrollPositionChanged, this, [this](qreal scrollY, qreal scrollHeight, qreal innerHeight) {
         bool atTop = scrollY <= 0;
         bool atBottom = (scrollHeight - scrollY - innerHeight) <= 1.0;
         if (atTop != m_atYBeginning) {
@@ -226,22 +226,22 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     });
 }
 
-WPEWebPage::~WPEWebPage()
+WebPage::~WebPage()
 {
     livePages().removeAll(this);
 }
 
-const QList<WPEWebPage *> &WPEWebPage::liveInstances()
+const QList<WebPage *> &WebPage::liveInstances()
 {
     return livePages();
 }
 
-int WPEWebPage::tabId() const
+int WebPage::tabId() const
 {
     return m_tabId;
 }
 
-void WPEWebPage::setTabId(int tabId)
+void WebPage::setTabId(int tabId)
 {
     if (m_tabId != tabId) {
         m_tabId = tabId;
@@ -249,27 +249,27 @@ void WPEWebPage::setTabId(int tabId)
     }
 }
 
-bool WPEWebPage::painted() const
+bool WebPage::painted() const
 {
     return m_painted;
 }
 
-bool WPEWebPage::loaded() const
+bool WebPage::loaded() const
 {
     return m_loaded;
 }
 
-void WPEWebPage::updateEngineVisibility()
+void WebPage::updateEngineVisibility()
 {
     bool visible = m_active && m_appForeground;
-    setWebKitVisible(visible);
+    setEngineVisible(visible);
     if (visible && !privateBrowsing())
         m_thumbnailTimer.start();
     else
         m_thumbnailTimer.stop();
 }
 
-void WPEWebPage::setActive(bool active)
+void WebPage::setActive(bool active)
 {
     if (m_active == active)
         return;
@@ -278,7 +278,7 @@ void WPEWebPage::setActive(bool active)
     emit activeChanged();
 }
 
-void WPEWebPage::setAppForeground(bool foreground)
+void WebPage::setAppForeground(bool foreground)
 {
     if (m_appForeground == foreground)
         return;
@@ -286,7 +286,7 @@ void WPEWebPage::setAppForeground(bool foreground)
     updateEngineVisibility();
 }
 
-void WPEWebPage::loadTab(const QString &url, bool force)
+void WebPage::loadTab(const QString &url, bool force)
 {
     QUrl target = QUrl::fromUserInput(url);
     if (!target.isValid())
@@ -300,24 +300,24 @@ void WPEWebPage::loadTab(const QString &url, bool force)
     setUrl(target);
 }
 
-void WPEWebPage::loadCurrentUrlAgain()
+void WebPage::loadCurrentUrlAgain()
 {
     reload();
 }
 
-void WPEWebPage::goBack()
+void WebPage::goBack()
 {
-    WPEQtView::goBack();
+    EngineView::goBack();
 }
 
-void WPEWebPage::goForward()
+void WebPage::goForward()
 {
-    WPEQtView::goForward();
+    EngineView::goForward();
 }
 
-void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
+void WebPage::onLoadingChanged(EngineViewLoadRequest *loadRequest)
 {
-    bool finished = loadRequest->status() != WPEQtView::LoadStartedStatus;
+    bool finished = loadRequest->status() != EngineView::LoadStartedStatus;
     if (m_domContentLoaded != finished) {
         m_domContentLoaded = finished;
         emit domContentLoadedChanged();
@@ -349,7 +349,7 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
     }
 }
 
-void WPEWebPage::onFrameArrived()
+void WebPage::onFrameArrived()
 {
     if (!m_painted) {
         m_painted = true;
@@ -360,21 +360,21 @@ void WPEWebPage::onFrameArrived()
 
 // --- Thumbnails -------------------------------------------------------------
 
-void WPEWebPage::grabToFile(const QSize &size)
+void WebPage::grabToFile(const QSize &size)
 {
     if (size.width() > 0 && size.height() > 0)
         m_thumbnailSize = size;
     captureThumbnail();
 }
 
-void WPEWebPage::grabThumbnail(const QSize &size)
+void WebPage::grabThumbnail(const QSize &size)
 {
     Q_UNUSED(size);
     // FIXME: Atlantic answered this with a PNG data: URI from a WebKit snapshot (used as a favourite's icon when
     //        the page has no usable favicon). Nothing asks the engine for a snapshot yet.
 }
 
-void WPEWebPage::captureThumbnail()
+void WebPage::captureThumbnail()
 {
     if (privateBrowsing() || m_tabId <= 0 || !m_painted || m_thumbnailGrab)
         return;
@@ -417,35 +417,35 @@ void WPEWebPage::captureThumbnail()
 }
 // --- Chrome -----------------------------------------------------------------
 
-void WPEWebPage::setChrome(bool chrome)
+void WebPage::setChrome(bool chrome)
 {
     static const bool logChrome = !qgetenv("PACIFIC_LOG_ENGINE").isEmpty();
     if (logChrome && m_chrome != chrome)
-        qWarning("WPEWebPage: chrome %d, page %dx%d painted %dx%d", chrome, int(width()), int(height()), paintedSize().width(), paintedSize().height());
+        qWarning("WebPage: chrome %d, page %dx%d painted %dx%d", chrome, int(width()), int(height()), paintedSize().width(), paintedSize().height());
     if (m_chrome != chrome) {
         m_chrome = chrome;
         emit chromeChanged();
     }
 }
 
-void WPEWebPage::forceChrome(bool forced)
+void WebPage::forceChrome(bool forced)
 {
     setForcedChrome(forced);
     if (forced)
         setChrome(true);
 }
 
-void WPEWebPage::suspendView()
+void WebPage::suspendView()
 {
-    setWebKitVisible(false);
+    setEngineVisible(false);
 }
 
-void WPEWebPage::resumeView()
+void WebPage::resumeView()
 {
     updateEngineVisibility();
 }
 
-void WPEWebPage::setDesktopMode(bool desktop)
+void WebPage::setDesktopMode(bool desktop)
 {
     if (m_desktopMode == desktop)
         return;
@@ -456,22 +456,22 @@ void WPEWebPage::setDesktopMode(bool desktop)
 
 // --- Selection --------------------------------------------------------------
 
-bool WPEWebPage::textSelectionActive() const
+bool WebPage::textSelectionActive() const
 {
     return m_textSelectionActive;
 }
 
-QObject* WPEWebPage::textSelectionController()
+QObject* WebPage::textSelectionController()
 {
     return this;
 }
 
-QString WPEWebPage::selectedText() const
+QString WebPage::selectedText() const
 {
     return m_selectedText;
 }
 
-bool WPEWebPage::isPhoneNumber() const
+bool WebPage::isPhoneNumber() const
 {
     static const QRegularExpression re(QStringLiteral("^[+\\d][\\d\\s\\-().+]{6,}$"));
     return re.match(m_selectedText.trimmed()).hasMatch();
@@ -481,7 +481,7 @@ bool WPEWebPage::isPhoneNumber() const
 // The engine says when an editable element has focus. While one has, this item takes the input method's focus,
 // which brings up the on-screen keyboard, and what the keyboard commits or composes goes to the engine.
 
-void WPEWebPage::onPageWantsTextInputChanged()
+void WebPage::onPageWantsTextInputChanged()
 {
     const bool wantsInput = pageWantsTextInput();
     setFlag(ItemAcceptsInputMethod, wantsInput);
@@ -498,7 +498,7 @@ void WPEWebPage::onPageWantsTextInputChanged()
     }
 }
 
-QVariant WPEWebPage::inputMethodQuery(Qt::InputMethodQuery query) const
+QVariant WebPage::inputMethodQuery(Qt::InputMethodQuery query) const
 {
     switch (query) {
     case Qt::ImEnabled:
@@ -510,7 +510,7 @@ QVariant WPEWebPage::inputMethodQuery(Qt::InputMethodQuery query) const
     }
 }
 
-void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
+void WebPage::inputMethodEvent(QInputMethodEvent *event)
 {
     if (!event->commitString().isEmpty() || event->replacementLength() > 0) {
         // replacementStart is relative to the caret and negative for text before it.
@@ -522,7 +522,7 @@ void WPEWebPage::inputMethodEvent(QInputMethodEvent *event)
     event->accept();
 }
 
-void WPEWebPage::keyPressEvent(QKeyEvent *event)
+void WebPage::keyPressEvent(QKeyEvent *event)
 {
     int key = 0;
     switch (event->key()) {
@@ -568,7 +568,7 @@ void WPEWebPage::keyPressEvent(QKeyEvent *event)
     event->accept();
 }
 
-void WPEWebPage::touchEvent(QTouchEvent *event)
+void WebPage::touchEvent(QTouchEvent *event)
 {
     if (event->type() == QEvent::TouchBegin) {
         m_lastTouchMs = QDateTime::currentMSecsSinceEpoch();
@@ -576,27 +576,27 @@ void WPEWebPage::touchEvent(QTouchEvent *event)
         // A page still loading has not had the agent yet.
         evaluate(QString::fromLatin1(kPageAgentScript));
     }
-    WPEQtView::touchEvent(event);
+    EngineView::touchEvent(event);
 }
 
 // --- Everything below is state the interface reads and the engine protocol does not drive yet ---------------
 
-bool WPEWebPage::domContentLoaded() const
+bool WebPage::domContentLoaded() const
 {
     return m_domContentLoaded;
 }
 
-bool WPEWebPage::chrome() const
+bool WebPage::chrome() const
 {
     return m_chrome;
 }
 
-bool WPEWebPage::forcedChrome() const
+bool WebPage::forcedChrome() const
 {
     return m_forcedChrome;
 }
 
-void WPEWebPage::setForcedChrome(bool forcedChrome)
+void WebPage::setForcedChrome(bool forcedChrome)
 {
     if (m_forcedChrome == forcedChrome)
         return;
@@ -604,27 +604,27 @@ void WPEWebPage::setForcedChrome(bool forcedChrome)
     emit forcedChromeChanged();
 }
 
-bool WPEWebPage::fullscreen() const
+bool WebPage::fullscreen() const
 {
     return m_fullscreen;
 }
 
-bool WPEWebPage::atYBeginning() const
+bool WebPage::atYBeginning() const
 {
     return m_atYBeginning;
 }
 
-bool WPEWebPage::atYEnd() const
+bool WebPage::atYEnd() const
 {
     return m_atYEnd;
 }
 
-QString WPEWebPage::favicon() const
+QString WebPage::favicon() const
 {
     return m_favicon;
 }
 
-void WPEWebPage::setFavicon(const QString &favicon)
+void WebPage::setFavicon(const QString &favicon)
 {
     if (m_favicon == favicon)
         return;
@@ -632,23 +632,23 @@ void WPEWebPage::setFavicon(const QString &favicon)
     emit faviconChanged();
 }
 
-QStringList WPEWebPage::faviconCandidates() const
+QStringList WebPage::faviconCandidates() const
 {
     return m_faviconCandidates;
 }
 
-void WPEWebPage::setFaviconCandidates(const QStringList &candidates)
+void WebPage::setFaviconCandidates(const QStringList &candidates)
 {
     if (m_faviconCandidates == candidates)
         return;
     m_faviconCandidates = candidates;
 }
-qreal WPEWebPage::fullscreenHeight() const
+qreal WebPage::fullscreenHeight() const
 {
     return m_fullscreenHeight;
 }
 
-void WPEWebPage::setFullscreenHeight(qreal height)
+void WebPage::setFullscreenHeight(qreal height)
 {
     if (m_fullscreenHeight == height)
         return;
@@ -656,12 +656,12 @@ void WPEWebPage::setFullscreenHeight(qreal height)
     emit fullscreenHeightChanged();
 }
 
-qreal WPEWebPage::toolbarHeight() const
+qreal WebPage::toolbarHeight() const
 {
     return m_toolbarHeight;
 }
 
-void WPEWebPage::setToolbarHeight(qreal height)
+void WebPage::setToolbarHeight(qreal height)
 {
     if (m_toolbarHeight == height)
         return;
@@ -669,7 +669,7 @@ void WPEWebPage::setToolbarHeight(qreal height)
     emit toolbarHeightChanged();
 }
 
-bool WPEWebPage::active() const
+bool WebPage::active() const
 {
     return m_active;
 }
@@ -679,15 +679,15 @@ bool WPEWebPage::active() const
 static bool s_adBlockEnabled = false;
 static bool s_cookieBannerBlockingEnabled = false;
 
-void WPEWebPage::applyAdBlockEnabledGlobally(bool enabled)
+void WebPage::applyAdBlockEnabledGlobally(bool enabled)
 {
     s_adBlockEnabled = enabled;
     LadybirdEngine::instance()->send(0, LB_EMBED_SET_AD_BLOCKING, enabled ? 1 : 0);
-    for (WPEWebPage *page : livePages())
+    for (WebPage *page : livePages())
         emit page->adBlockEnabledChanged();
 }
 
-void WPEWebPage::applyAdBlockAllowlistGlobally(const QString &json)
+void WebPage::applyAdBlockAllowlistGlobally(const QString &json)
 {
     // The sites the user switched blocking off for become exception rules on top of the lists: nothing a page of
     // that site (or of a subdomain) asks for is blocked, and nothing in it is hidden.
@@ -703,11 +703,11 @@ void WPEWebPage::applyAdBlockAllowlistGlobally(const QString &json)
     LadybirdEngine::instance()->send(0, LB_EMBED_SET_BLOCKER_FILTERS, 0, 0, 0, 0, 0, rules.toUtf8());
 }
 
-void WPEWebPage::applyCookieBannerBlockingGlobally(bool enabled)
+void WebPage::applyCookieBannerBlockingGlobally(bool enabled)
 {
     s_cookieBannerBlockingEnabled = enabled;
     LadybirdEngine::instance()->send(0, LB_EMBED_SET_COOKIE_BANNER_BLOCKING, enabled ? 1 : 0);
-    for (WPEWebPage *page : livePages())
+    for (WebPage *page : livePages())
         emit page->cookieBannerBlockingEnabledChanged();
 }
 
@@ -723,7 +723,7 @@ static void sendSiteOptions()
     LadybirdEngine::instance()->send(0, LB_EMBED_SET_SITE_OPTIONS, 0, 0, 0, 0, 0, QJsonDocument(options).toJson(QJsonDocument::Compact));
 }
 
-void WPEWebPage::applySiteUaOverridesGlobally(const QString &json)
+void WebPage::applySiteUaOverridesGlobally(const QString &json)
 {
     // The interface's profile ids, as the names of the engine's user agent presets.
     static const QHash<QString, QString> presets {
@@ -744,19 +744,19 @@ void WPEWebPage::applySiteUaOverridesGlobally(const QString &json)
     sendSiteOptions();
 }
 
-void WPEWebPage::applyJavaScriptBlocklistGlobally(const QString &json)
+void WebPage::applyJavaScriptBlocklistGlobally(const QString &json)
 {
     s_noScriptSites = QJsonArray();
     for (const QJsonValue &host : QJsonDocument::fromJson(json.toUtf8()).array())
         s_noScriptSites.append(host.toString().trimmed().toLower());
     sendSiteOptions();
 }
-bool WPEWebPage::chromeGestureEnabled() const
+bool WebPage::chromeGestureEnabled() const
 {
     return m_chromeGestureEnabled;
 }
 
-void WPEWebPage::setChromeGestureEnabled(bool enabled)
+void WebPage::setChromeGestureEnabled(bool enabled)
 {
     if (m_chromeGestureEnabled == enabled)
         return;
@@ -764,12 +764,12 @@ void WPEWebPage::setChromeGestureEnabled(bool enabled)
     emit chromeGestureEnabledChanged();
 }
 
-qreal WPEWebPage::chromeGestureThreshold() const
+qreal WebPage::chromeGestureThreshold() const
 {
     return m_chromeGestureThreshold;
 }
 
-void WPEWebPage::setChromeGestureThreshold(qreal threshold)
+void WebPage::setChromeGestureThreshold(qreal threshold)
 {
     if (m_chromeGestureThreshold == threshold)
         return;
@@ -777,12 +777,12 @@ void WPEWebPage::setChromeGestureThreshold(qreal threshold)
     emit chromeGestureThresholdChanged();
 }
 
-bool WPEWebPage::fixedToolbar() const
+bool WebPage::fixedToolbar() const
 {
     return m_fixedToolbar;
 }
 
-void WPEWebPage::setFixedToolbar(bool fixed)
+void WebPage::setFixedToolbar(bool fixed)
 {
     if (m_fixedToolbar == fixed)
         return;
@@ -790,20 +790,20 @@ void WPEWebPage::setFixedToolbar(bool fixed)
     emit fixedToolbarChanged();
 }
 
-bool WPEWebPage::moving() const
+bool WebPage::moving() const
 {
     return false;
 }
-bool WPEWebPage::dragging() const
+bool WebPage::dragging() const
 {
     return false;
 }
 
-bool WPEWebPage::desktopMode() const
+bool WebPage::desktopMode() const
 {
     return m_desktopMode;
 }
-void WPEWebPage::pageFullscreenChanged(bool fullscreen)
+void WebPage::pageFullscreenChanged(bool fullscreen)
 {
     if (m_fullscreen == fullscreen)
         return;
@@ -812,20 +812,20 @@ void WPEWebPage::pageFullscreenChanged(bool fullscreen)
     updateMediaState();
 }
 
-void WPEWebPage::exitFullscreen()
+void WebPage::exitFullscreen()
 {
     if (m_fullscreen)
         sendToEngine(LB_EMBED_EXIT_FULLSCREEN);
 }
 
-void WPEWebPage::mediaStateChanged(bool playsAudio, bool keepsScreenOn)
+void WebPage::mediaStateChanged(bool playsAudio, bool keepsScreenOn)
 {
     m_playsAudio = playsAudio;
     m_keepsScreenOn = keepsScreenOn;
     updateMediaState();
 }
 
-void WPEWebPage::updateMediaState()
+void WebPage::updateMediaState()
 {
     // NB: The engine reports sound, not video. A page in fullscreen is nearly always showing one, and a page that
     //     wants the screen on asks for it.
@@ -840,38 +840,38 @@ void WPEWebPage::updateMediaState()
         emit mediaVideoActiveChanged();
     }
 }
-void WPEWebPage::revealFocusedEditable()
+void WebPage::revealFocusedEditable()
 {
     evaluate(QStringLiteral("(function(e){if(e&&e!==document.body)e.scrollIntoView({block:'center'});return 0})(document.activeElement)"));
 }
-void WPEWebPage::clearSelection()
+void WebPage::clearSelection()
 {
     handleJsSelectionClear();
     evaluate(QStringLiteral("getSelection().removeAllRanges(),0"));
 }
 
-void WPEWebPage::selectAll()
+void WebPage::selectAll()
 {
     evaluate(QStringLiteral("getSelection().selectAllChildren(document.body),0"));
 }
 
-void WPEWebPage::moveSelectionStart(qreal cssX, qreal cssY)
+void WebPage::moveSelectionStart(qreal cssX, qreal cssY)
 {
     moveSelectionEdge(true, cssX, cssY);
 }
 
-void WPEWebPage::moveSelectionEnd(qreal cssX, qreal cssY)
+void WebPage::moveSelectionEnd(qreal cssX, qreal cssY)
 {
     moveSelectionEdge(false, cssX, cssY);
 }
 
-void WPEWebPage::copyToClipboard()
+void WebPage::copyToClipboard()
 {
     if (!m_selectedText.isEmpty())
         QGuiApplication::clipboard()->setText(m_selectedText);
 }
 
-void WPEWebPage::handleJsSelectionClear()
+void WebPage::handleJsSelectionClear()
 {
     const bool wasActive = m_textSelectionActive;
     const bool hadSelection = !m_selectedText.isEmpty();
@@ -886,7 +886,7 @@ void WPEWebPage::handleJsSelectionClear()
         emit selectionHandlesUpdated();
 }
 
-void WPEWebPage::handleJsSelectionUpdate(const QString &text, qreal startX, qreal startY, qreal endX, qreal endY)
+void WebPage::handleJsSelectionUpdate(const QString &text, qreal startX, qreal startY, qreal endX, qreal endY)
 {
     if (text.isEmpty()) {
         handleJsSelectionClear();
@@ -909,7 +909,7 @@ void WPEWebPage::handleJsSelectionUpdate(const QString &text, qreal startX, qrea
     if (textChanged || handlesChanged || !wasActive)
         emit selectionHandlesUpdated();
 }
-void WPEWebPage::findText(const QString &text, bool backwards)
+void WebPage::findText(const QString &text, bool backwards)
 {
     if (text.isEmpty()) {
         findFinish();
@@ -923,7 +923,7 @@ void WPEWebPage::findText(const QString &text, bool backwards)
     }
 }
 
-void WPEWebPage::findFinish()
+void WebPage::findFinish()
 {
     if (!m_findText.isEmpty())
         sendToEngine(LB_EMBED_FIND, LB_EMBED_FIND_END);
@@ -931,7 +931,7 @@ void WPEWebPage::findFinish()
     setFindInPageHasResult(false);
 }
 
-void WPEWebPage::setFindInPageHasResult(bool has)
+void WebPage::setFindInPageHasResult(bool has)
 {
     if (m_findInPageHasResult == has)
         return;
@@ -939,12 +939,12 @@ void WPEWebPage::setFindInPageHasResult(bool has)
     emit findInPageHasResultChanged();
 }
 
-QString WPEWebPage::origin(const QUrl &url)
+QString WebPage::origin(const QUrl &url)
 {
     return url.adjusted(QUrl::RemoveUserInfo | QUrl::RemovePath | QUrl::RemoveQuery | QUrl::RemoveFragment).toString();
 }
 
-void WPEWebPage::fillLoginForFocusedForm()
+void WebPage::fillLoginForFocusedForm()
 {
     CredentialStore *store = CredentialStore::instance();
     if (url().scheme() != QLatin1String("https") || !store->isUnlocked())
@@ -969,7 +969,7 @@ static QSet<QString> &certificateExceptions()
     return hosts;
 }
 
-void WPEWebPage::setTlsError(bool failed)
+void WebPage::setTlsError(bool failed)
 {
     if (failed == m_tlsErrorPending)
         return;
@@ -980,7 +980,7 @@ void WPEWebPage::setTlsError(bool failed)
     emit tlsErrorChanged();
 }
 
-void WPEWebPage::acceptTlsCertificate()
+void WebPage::acceptTlsCertificate()
 {
     if (!m_tlsErrorPending)
         return;
@@ -1007,7 +1007,7 @@ QHash<QString, CertificateDetails> &certificateDetails()
 
 }
 
-void WPEWebPage::updateSecurity()
+void WebPage::updateSecurity()
 {
     const QUrl pageUrl = url();
     if (pageUrl.scheme() != QLatin1String("https") || m_tlsErrorPending) {
@@ -1071,12 +1071,12 @@ static QHash<QString, bool> &sessionPermissionDecisions()
     return decisions;
 }
 
-void WPEWebPage::clearPermissionDecisions()
+void WebPage::clearPermissionDecisions()
 {
     sessionPermissionDecisions().clear();
 }
 
-void WPEWebPage::permissionRequested(int question, const QString &name, const QString &origin)
+void WebPage::permissionRequested(int question, const QString &name, const QString &origin)
 {
     const QString key = origin + QLatin1Char('|') + name;
     QHash<QString, bool> &decisions = privateBrowsing() ? m_permissionDecisions : sessionPermissionDecisions();
@@ -1089,7 +1089,7 @@ void WPEWebPage::permissionRequested(int question, const QString &name, const QS
         showNextPermissionQuestion();
 }
 
-void WPEWebPage::showNextPermissionQuestion()
+void WebPage::showNextPermissionQuestion()
 {
     m_permissionPending = !m_permissionQuestions.isEmpty();
     if (m_permissionPending) {
@@ -1104,7 +1104,7 @@ void WPEWebPage::showNextPermissionQuestion()
     emit permissionChanged();
 }
 
-void WPEWebPage::answerPermissions(const QString &key, bool allow)
+void WebPage::answerPermissions(const QString &key, bool allow)
 {
     for (int i = m_permissionQuestions.size() - 1; i >= 0; --i) {
         if (!key.isEmpty() && m_permissionQuestions.at(i).second != key)
@@ -1115,7 +1115,7 @@ void WPEWebPage::answerPermissions(const QString &key, bool allow)
     showNextPermissionQuestion();
 }
 
-void WPEWebPage::resolvePermission(bool allow)
+void WebPage::resolvePermission(bool allow)
 {
     if (m_permissionQuestions.isEmpty())
         return;
@@ -1124,7 +1124,7 @@ void WPEWebPage::resolvePermission(bool allow)
     answerPermissions(key, allow);
 }
 
-void WPEWebPage::offerCapturedLogin()
+void WebPage::offerCapturedLogin()
 {
     m_offerLoginTimer.stop();
     if (m_capturedLogin.isEmpty())
@@ -1156,7 +1156,7 @@ void WPEWebPage::offerCapturedLogin()
     emit saveLoginChanged();
 }
 
-void WPEWebPage::resolveSaveLogin(bool save)
+void WebPage::resolveSaveLogin(bool save)
 {
     if (!m_saveLoginPending)
         return;
@@ -1175,7 +1175,7 @@ void WPEWebPage::resolveSaveLogin(bool save)
     emit saveLoginNeedsUnlock();
 }
 
-void WPEWebPage::storePendingLogin()
+void WebPage::storePendingLogin()
 {
     m_saveLoginWaitsForVault = false;
     QVariantMap fields;
@@ -1195,7 +1195,7 @@ void WPEWebPage::storePendingLogin()
     emit loginSaved();
 }
 
-void WPEWebPage::selectMenuOption(int index)
+void WebPage::selectMenuOption(int index)
 {
     if (!m_selectMenuActive)
         return;
@@ -1204,17 +1204,17 @@ void WPEWebPage::selectMenuOption(int index)
     emit selectMenuActiveChanged();
 }
 
-void WPEWebPage::downloadUrl(const QString &url)
+void WebPage::downloadUrl(const QString &url)
 {
     DownloadModel::instance()->start(url);
 }
 
-void WPEWebPage::closeSelectMenu()
+void WebPage::closeSelectMenu()
 {
     selectMenuOption(-1);
 }
 
-void WPEWebPage::chooseFiles(const QStringList &filePaths)
+void WebPage::chooseFiles(const QStringList &filePaths)
 {
     if (!m_fileChooserActive)
         return;
@@ -1230,12 +1230,12 @@ void WPEWebPage::chooseFiles(const QStringList &filePaths)
     emit fileChooserActiveChanged();
 }
 
-void WPEWebPage::cancelFileChooser()
+void WebPage::cancelFileChooser()
 {
     chooseFiles(QStringList());
 }
 
-void WPEWebPage::openSelectMenu(const QStringList &options, int selectedIndex)
+void WebPage::openSelectMenu(const QStringList &options, int selectedIndex)
 {
     m_selectMenuOptions = options;
     m_selectMenuSelectedIdx = selectedIndex;
@@ -1245,7 +1245,7 @@ void WPEWebPage::openSelectMenu(const QStringList &options, int selectedIndex)
     emit selectMenuActiveChanged();
 }
 
-void WPEWebPage::resolveInputPicker(const QString &value)
+void WebPage::resolveInputPicker(const QString &value)
 {
     if (m_inputPickerIsEngineColor) {
         sendToEngine(LB_EMBED_COLOR_PICKED, 1, 0, 0, 0, value.toUtf8());
@@ -1259,7 +1259,7 @@ void WPEWebPage::resolveInputPicker(const QString &value)
     closeInputPicker();
 }
 
-void WPEWebPage::cancelInputPicker()
+void WebPage::cancelInputPicker()
 {
     if (m_inputPickerIsEngineColor)
         sendToEngine(LB_EMBED_COLOR_PICKED, 0);
@@ -1268,7 +1268,7 @@ void WPEWebPage::cancelInputPicker()
     closeInputPicker();
 }
 
-void WPEWebPage::openInputPicker(const QString &type, const QString &value, const QString &min, const QString &max, const QString &step)
+void WebPage::openInputPicker(const QString &type, const QString &value, const QString &min, const QString &max, const QString &step)
 {
     m_inputPickerType = type;
     m_inputPickerValue = value;
@@ -1280,7 +1280,7 @@ void WPEWebPage::openInputPicker(const QString &type, const QString &value, cons
     emit inputPickerActiveChanged();
 }
 
-void WPEWebPage::openImageLongPress(const QString &imageUrl)
+void WebPage::openImageLongPress(const QString &imageUrl)
 {
     if (m_imageLongPressUrl != imageUrl) {
         m_imageLongPressUrl = imageUrl;
@@ -1288,7 +1288,7 @@ void WPEWebPage::openImageLongPress(const QString &imageUrl)
     }
 }
 
-void WPEWebPage::clearImageLongPress()
+void WebPage::clearImageLongPress()
 {
     if (!m_imageLongPressUrl.isEmpty()) {
         m_imageLongPressUrl.clear();
@@ -1297,7 +1297,7 @@ void WPEWebPage::clearImageLongPress()
     setContextInfo(QVariantMap());
 }
 
-void WPEWebPage::setContextInfo(const QVariantMap &info)
+void WebPage::setContextInfo(const QVariantMap &info)
 {
     if (m_contextInfo == info)
         return;
@@ -1305,34 +1305,34 @@ void WPEWebPage::setContextInfo(const QVariantMap &info)
     emit contextInfoChanged();
 }
 
-void WPEWebPage::clearContextInfo()
+void WebPage::clearContextInfo()
 {
     setContextInfo(QVariantMap());
 }
 
-bool WPEWebPage::adBlockEnabled() const
+bool WebPage::adBlockEnabled() const
 {
     return s_adBlockEnabled;
 }
 
-void WPEWebPage::setAdBlockEnabled(bool enabled)
+void WebPage::setAdBlockEnabled(bool enabled)
 {
     applyAdBlockEnabledGlobally(enabled);
 }
 
-bool WPEWebPage::cookieBannerBlockingEnabled() const
+bool WebPage::cookieBannerBlockingEnabled() const
 {
     return s_cookieBannerBlockingEnabled;
 }
 
-void WPEWebPage::setCookieBannerBlockingEnabled(bool enabled)
+void WebPage::setCookieBannerBlockingEnabled(bool enabled)
 {
     applyCookieBannerBlockingGlobally(enabled);
 }
 
 // --- Long press, text selection, select menus and page dialogs -------------------------------------------------
 
-void WPEWebPage::longPressed(const QPointF &position)
+void WebPage::longPressed(const QPointF &position)
 {
     const qreal scale = deviceScaleFactor();
     QString script = QString::fromLatin1(kLongPressScript).arg(position.x() / scale, 0, 'f', 2).arg(position.y() / scale, 0, 'f', 2);
@@ -1353,11 +1353,11 @@ void WPEWebPage::longPressed(const QPointF &position)
     });
 }
 
-void WPEWebPage::pageMessage(const QString &kind, const QJsonValue &data)
+void WebPage::pageMessage(const QString &kind, const QJsonValue &data)
 {
     static const bool log = !qgetenv("PACIFIC_LOG_ENGINE").isEmpty();
     if (log)
-        qWarning("WPEWebPage: page message %s", qPrintable(kind));
+        qWarning("WebPage: page message %s", qPrintable(kind));
     if (kind == QLatin1String("scroll")) {
         QJsonArray position = data.toArray();
         if (position.size() == 3)
@@ -1380,7 +1380,7 @@ void WPEWebPage::pageMessage(const QString &kind, const QJsonValue &data)
     }
 }
 
-void WPEWebPage::moveSelectionEdge(bool start, qreal cssX, qreal cssY)
+void WebPage::moveSelectionEdge(bool start, qreal cssX, qreal cssY)
 {
     // These arrive in the interface's pixels too, whatever the parameters are called.
     const qreal scale = deviceScaleFactor();
@@ -1390,13 +1390,13 @@ void WPEWebPage::moveSelectionEdge(bool start, qreal cssX, qreal cssY)
     evaluate(script);
 }
 
-void WPEWebPage::findResult(int current, int total)
+void WebPage::findResult(int current, int total)
 {
     Q_UNUSED(current);
     setFindInPageHasResult(total != 0);
 }
 
-void WPEWebPage::selectMenuRequested(const QByteArray &optionsJson)
+void WebPage::selectMenuRequested(const QByteArray &optionsJson)
 {
     // The interface's menu is a plain list, so group headings are left out and an option that cannot be chosen
     // is too.
@@ -1419,7 +1419,7 @@ void WPEWebPage::selectMenuRequested(const QByteArray &optionsJson)
     openSelectMenu(labels, selected);
 }
 
-void WPEWebPage::dialogRequested(int kind, const QByteArray &json)
+void WebPage::dialogRequested(int kind, const QByteArray &json)
 {
     QJsonObject dialog = QJsonDocument::fromJson(json).object();
     m_jsDialogKind = kind;
@@ -1428,7 +1428,7 @@ void WPEWebPage::dialogRequested(int kind, const QByteArray &json)
     emit jsDialogChanged();
 }
 
-QString WPEWebPage::jsDialogKind() const
+QString WebPage::jsDialogKind() const
 {
     switch (m_jsDialogKind) {
     case LB_EMBED_DIALOG_ALERT:
@@ -1442,7 +1442,7 @@ QString WPEWebPage::jsDialogKind() const
     }
 }
 
-void WPEWebPage::resolveJsDialog(bool accepted, const QString &text)
+void WebPage::resolveJsDialog(bool accepted, const QString &text)
 {
     if (m_jsDialogKind < 0)
         return;
@@ -1453,14 +1453,14 @@ void WPEWebPage::resolveJsDialog(bool accepted, const QString &text)
     emit jsDialogChanged();
 }
 
-void WPEWebPage::applyDarkModeGlobally(bool dark)
+void WebPage::applyDarkModeGlobally(bool dark)
 {
     LadybirdEngine::instance()->send(0, LB_EMBED_SET_DARK_MODE, dark ? 1 : 0);
 }
 
 // --- Pickers, the file chooser, where the page is scrolled to, engine data -----------------------------------
 
-void WPEWebPage::closeInputPicker()
+void WebPage::closeInputPicker()
 {
     m_inputPickerIsEngineColor = false;
     if (m_inputPickerActive) {
@@ -1469,7 +1469,7 @@ void WPEWebPage::closeInputPicker()
     }
 }
 
-void WPEWebPage::tapped(const QPointF &position)
+void WebPage::tapped(const QPointF &position)
 {
     const qreal scale = deviceScaleFactor();
     QString script = QString::fromLatin1(kInputPickerScript).arg(position.x() / scale, 0, 'f', 2).arg(position.y() / scale, 0, 'f', 2);
@@ -1484,13 +1484,13 @@ void WPEWebPage::tapped(const QPointF &position)
     });
 }
 
-void WPEWebPage::colorPickerRequested(const QString &color)
+void WebPage::colorPickerRequested(const QString &color)
 {
     m_inputPickerIsEngineColor = true;
     openInputPicker(QStringLiteral("color"), color, QString(), QString(), QString());
 }
 
-void WPEWebPage::filePickerRequested(bool multiple)
+void WebPage::filePickerRequested(bool multiple)
 {
     if (m_fileChooserSelectMultiple != multiple) {
         m_fileChooserSelectMultiple = multiple;
@@ -1500,12 +1500,12 @@ void WPEWebPage::filePickerRequested(bool multiple)
     emit fileChooserActiveChanged();
 }
 
-void WPEWebPage::clearEngineDataGlobally(bool cache, bool siteData)
+void WebPage::clearEngineDataGlobally(bool cache, bool siteData)
 {
     LadybirdEngine::instance()->send(0, LB_EMBED_CLEAR_DATA, (cache ? LB_EMBED_CLEAR_CACHE : 0) | (siteData ? LB_EMBED_CLEAR_SITE_DATA : 0));
 }
 
-void WPEWebPage::pageColorChanged(int kind, const QString &color)
+void WebPage::pageColorChanged(int kind, const QString &color)
 {
     QColor before = surroundColor();
     if (kind == LB_EMBED_PAGE_COLOR_THEME)

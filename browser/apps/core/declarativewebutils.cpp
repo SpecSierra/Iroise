@@ -102,7 +102,6 @@ void DeclarativeWebUtils::setFirstUseDone(bool firstUseDone)
 
 qreal DeclarativeWebUtils::cssPixelRatio() const
 {
-    // WPE: return screen pixel ratio
     QScreen *screen = QGuiApplication::primaryScreen();
     return screen ? screen->devicePixelRatio() : 1.0;
 }

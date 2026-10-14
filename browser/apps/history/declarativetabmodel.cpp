@@ -17,7 +17,7 @@
 #include <QStringList>
 #include <QUrl>
 
-#include "WPEWebPage.h"
+#include "WebPage.h"
 #include "declarativetabmodel.h"
 
 #ifndef DEBUG_LOGS
@@ -510,7 +510,7 @@ void DeclarativeTabModel::updateThumbnailPath(int tabId, const QString &path)
 
 void DeclarativeTabModel::onUrlChanged()
 {
-    WPEWebPage *webPage = qobject_cast<WPEWebPage *>(sender());
+    WebPage *webPage = qobject_cast<WebPage *>(sender());
     if (webPage) {
         QString url = webPage->url().toString();
         int tabId = webPage->tabId();
@@ -521,15 +521,9 @@ void DeclarativeTabModel::onUrlChanged()
         }
     }
 }
-
-void DeclarativeTabModel::onDesktopModeChanged()
-{
-    // WPE: desktop mode concept doesn't apply; no-op
-}
-
 void DeclarativeTabModel::onTitleChanged()
 {
-    WPEWebPage *webPage = qobject_cast<WPEWebPage *>(sender());
+    WebPage *webPage = qobject_cast<WebPage *>(sender());
     if (webPage) {
         QString title = webPage->title();
         int tabId = webPage->tabId();

@@ -7,7 +7,7 @@
 #include "dbmanager.h"
 #include "faviconmanager.h"
 #include "../browser/settings/credentialstore.h"
-#include "WPEWebPage.h"
+#include "WebPage.h"
 
 #include <QCoreApplication>
 #include <QVariant>
@@ -32,7 +32,7 @@ void SettingManager::setAmbienceDark(bool dark)
     if (m_ambienceDark == dark)
         return;
     m_ambienceDark = dark;
-    WPEWebPage::applyDarkModeGlobally(dark);
+    WebPage::applyDarkModeGlobally(dark);
 }
 int SettingManager::toolbarSmall()
 {
@@ -59,7 +59,7 @@ void SettingManager::clearHistory(int period)
 
 void SettingManager::clearCookiesAndSiteData()
 {
-    WPEWebPage::clearEngineDataGlobally(false, true);
+    WebPage::clearEngineDataGlobally(false, true);
 }
 
 void SettingManager::clearPasswords()
@@ -70,12 +70,12 @@ void SettingManager::clearPasswords()
 
 void SettingManager::clearCache()
 {
-    WPEWebPage::clearEngineDataGlobally(true, false);
+    WebPage::clearEngineDataGlobally(true, false);
 }
 
 void SettingManager::clearSitePermissions()
 {
-    WPEWebPage::clearPermissionDecisions();
+    WebPage::clearPermissionDecisions();
 }
 
 void SettingManager::removeAllTabs()
@@ -114,11 +114,11 @@ void SettingManager::calculateSiteDataSize(QJSValue callback)
 }
 bool SettingManager::isAdBlockEnabled() const
 {
-    const QList<WPEWebPage *> &pages = WPEWebPage::liveInstances();
+    const QList<WebPage *> &pages = WebPage::liveInstances();
     return !pages.isEmpty() && pages.first()->adBlockEnabled();
 }
 
 void SettingManager::setAdBlockEnabled(bool enabled)
 {
-    WPEWebPage::applyAdBlockEnabledGlobally(enabled);
+    WebPage::applyAdBlockEnabledGlobally(enabled);
 }

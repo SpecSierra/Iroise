@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#include "WPEQtView.h"
+#include "EngineView.h"
 
 #include "DirectFrameTextures.h"
 
@@ -28,7 +28,7 @@
 static const int longPressMilliseconds = 500;
 static const qreal touchSlop = 24;
 
-WPEQtView::WPEQtView(QQuickItem* parent)
+EngineView::EngineView(QQuickItem* parent)
     : QQuickItem(parent)
 {
     setFlag(ItemHasContents, true);
@@ -50,19 +50,19 @@ WPEQtView::WPEQtView(QQuickItem* parent)
     });
 }
 
-WPEQtView::~WPEQtView()
+EngineView::~EngineView()
 {
     if (m_view)
         LadybirdEngine::instance()->removeView(m_view);
 }
 
-void WPEQtView::componentComplete()
+void EngineView::componentComplete()
 {
     QQuickItem::componentComplete();
     ensureEngineView();
 }
 
-void WPEQtView::ensureEngineView()
+void EngineView::ensureEngineView()
 {
     // The engine lays a page out for the size it is created with, so wait until we know ours.
     if (m_view || width() < 1 || height() < 1)
@@ -84,13 +84,13 @@ void WPEQtView::ensureEngineView()
     }
 }
 
-void WPEQtView::sendToEngine(lb_embed_message_type type, int a, int b, int c, int d, const QByteArray& text)
+void EngineView::sendToEngine(lb_embed_message_type type, int a, int b, int c, int d, const QByteArray& text)
 {
     if (m_view)
         LadybirdEngine::instance()->send(m_view, type, a, b, c, d, 0, text);
 }
 
-void WPEQtView::setUrl(const QUrl& url)
+void EngineView::setUrl(const QUrl& url)
 {
     if (!url.isValid() || url == m_url)
         return;
@@ -104,7 +104,7 @@ void WPEQtView::setUrl(const QUrl& url)
     sendToEngine(LB_EMBED_LOAD, 0, 0, 0, 0, url.toString(QUrl::FullyEncoded).toUtf8());
 }
 
-void WPEQtView::setDeviceScaleFactor(qreal scale)
+void EngineView::setDeviceScaleFactor(qreal scale)
 {
     if (scale < 1 || qFuzzyCompare(scale, m_deviceScaleFactor))
         return;
@@ -113,7 +113,7 @@ void WPEQtView::setDeviceScaleFactor(qreal scale)
         LadybirdEngine::instance()->send(m_view, LB_EMBED_RESIZE, static_cast<int>(width()), static_cast<int>(height()), 0, 0, m_deviceScaleFactor);
 }
 
-void WPEQtView::setWebKitVisible(bool visible)
+void EngineView::setEngineVisible(bool visible)
 {
     if (visible == m_engineVisible)
         return;
@@ -121,11 +121,11 @@ void WPEQtView::setWebKitVisible(bool visible)
     sendToEngine(LB_EMBED_SET_VISIBLE, visible ? 1 : 0);
 }
 
-void WPEQtView::goBack() { sendToEngine(LB_EMBED_GO_BACK); }
-void WPEQtView::goForward() { sendToEngine(LB_EMBED_GO_FORWARD); }
-void WPEQtView::reload() { sendToEngine(LB_EMBED_RELOAD); }
-void WPEQtView::stop() { sendToEngine(LB_EMBED_STOP); }
-void WPEQtView::evaluate(const QString& expression, std::function<void(const QJsonValue&)> callback)
+void EngineView::goBack() { sendToEngine(LB_EMBED_GO_BACK); }
+void EngineView::goForward() { sendToEngine(LB_EMBED_GO_FORWARD); }
+void EngineView::reload() { sendToEngine(LB_EMBED_RELOAD); }
+void EngineView::stop() { sendToEngine(LB_EMBED_STOP); }
+void EngineView::evaluate(const QString& expression, std::function<void(const QJsonValue&)> callback)
 {
     if (!m_view)
         return;
@@ -138,7 +138,7 @@ void WPEQtView::evaluate(const QString& expression, std::function<void(const QJs
     sendToEngine(LB_EMBED_RUN_SCRIPT, 0, 0, 0, 0, wrapped.toUtf8());
 }
 
-void WPEQtView::runJavaScript(const QString& script, const QJSValue& callback)
+void EngineView::runJavaScript(const QString& script, const QJSValue& callback)
 {
     if (!callback.isCallable()) {
         evaluate(script);
@@ -150,7 +150,7 @@ void WPEQtView::runJavaScript(const QString& script, const QJSValue& callback)
     });
 }
 
-void WPEQtView::setLoadProgress(int progress)
+void EngineView::setLoadProgress(int progress)
 {
     if (progress == m_loadProgress)
         return;
@@ -158,11 +158,11 @@ void WPEQtView::setLoadProgress(int progress)
     emit loadProgressChanged();
 }
 
-void WPEQtView::engineFrame(const LadybirdFrame& frame)
+void EngineView::engineFrame(const LadybirdFrame& frame)
 {
     static const bool logFrames = !qgetenv("PACIFIC_LOG_ENGINE").isEmpty();
     if (logFrames && (frame.pitch != m_frame.pitch || frame.bufferSize != m_frame.bufferSize || frame.paintedSize != m_frame.paintedSize)) {
-        qWarning("WPEQtView: frame geometry pitch=%d buffer=%dx%d painted=%dx%d item=%dx%d", frame.pitch,
+        qWarning("EngineView: frame geometry pitch=%d buffer=%dx%d painted=%dx%d item=%dx%d", frame.pitch,
             frame.bufferSize.width(), frame.bufferSize.height(), frame.paintedSize.width(), frame.paintedSize.height(),
             int(width()), int(height()));
     }
@@ -171,7 +171,7 @@ void WPEQtView::engineFrame(const LadybirdFrame& frame)
     emit frameArrived();
 }
 
-void WPEQtView::engineBufferGone(quint64 bufferId)
+void EngineView::engineBufferGone(quint64 bufferId)
 {
     if (m_frame.bufferId == bufferId)
         m_frame = LadybirdFrame();
@@ -180,7 +180,7 @@ void WPEQtView::engineBufferGone(quint64 bufferId)
     update();
 }
 
-void WPEQtView::engineMessage(const lb_embed_header& header, const QString& text)
+void EngineView::engineMessage(const lb_embed_header& header, const QString& text)
 {
     switch (header.type) {
     case LB_EMBED_URL: {
@@ -246,7 +246,7 @@ void WPEQtView::engineMessage(const lb_embed_header& header, const QString& text
             m_scripts.clear();
         // The engine does not report how far a load has got, only that it started and that it finished.
         setLoadProgress(m_loading ? 30 : 100);
-        WPEQtViewLoadRequest request(m_url, m_loading ? LoadStartedStatus : LoadSucceededStatus);
+        EngineViewLoadRequest request(m_url, m_loading ? LoadStartedStatus : LoadSucceededStatus);
         emit loadingChanged(&request);
         break;
     }
@@ -274,7 +274,7 @@ void WPEQtView::engineMessage(const lb_embed_header& header, const QString& text
     }
 }
 
-void WPEQtView::geometryChanged(const QRectF& newGeometry, const QRectF& oldGeometry)
+void EngineView::geometryChanged(const QRectF& newGeometry, const QRectF& oldGeometry)
 {
     QQuickItem::geometryChanged(newGeometry, oldGeometry);
     if (newGeometry.size() == oldGeometry.size() || newGeometry.width() < 1 || newGeometry.height() < 1)
@@ -287,7 +287,7 @@ void WPEQtView::geometryChanged(const QRectF& newGeometry, const QRectF& oldGeom
     LadybirdEngine::instance()->send(m_view, LB_EMBED_RESIZE, static_cast<int>(newGeometry.width()), static_cast<int>(newGeometry.height()), 0, 0, m_deviceScaleFactor);
 }
 
-QSGNode* WPEQtView::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*)
+QSGNode* EngineView::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*)
 {
     QSGSimpleTextureNode* node = static_cast<QSGSimpleTextureNode*>(oldNode);
 
@@ -307,7 +307,7 @@ QSGNode* WPEQtView::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*)
     }
     if (m_frame.pixels && !m_loggedPath) {
         m_loggedPath = true;
-        qWarning("WPEQtView: frames are %s", direct ? "shown from the engine's buffers, without a copy" : "uploaded to a texture");
+        qWarning("EngineView: frames are %s", direct ? "shown from the engine's buffers, without a copy" : "uploaded to a texture");
     }
     if (direct) {
         if (m_texture) {
@@ -386,7 +386,7 @@ QSGNode* WPEQtView::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*)
     return node;
 }
 
-void WPEQtView::releaseResources()
+void EngineView::releaseResources()
 {
     // NB: The scene graph deletes textures it was given through a node only on its own thread.
     if (m_texture)
@@ -400,7 +400,7 @@ void WPEQtView::releaseResources()
     m_directGeneration = 0;
 }
 
-void WPEQtView::abandonTouch()
+void EngineView::abandonTouch()
 {
     m_longPressTimer.stop();
     if (m_touchId >= 0 && !m_touchConsumed)
@@ -410,13 +410,13 @@ void WPEQtView::abandonTouch()
     m_pinching = false;
 }
 
-void WPEQtView::touchUngrabEvent()
+void EngineView::touchUngrabEvent()
 {
     abandonTouch();
     QQuickItem::touchUngrabEvent();
 }
 
-void WPEQtView::touchEvent(QTouchEvent* event)
+void EngineView::touchEvent(QTouchEvent* event)
 {
     event->accept();
     if (event->type() == QEvent::TouchCancel) {

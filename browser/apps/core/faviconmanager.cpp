@@ -23,7 +23,7 @@
 
 #include "faviconmanager.h"
 
-#include "WPEWebPage.h"
+#include "WebPage.h"
 
 FaviconManager::FaviconManager(QObject *parent)
     : QObject(parent)
@@ -207,7 +207,7 @@ QString FaviconManager::get(const QString &type, const QString &hostname)
     return isRealIcon(favicon) ? favicon : QString();
 }
 
-void FaviconManager::grabIcon(const QString &type, WPEWebPage *webPage, const QSize &size)
+void FaviconManager::grabIcon(const QString &type, WebPage *webPage, const QSize &size)
 {
     if (!webPage)
         return;
@@ -255,7 +255,7 @@ void FaviconManager::grabIcon(const QString &type, WPEWebPage *webPage, const QS
 // generic icon.
 void FaviconManager::fetchCandidate(const QString &type, const QString &pageUrl,
                                     const QStringList &candidates, int index,
-                                    QPointer<WPEWebPage> webPage, const QSize &size,
+                                    QPointer<WebPage> webPage, const QSize &size,
                                     bool allowThumbnailFallback)
 {
     if (index < 0 || index >= candidates.count()) {
@@ -289,14 +289,14 @@ void FaviconManager::fetchCandidate(const QString &type, const QString &pageUrl,
     dataFetcher->fetch(candidates.at(index));
 }
 
-void FaviconManager::grabThumbnailFallback(const QString &type, QPointer<WPEWebPage> webPage,
+void FaviconManager::grabThumbnailFallback(const QString &type, QPointer<WebPage> webPage,
                                            const QSize &size)
 {
     if (!webPage)
         return;
 
     std::shared_ptr<QMetaObject::Connection> thumbConn = std::make_shared<QMetaObject::Connection>();
-    *thumbConn = connect(webPage.data(), &WPEWebPage::thumbnailResult, this,
+    *thumbConn = connect(webPage.data(), &WebPage::thumbnailResult, this,
                          [this, type, webPage, thumbConn](const QString &data) {
         QObject::disconnect(*thumbConn);
         if (!webPage || data.isEmpty())

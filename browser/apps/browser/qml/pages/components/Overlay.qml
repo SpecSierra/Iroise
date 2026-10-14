@@ -63,7 +63,7 @@ Shared.Background {
         if (url == "about:settings") {
             pageStack.animatorPush(Qt.resolvedUrl("../SettingsPage.qml"))
         } else {
-            // WPE: search keywords -> search URL on the configured engine,
+            // Search keywords -> search URL on the configured engine,
             // bare host -> https:// (see UrlUtils.js)
             var pageUrl = UrlUtils.normalize(url, SearchEngineModel.searchUrlTemplate(searchEngineConf.value))
             console.log("[QML-LOAD] resolved pageUrl=" + pageUrl)

@@ -116,7 +116,7 @@ void SearchEngineModel::componentComplete()
 }
 
 // Called for every page that advertises an OpenSearch description (see the
-// searchEngineBridge in WPEWebPage), so it runs often and must stay cheap and
+// searchEngineBridge in WebPage), so it runs often and must stay cheap and
 // idempotent. Dedupes on both name and description URL: the same service is
 // commonly advertised under a slightly different <link title> per page.
 void SearchEngineModel::add(const QString &title, const QString &url)

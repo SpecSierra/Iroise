@@ -6,10 +6,8 @@ import QtQuick 2.2
 import Sailfish.Silica 1.0
 
 // Native pickers for HTML5 <input type=date|month|week|time|datetime-local|color>.
-// WebKit has no native WPE picker for these (createColorPicker/createDateTimePicker
-// return nullptr in the WPE port), so the engine's kInputPickerBridge userscript
-// forwards each activation to WPEWebPage, which raises inputPicker* on its
-// contentItem. This non-visual item watches that state and drives the matching
+// A tap on a date or time input (found by a script in the page) or the engine's
+// colour picker request raises inputPicker* on the page (WebPage). This non-visual item watches that state and drives the matching
 // Silica dialog, then writes the chosen value back with resolveInputPicker()
 // (or cancelInputPicker() on dismiss). Same NOTIFY-property bridge as
 // SelectMenuOverlay.

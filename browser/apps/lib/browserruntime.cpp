@@ -10,9 +10,8 @@
 #include "privatetabmodel.h"
 #include "declarativehistorymodel.h"
 #include "declarativetabfiltermodel.h"
-#include "WPEWebContainer.h"
-#include "WPEWebPage.h"
-#include "WPEWebPageCreator.h"
+#include "WebContainer.h"
+#include "WebPage.h"
 #include "declarativeloginmodel.h"
 #include "loginfiltermodel.h"
 #include "datafetcher.h"
@@ -71,9 +70,9 @@ void requestActivePageRenderRecovery(QQuickView *view, const char *reason)
         return;
     }
 
-    const QList<WPEWebPage *> pages = WPEWebPage::liveInstances();
+    const QList<WebPage *> pages = WebPage::liveInstances();
     int resumedPageCount = 0;
-    for (WPEWebPage *page : pages) {
+    for (WebPage *page : pages) {
         if (!page || !page->active()) {
             continue;
         }
@@ -82,7 +81,7 @@ void requestActivePageRenderRecovery(QQuickView *view, const char *reason)
         ++resumedPageCount;
     }
 
-    // NB: Atlantic also reloaded the whole interface here when no page existed, to recover from a WebKit render
+    // NB: Atlantic also reloaded the whole interface here when no page existed, to recover from a render
     //     stall. That fired during start-up, before the first page was made, and took the application down.
     if (resumedPageCount > 0)
         view->update();
@@ -188,9 +187,8 @@ static void registerBrowserQmlTypes()
     qmlRegisterSingletonType<BookmarkManager>(uri, 1, 0, "BookmarkManager", bookmarkmanager_factory);
     qmlRegisterSingletonType<FaviconManager>(uri, 1, 0, "FaviconManager", faviconmanager_factory);
     qmlRegisterUncreatableType<DownloadModel>(uri, 1, 0, "DownloadModel", "");
-    qmlRegisterType<WPEWebContainer>(uri, 1, 0, "WebContainer");
-    qmlRegisterType<WPEWebPage>(uri, 1, 0, "WebPage");
-    qmlRegisterType<WPEWebPageCreator>(uri, 1, 0, "WebPageCreator");
+    qmlRegisterType<WebContainer>(uri, 1, 0, "WebContainer");
+    qmlRegisterType<WebPage>(uri, 1, 0, "WebPage");
     qmlRegisterType<DesktopBookmarkWriter>(uri, 1, 0, "DesktopBookmarkWriter");
     qmlRegisterType<DataFetcher>(uri, 1, 0, "DataFetcher");
     qmlRegisterType<InputRegion>(uri, 1, 0, "InputRegion");

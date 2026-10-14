@@ -28,7 +28,7 @@ import Sailfish.Browser 1.0
 CoverBackground {
     id: cover
 
-    // WPEWebContainer. Null while the browser is tearing down.
+    // WebContainer. Null while the browser is tearing down.
     property QtObject webView
 
     readonly property QtObject tabModel: webView ? webView.tabModel : null

@@ -39,7 +39,7 @@ public:
     explicit SearchEngineModel(QObject *parent = 0);
     virtual ~SearchEngineModel();
 
-    // The QML singleton, so the OpenSearch discovery bridge in WPEWebPage can
+    // The QML singleton, so the OpenSearch discovery bridge in WebPage can
     // offer a page's search service without routing it through QML. Null until
     // the singleton is constructed (and again after it is destroyed).
     static SearchEngineModel *instance();

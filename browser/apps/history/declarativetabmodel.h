@@ -79,7 +79,6 @@ public:
 public slots:
     void updateThumbnailPath(int tabId, const QString &path);
     void onUrlChanged();
-    void onDesktopModeChanged();
     void onTitleChanged();
 
 signals:

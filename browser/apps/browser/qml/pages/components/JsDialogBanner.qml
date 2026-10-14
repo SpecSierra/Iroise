@@ -7,7 +7,7 @@ import Sailfish.Silica 1.0
 
 // A page's alert(), confirm() or prompt(). The page's script waits for the
 // answer, so the rest of the page is covered until one is given. Driven
-// entirely by the bound webView's contentItem (see WPEWebPage::resolveJsDialog).
+// entirely by the bound webView's contentItem (see WebPage::resolveJsDialog).
 Item {
     id: jsDialog
 

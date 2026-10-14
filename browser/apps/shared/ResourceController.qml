@@ -15,7 +15,6 @@ import QtQuick 2.0
 import Nemo.KeepAlive 1.2
 import Nemo.DBus 2.0
 import Nemo.Policy 1.0
-import Nemo.Connectivity 1.0
 
 // QtObject cannot have children
 Item {
@@ -24,31 +23,12 @@ Item {
     property bool audioActive
     readonly property alias displayOff: screenBlanked.blanked
     property bool background
-
-    property string _mediaState: "pause"
-    property string _lastStateOwner
-    property string _lastMetaOwner
-    property bool _isAudioStream
-    property bool _isVideoStream
-    property bool _webrtcAudioActive
-    property bool _webrtcVideoActive
     property bool _htmlAudioActive
     property bool _htmlVideoActive
 
     function calculateStatus() {
-        var video = _webrtcVideoActive || _htmlVideoActive
-        var audio = _webrtcAudioActive || _htmlAudioActive || video
-
-        if (_mediaState === "play" && _lastStateOwner === _lastMetaOwner) {
-            if (_isVideoStream) {
-                video = true
-                audio = true
-            }
-            if (_isAudioStream) {
-                audio = true
-            }
-        }
-
+        var video = _htmlVideoActive
+        var audio = _htmlAudioActive || video
         if (videoActive !== video) {
             videoActive = video
         }
@@ -84,19 +64,6 @@ Item {
         }
     }
 
-    // WPE: Gecko WebEngine observer removed — WPE handles network internally
-
-    ConnectionHelper {
-        id: connectionHelper
-
-        readonly property bool connected: status >= ConnectionHelper.Connected
-
-        function notifyOfflineStatus() {
-            // WPE: network status handled internally by WPE
-        }
-
-        onConnectedChanged: notifyOfflineStatus()
-    }
 
     DBusInterface {
         id: screenBlanked

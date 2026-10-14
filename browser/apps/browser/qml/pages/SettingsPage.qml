@@ -26,12 +26,11 @@ Page {
         z: -1
     }
 
-    // WPE: color scheme constants (outside QtObject — QML forbids uppercase property names)
+    // Color scheme constants (outside QtObject — QML forbids uppercase property names)
     readonly property int _prefersLightMode: 0
     readonly property int _prefersDarkMode: 1
     readonly property int _followsAmbience: 2
 
-    // WPE: stub for Gecko WebEngineSettings — wired to Nemo.Configuration
     QtObject {
         id: webEngineSettings
         property alias colorScheme: colorSchemeConf.value

@@ -285,7 +285,7 @@ Page {
 
         onWindowChanged: webView.chromeWindow = window
 
-        // Height of the keyboard to reserve in the WebKit layout viewport, so
+        // Height of the keyboard to reserve in the page's layout viewport, so
         // an input at the bottom of the page lays out ABOVE the keyboard
         // instead of behind it. Consumed by webView._desiredContentBottomInset.
         //
@@ -293,11 +293,6 @@ Page {
         // state, after the show animation — so the viewport relayouts exactly
         // once per show/hide instead of on every animation frame. Same
         // discipline as the toolbar inset's "chromeVisible" gating.
-        //
-        // This used to be a PropertyChanges onto contentItem.virtualKeyboardHeight,
-        // a property left over from the EmbedLite port that the WPE content item
-        // never had — it only ever logged "Cannot assign to non-existent
-        // property" and the keyboard covered bottom inputs. Do not reinstate it.
         readonly property real contentInset:
             (opened && webView.enabled) ? imSize : 0
     }
@@ -344,7 +339,7 @@ Page {
     // sides of the notch) and filled with the page's own colour, so that the
     // page looks as if it reached the edge of the screen. The same fill is
     // what shows for a moment wherever the page has not painted yet.
-    // WPEWebContainer sizes itself and its pages from its parent item, so
+    // WebContainer sizes itself and its pages from its parent item, so
     // insetting this frame is all it takes. The chrome (Overlay) stays at the
     // page edges, so fullscreenHeight is still the page height.
     readonly property real _notchInset: cropNotchConfig.value && Screen.hasCutouts
@@ -379,7 +374,7 @@ Page {
             rotationHandler: browserPage
 
             // Bottom URL-bar viewport inset (dconf: viewport_inset_toolbar, default
-            // OFF). When enabled, reserve the toolbar strip in the WebKit layout
+            // OFF). When enabled, reserve the toolbar strip in the page's layout
             // viewport while the chrome is settled-visible, so position:fixed bottom
             // content (hover buttons, cookie bars, chat bubbles) lays out above the
             // URL bar instead of behind it. Gated on the *settled* "chromeVisible"
@@ -548,8 +543,7 @@ Page {
 
         window: webView.chromeWindow
         orientation: browserPage.orientation // Qt and Silica orientations match
-        // WPE uses a single QWindow for both chrome and web content (unlike Gecko which
-        // used a separate QWindow for the web view).  Always expose the full screen so
+        // Chrome and web content share one QWindow. Always expose the full screen so
         // Wayland delivers touch events for the web content area to this window.
         overlayMask: Qt.rect(0, 0, browserPage.width, browserPage.height)
         closeButtonMask: fullscreenClose.visible ? Qt.rect(fullscreenClose.x, fullscreenClose.y,
