@@ -737,8 +737,16 @@ private:
         }
         if (header.type == LB_EMBED_SET_DARK_MODE) {
             m_dark_mode = header.a != 0;
-            for (auto& entry : m_views)
-                entry.value->set_preferred_color_scheme(m_dark_mode ? Web::CSS::PreferredColorScheme::Dark : Web::CSS::PreferredColorScheme::Light);
+            // NB: Every page that comes to host a tab gets the application's colour scheme again
+            //     (Application::apply_view_options), so a view's own setting would last until its next navigation.
+            //     The application's is only reachable through its colour scheme menu.
+            auto wanted = m_dark_mode ? "Dark"sv : "Light"sv;
+            for (auto& item : WebView::Application::the().color_scheme_menu().items()) {
+                if (auto* action = item.get_pointer<NonnullRefPtr<WebView::Action>>(); action && (*action)->text() == wanted) {
+                    (*action)->set_checked(true);
+                    (*action)->activate();
+                }
+            }
             return;
         }
         if (header.type == LB_EMBED_SET_BLOCKER_FILTERS) {
