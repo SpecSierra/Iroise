@@ -31,10 +31,6 @@
 #include <LibWebView/URL.h>
 #include <LibWebView/Utilities.h>
 #include <UI/SFOS/EmbeddedHost.h>
-#include <UI/SFOS/WaylandWindow.h>
-#ifdef USE_VULKAN_DMABUF_IMAGES
-#    include <UI/SFOS/VulkanPresenter.h>
-#endif
 
 namespace Ladybird {
 
@@ -44,24 +40,18 @@ class Application final : public WebView::Application {
 private:
     Application() = default;
 
-    // Never hand off to an already running instance: a windowed run is a throwaway probe, and an embedded engine
-    // belongs to the app that started it.
+    // Never hand off to an already running instance: an embedded engine belongs to the app that started it.
     virtual bool should_coordinate_browser_process() const override { return false; }
-    // A windowed run leaves nothing behind. An embedded engine is somebody's browser: its settings, its filter
+    // A headless run leaves nothing behind. An embedded engine is somebody's browser: its settings, its filter
     // lists and its site data have to be there next time.
-    virtual bool should_use_temporary_profile_by_default() const override { return !is_embedded(); }
-
-public:
-    static bool is_embedded() { return Core::Environment::has(StringView { LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE, strlen(LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE) }); }
-
-private:
+    virtual bool should_use_temporary_profile_by_default() const override { return browser_options().headless_mode.has_value(); }
 
     // We only say how far the finger moved and when it lifted; the compositor makes the fling.
     virtual bool platform_reports_scroll_momentum() const override { return false; }
 };
 
-// A HeadlessWebView already knows how to run a page without a toolkit. This one also hands its frames to whoever
-// shows them (our own window, or the Silica app that embeds us) and turns one-finger touches into taps and scrolls.
+// A HeadlessWebView already knows how to run a page without a toolkit. This one also hands its frames to the Silica
+// app that shows them and turns one-finger touches into taps and scrolls.
 class PresentedWebView final : public WebView::HeadlessWebView {
 public:
     enum class TouchPhase {
@@ -80,14 +70,7 @@ public:
         return view;
     }
 
-    // Shows a frame and says where it went, or returns an empty Optional if it cannot take one right now.
-    Function<Optional<StringView>(Gfx::SharedImageBuffer const&, Gfx::IntSize painted_size)> on_present;
-
-    void present_pending_frame()
-    {
-        if (m_has_unpresented_frame)
-            present();
-    }
+    Function<void(Gfx::LinuxDmaBufHandle const&, Gfx::IntSize painted_size)> on_present;
 
     void resize(Gfx::IntSize size, double device_pixel_ratio)
     {
@@ -160,16 +143,15 @@ private:
     {
         if (!m_has_usable_bitmap || !m_front_bitmap.shared_image_buffer || !on_present)
             return;
-
-        auto shown_by = on_present(*m_front_bitmap.shared_image_buffer, m_front_bitmap.last_painted_size.to_type<int>());
-        m_has_unpresented_frame = !shown_by.has_value();
-        if (m_has_unpresented_frame)
+        auto const* dmabuf = m_front_bitmap.shared_image_buffer->linux_dmabuf_handle();
+        if (!dmabuf)
             return;
+        on_present(*dmabuf, m_front_bitmap.last_painted_size.to_type<int>());
 
         ++m_frames_presented;
         if (auto elapsed = m_frame_timer.elapsed_milliseconds(); elapsed >= 1000) {
             if (s_log_frame_rate)
-                warnln("ladybird-sfos: {} fps from {}", m_frames_presented * 1000 / elapsed, *shown_by);
+                warnln("ladybird-sfos: {} fps", m_frames_presented * 1000 / elapsed);
             m_frames_presented = 0;
             m_frame_timer.start();
         }
@@ -198,8 +180,6 @@ private:
 
     static inline bool s_log_frame_rate = Core::Environment::has("LADYBIRD_SFOS_LOG_FPS"sv);
 
-    bool m_has_unpresented_frame { false };
-
     Optional<int> m_active_touch;
     Gfx::IntPoint m_touch_start;
     Gfx::IntPoint m_touch_last;
@@ -209,83 +189,13 @@ private:
     i64 m_frames_presented { 0 };
 };
 
-static double device_pixel_ratio_from_environment()
-{
-    // The J2 panel is 1032 device pixels wide; 2.5 gives a 413 CSS pixel viewport.
-    if (auto value = Core::Environment::get("LADYBIRD_SFOS_DPR"sv); value.has_value()) {
-        if (auto ratio = value->to_number<double>(); ratio.has_value() && *ratio >= 1)
-            return *ratio;
-    }
-    return 2.5;
-}
-
 static ErrorOr<Core::AnonymousBuffer> load_theme()
 {
     auto theme_path = LexicalPath::join(WebView::s_ladybird_resource_root, "themes"sv, "Default.ini"sv);
     return Gfx::load_system_theme(theme_path.string());
 }
 
-// Our own full-screen window: Vulkan when the frames are shared GPU images, wl_shm copies otherwise.
-static ErrorOr<int> run_windowed(Application& app)
-{
-    auto window = TRY(WaylandWindow::create());
-    window->on_disconnect = [] { Core::EventLoop::current().quit(1); };
-
-    auto view = PresentedWebView::create(TRY(load_theme()), window->size(), device_pixel_ratio_from_environment());
-
-#ifdef USE_VULKAN_DMABUF_IMAGES
-    OwnPtr<VulkanPresenter> vulkan_presenter;
-    if (!Core::Environment::has("LADYBIRD_SFOS_CPU_PRESENT"sv)) {
-        if (auto presenter = VulkanPresenter::create(window->display(), window->surface(), window->size()); presenter.is_error())
-            warnln("ladybird-sfos: no Vulkan presentation ({}), copying frames on the CPU", presenter.error());
-        else
-            vulkan_presenter = presenter.release_value();
-    }
-#endif
-
-    view->on_present = [&](Gfx::SharedImageBuffer const& buffer, Gfx::IntSize painted_size) -> Optional<StringView> {
-#ifdef USE_VULKAN_DMABUF_IMAGES
-        if (auto const* dmabuf = buffer.linux_dmabuf_handle(); dmabuf && vulkan_presenter) {
-            if (!vulkan_presenter->present(*dmabuf, painted_size).is_error())
-                return "Vulkan"sv;
-            warnln("ladybird-sfos: Vulkan presentation failed, copying frames on the CPU from now on");
-            vulkan_presenter = nullptr;
-        }
-#endif
-        // NB: A shared GPU image also has a bitmap, which is a mapping of the same memory.
-        auto bitmap = buffer.bitmap_if_present();
-        if (!bitmap)
-            return {};
-        auto size = Gfx::IntSize { min(bitmap->width(), painted_size.width()), min(bitmap->height(), painted_size.height()) };
-        if (!window->present(bitmap->scanline_u8(0), bitmap->pitch(), size))
-            return {};
-        return "CPU copy"sv;
-    };
-    window->on_frame_ready = [&] { view->present_pending_frame(); };
-    window->on_resize = [&](Gfx::IntSize size) {
-#ifdef USE_VULKAN_DMABUF_IMAGES
-        if (vulkan_presenter && vulkan_presenter->resize(size).is_error())
-            vulkan_presenter = nullptr;
-#endif
-        view->resize(size, device_pixel_ratio_from_environment());
-    };
-    window->on_touch = [&](WaylandWindow::TouchPhase phase, int id, Gfx::IntPoint position) {
-        using enum WaylandWindow::TouchPhase;
-        auto view_phase = phase == Down ? PresentedWebView::TouchPhase::Down : phase == Motion ? PresentedWebView::TouchPhase::Motion
-                                                                                                : PresentedWebView::TouchPhase::Up;
-        view->handle_touch(view_phase, id, position);
-    };
-
-    // NB: On a fresh profile the application puts its welcome page ahead of the URLs we were given. Every run here
-    //     has a fresh profile, so take the last URL: ours if there is one, the welcome page otherwise.
-    if (auto const& urls = Application::browser_options().urls; !urls.is_empty())
-        view->load(urls.last());
-
-    return app.execute();
-}
-
-// No window of our own: a Silica app shows our frames and sends us input over a socket. It has one view per tab.
-#ifdef USE_VULKAN_DMABUF_IMAGES
+// A Silica app shows our frames and sends us input over a socket. It has one view per tab.
 class EmbeddedViews final : private WebView::FileDownloaderObserver {
 public:
     explicit EmbeddedViews(EmbeddedHost& host, Core::AnonymousBuffer theme)
@@ -380,12 +290,8 @@ private:
         auto view = PresentedWebView::create(m_theme, size, device_pixel_ratio);
         auto* raw_view = view.ptr();
 
-        view->on_present = [this, id](Gfx::SharedImageBuffer const& buffer, Gfx::IntSize painted_size) -> Optional<StringView> {
-            auto const* dmabuf = buffer.linux_dmabuf_handle();
-            if (!dmabuf)
-                return {};
-            m_host.send_frame(id, *dmabuf, painted_size);
-            return "embedding app"sv;
+        view->on_present = [this, id](Gfx::LinuxDmaBufHandle const& dmabuf, Gfx::IntSize painted_size) {
+            m_host.send_frame(id, dmabuf, painted_size);
         };
         view->on_url_change = [this, id](URL::URL const& url) {
             auto text = url.serialize();
@@ -575,7 +481,7 @@ private:
             return;
         }
         if (header.type == LB_EMBED_CREATE_VIEW) {
-            create_view(header.view, { header.a, header.b }, header.scale >= 1 ? header.scale : device_pixel_ratio_from_environment());
+            create_view(header.view, { header.a, header.b }, max(header.scale, 1.0));
             return;
         }
         auto found = m_views.get(header.view);
@@ -604,7 +510,7 @@ private:
         }
         case LB_EMBED_RESIZE:
             if (header.a > 0 && header.b > 0)
-                view.resize({ header.a, header.b }, header.scale >= 1 ? header.scale : device_pixel_ratio_from_environment());
+                view.resize({ header.a, header.b }, max(header.scale, 1.0));
             break;
         case LB_EMBED_GO_BACK:
             view.traverse_the_history_by_delta(-1);
@@ -732,21 +638,6 @@ private:
     RefPtr<Core::Timer> m_restart_list_updates_timer;
     RefPtr<Core::Timer> m_resume_list_updates_timer;
 };
-#endif
-
-static ErrorOr<int> run_embedded(Application& app, ByteString const& socket_path)
-{
-#ifdef USE_VULKAN_DMABUF_IMAGES
-    auto host = TRY(EmbeddedHost::connect(socket_path));
-    host->on_disconnect = [] { Core::EventLoop::current().quit(0); };
-    EmbeddedViews views { *host, TRY(load_theme()) };
-    return app.execute();
-#else
-    (void)app;
-    (void)socket_path;
-    return Error::from_string_literal("Embedding needs a build with shared GPU images");
-#endif
-}
 
 }
 
@@ -759,8 +650,12 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
     if (Ladybird::Application::browser_options().headless_mode.has_value())
         return app->execute();
 
-    if (auto socket_path = Core::Environment::get(StringView { LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE, strlen(LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE) }); socket_path.has_value())
-        return Ladybird::run_embedded(*app, ByteString { *socket_path });
+    auto socket_path = Core::Environment::get(StringView { LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE, strlen(LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE) });
+    if (!socket_path.has_value())
+        return Error::from_string_literal("Run headless, or embedded by the browser (" LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE ")");
 
-    return Ladybird::run_windowed(*app);
+    auto host = TRY(Ladybird::EmbeddedHost::connect(ByteString { *socket_path }));
+    host->on_disconnect = [] { Core::EventLoop::current().quit(0); };
+    Ladybird::EmbeddedViews views { *host, TRY(Ladybird::load_theme()) };
+    return app->execute();
 }

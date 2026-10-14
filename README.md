@@ -20,7 +20,7 @@ patches. Developed and tested on the Jolla Phone 2 (MT6858, Mali-G610).
 | `scripts/build.sh` | native aarch64 build of the engine on the build host |
 | `scripts/build-browser.sh` | builds `browser/` against the SFOS SDK target |
 | `scripts/bundle.sh`, `scripts/deploy.sh` | relocatable bundle, copied to `/tmp/ladybird` on the phone |
-| `scripts/phone/` | start/stop scripts that run on the phone |
+| `scripts/phone/` | start/stop scripts for the browser on the phone |
 | `scripts/package-rpm.sh` | the `pacific-browser` RPM: engine, interface, launcher entry, Sailjail profile |
 | `browser/data/icon-launcher-pacific.svg` | the launcher icon; the PNGs are rendered from it |
 | `scripts/embed-harness.py` | talks the embedding protocol to an engine on the build host: load a page, tap, print what comes back |
@@ -83,11 +83,6 @@ package, which is in the phone's repos but not installed by default
   returns success with fd -1. Shared images are therefore allocated from
   `/dev/dma_heap/system` and imported on both sides (patch 0006). The driver takes
   BGRA with the LINEAR modifier as a render target this way.
-- The front end presents those images with `VulkanPresenter`: import once per
-  buffer (recognised by inode), `vkCmdBlitImage` to a FIFO swapchain on the
-  `wl_surface` through the wrapper's Wayland WSI. The swapchain only offers RGBA
-  orders, which the blit converts. `LADYBIRD_SFOS_CPU_PRESENT=1` forces the old
-  wl_shm copy path for comparison.
 - With the package installed no `HYBRIS_*` settings are needed.
 
 ## Browser interface
@@ -184,4 +179,5 @@ On the phone: `sh /tmp/ladybird/start-browser.sh [url] [minutes]`.
 
 1. Build with a headless-only front end and render a page to a PNG on the host.
 2. Run the same bundle on the phone from `/tmp` and render a page there.
-3. Put pixels on screen: a Wayland window fed by the engine, with touch input.
+3. Put pixels on screen: a Wayland window fed by the engine, with touch input (since replaced by the embedded
+   engine; the standalone window was removed).
