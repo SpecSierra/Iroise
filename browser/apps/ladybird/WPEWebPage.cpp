@@ -9,7 +9,7 @@
 #include "WPEWebPage.h"
 
 #include "credentialstore.h"
-#include "downloadmanager.h"
+#include "DownloadModel.h"
 
 #include <QClipboard>
 #include <QCryptographicHash>
@@ -1206,11 +1206,7 @@ void WPEWebPage::selectMenuOption(int index)
 
 void WPEWebPage::downloadUrl(const QString &url)
 {
-    // NB: Through the download manager rather than straight to the engine, so that the download is known to
-    //     the interface from the start.
-    QString error;
-    if (DownloadManager::instance()->startDownload(url, QString(), false, &error) < 0)
-        qWarning("WPEWebPage: cannot download %s: %s", qPrintable(url), qPrintable(error));
+    DownloadModel::instance()->start(url);
 }
 
 void WPEWebPage::closeSelectMenu()

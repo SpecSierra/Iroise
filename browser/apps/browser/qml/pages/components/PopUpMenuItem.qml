@@ -8,7 +8,6 @@
 
 import QtQuick 2.2
 import Sailfish.Silica 1.0
-import Nemo.DBus 2.0
 
 Item {
     id: root
@@ -224,10 +223,7 @@ Item {
                 //% "Downloads"
                 text: qsTrId("sailfish_browser-la-downloads")
                 iconSource: "image://theme/icon-m-downloads"
-                onClicked: {
-                    overlay.animator.showChrome()
-                    settingsApp.call("showTransfers", [])
-                }
+                onClicked: pageStack.push(Qt.resolvedUrl("../DownloadsPage.qml"))
             }
 
             OverlayListItem {
@@ -244,13 +240,5 @@ Item {
                 }
             }
         }
-    }
-
-    DBusInterface {
-        id: settingsApp
-
-        service: "com.jolla.settings"
-        iface: "com.jolla.settings.ui"
-        path: "/com/jolla/settings/ui"
     }
 }

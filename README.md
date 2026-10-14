@@ -123,16 +123,14 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
 - "Block ads on this site" off: the hosts on the interface's allowlist become
   exception rules (`@@*$domain=host` and `@@||host^$elemhide`) given to the engine as
   its custom filters, on top of the lists.
-- Downloads: the engine saves a download itself, without asking, into
-  `XDG_DOWNLOAD_DIR` (which the interface sets to the Sailfish downloads folder) and
-  reports its progress. `LadybirdDownloads` turns those reports into the calls the
-  interface's `DownloadManager` was written to get from WebKit, behind a stand-in
-  for the few WebKit functions it uses, so the Sailfish transfer list, cancelling
-  and "save link/image" work as before. There is no "Save as" prompt and the
-  save-destination setting is not honoured. PDFs open in the engine's own viewer.
-  Patch 0008 fixes a link to a file on another site never being saved: the response
-  goes to the process that would host the document, and its claim to the download
-  was refused.
+- Downloads: the engine saves every download itself, into the Downloads folder (`XDG_DOWNLOAD_DIR`), and reports
+  its progress. `DownloadModel` lists this run's downloads for the interface's Downloads page (from Settings and
+  the toolbar menu), with a notification when one starts and when it ends. The Sailfish transfer list is not used:
+  the Jolla Store does not allow its library. There is no "Save as": the store's Downloads permission covers that
+  folder only. The engine is held to one connection per download: its downloads over several connections at once
+  sometimes never finished their last part. PDFs open in the engine's own viewer. Patch 0008 fixes a link to a file
+  on another site never being saved: the response goes to the process that would host the document, and its claim
+  to the download was refused.
 - Scripts: `LB_EMBED_RUN_SCRIPT` evaluates an expression in the page through the
   engine's console input, the one path that hands a value back. Only strings come
   back intact, so `WPEQtView::evaluate` wraps the expression in `JSON.stringify`

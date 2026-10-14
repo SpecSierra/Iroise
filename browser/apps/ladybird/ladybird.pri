@@ -16,15 +16,14 @@ SOURCES += \
     $$PWD/WPEWebPage.cpp \
     $$PWD/WPEWebContainer.cpp \
     $$PWD/WPEWebPageCreator.cpp
-INCLUDEPATH += $$PWD/shim
 
 # Frames are shown straight from the engine's buffers through libhybris' EGL, see DirectFrameTextures.
 HEADERS += $$PWD/DirectFrameTextures.h
 SOURCES += $$PWD/DirectFrameTextures.cpp
 LIBS += -lEGL
 
-HEADERS += $$PWD/LadybirdDownloads.h
-SOURCES += $$PWD/LadybirdDownloads.cpp
+HEADERS += $$PWD/DownloadModel.h
+SOURCES += $$PWD/DownloadModel.cpp
 
 QT += positioning
 HEADERS += $$PWD/LadybirdGeolocation.h

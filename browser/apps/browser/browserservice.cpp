@@ -19,16 +19,11 @@
 #include <QCoreApplication>
 
 namespace {
-const auto ErrorPidIsNotOwnerService = QStringLiteral("PID %1 is not the owner of '%2'");
 const auto SailfishBrowserUiService = QStringLiteral("org.pacific.browser.ui");
-const auto TransferEngine = QStringLiteral("org.nemo.transferengine");
 }
-
-#define GET_PID() connection().interface()->servicePid(message().service())
 
 BrowserService::BrowserService(QObject * parent)
     : QObject(parent)
-    , QDBusContext()
     , m_registered(true)
 {
     new DBusAdaptor(this);
@@ -61,41 +56,6 @@ void BrowserService::openUrl(const QStringList &args)
 void BrowserService::activateNewTabView()
 {
     emit activateNewTabViewRequested();
-}
-
-void BrowserService::cancelTransfer(int transferId)
-{
-    if (!callerMatchesService(TransferEngine)) {
-        return;
-    }
-
-    emit cancelTransferRequested(transferId);
-}
-
-void BrowserService::restartTransfer(int transferId)
-{
-    if (!callerMatchesService(TransferEngine)) {
-        return;
-    }
-
-    emit restartTransferRequested(transferId);
-}
-
-bool BrowserService::callerMatchesService(const QString &serviceName) const
-{
-    uint callerServicePid = GET_PID().value();
-
-    // Test this against pid of serviceName which works also inside
-    // sandbox. If that matches, then the caller is serviceName.
-    // Fail closed: an unresolved service pid (0 / error) must never match.
-    const QDBusReply<uint> servicePid = connection().interface()->servicePid(serviceName);
-    if (servicePid.isValid() && servicePid.value() != 0 && callerServicePid == servicePid.value()) {
-        return true;
-    }
-
-    sendErrorReply(QDBusError::AccessDenied,
-                   ErrorPidIsNotOwnerService.arg(callerServicePid).arg(serviceName));
-    return false;
 }
 
 BrowserUIService::BrowserUIService(QObject *parent)

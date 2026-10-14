@@ -14,10 +14,9 @@
 #define BROWSERSERVICE_H
 
 #include <QObject>
-#include <QDBusContext>
 #include <QStringList>
 
-class BrowserService : public QObject, protected QDBusContext
+class BrowserService : public QObject
 {
     Q_OBJECT
 public:
@@ -32,17 +31,12 @@ public slots:
     void openUrl(const QStringList &args);
     void activateNewTabView();
 
-    void cancelTransfer(int transferId);
-    void restartTransfer(int transferId);
 
 signals:
     void openUrlRequested(const QString &url);
     void activateNewTabViewRequested();
-    void cancelTransferRequested(int transferId);
-    void restartTransferRequested(int transferId);
 
 private:
-    bool callerMatchesService(const QString &serviceName) const;
 
     bool m_registered;
 };

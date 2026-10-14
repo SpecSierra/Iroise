@@ -109,7 +109,6 @@ whitelist ${HOME}/Downloads
 dbus-user.own org.pacific.browser
 dbus-user.own org.pacific.browser.ui
 # "Downloads" in the menu opens Settings > Transfers.
-dbus-user.call com.jolla.settings=com.jolla.settings.ui.showTransfers@/com/jolla/settings/ui
 
 env QT_QPA_PLATFORM=wayland
 PROFILE

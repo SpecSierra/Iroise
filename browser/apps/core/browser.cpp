@@ -13,7 +13,7 @@
 #include "browser.h"
 #include "browser_p.h"
 #include "declarativewebutils.h"
-#include "downloadmanager.h"
+#include "DownloadModel.h"
 #include "settingmanager.h"
 
 #include <QDir>
@@ -39,11 +39,10 @@ Browser::Browser(QQuickView *view, const QString &dataPath, QObject *parent)
     Q_ASSERT(qGuiApp);
 
     DeclarativeWebUtils *utils = DeclarativeWebUtils::instance();
-    DownloadManager *downloadManager = DownloadManager::instance();
 
     d->view->rootContext()->setContextProperty("WebUtils", utils);
     d->view->rootContext()->setContextProperty("Settings", SettingManager::instance());
-    d->view->rootContext()->setContextProperty("DownloadManager", downloadManager);
+    d->view->rootContext()->setContextProperty("Downloads", DownloadModel::instance());
 
     const QString mainQml = QStringLiteral("browser.qml");
 
@@ -91,14 +90,4 @@ void Browser::openSettings()
 void Browser::openNewTabView()
 {
     emit DeclarativeWebUtils::instance()->activateNewTabViewRequested();
-}
-
-void Browser::cancelDownload(int transferId)
-{
-    DownloadManager::instance()->cancelTransfer(transferId);
-}
-
-void Browser::restartDownload(int transferid)
-{
-    DownloadManager::instance()->restartTransfer(transferid);
 }

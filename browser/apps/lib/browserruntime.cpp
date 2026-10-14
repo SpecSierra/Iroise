@@ -6,7 +6,6 @@
 #include "bookmarkfiltermodel.h"
 #include "bookmarkfoldermodel.h"
 #include "desktopbookmarkwriter.h"
-#include "downloadstatus.h"
 #include "persistenttabmodel.h"
 #include "privatetabmodel.h"
 #include "declarativehistorymodel.h"
@@ -25,7 +24,7 @@
 #include "browserpaths.h"
 #include "declarativewebutils.h"
 #include "settingmanager.h"
-#include "downloadmanager.h"
+#include "DownloadModel.h"
 
 #include <QGuiApplication>
 #include <QCoreApplication>
@@ -188,7 +187,7 @@ static void registerBrowserQmlTypes()
     qmlRegisterType<DeclarativeTabFilterModel>(uri, 1, 0, "TabFilterModel");
     qmlRegisterSingletonType<BookmarkManager>(uri, 1, 0, "BookmarkManager", bookmarkmanager_factory);
     qmlRegisterSingletonType<FaviconManager>(uri, 1, 0, "FaviconManager", faviconmanager_factory);
-    qmlRegisterUncreatableType<DownloadStatus>(uri, 1, 0, "DownloadStatus", "");
+    qmlRegisterUncreatableType<DownloadModel>(uri, 1, 0, "DownloadModel", "");
     qmlRegisterType<WPEWebContainer>(uri, 1, 0, "WebContainer");
     qmlRegisterType<WPEWebPage>(uri, 1, 0, "WebPage");
     qmlRegisterType<WPEWebPageCreator>(uri, 1, 0, "WebPageCreator");
@@ -257,10 +256,6 @@ extern "C" Q_DECL_EXPORT bool pacificBrowserRuntimeStart(QQuickView *view,
                          browser, &Browser::openUrl);
         QObject::connect(service, &BrowserService::activateNewTabViewRequested,
                          browser, &Browser::openNewTabView);
-        QObject::connect(service, &BrowserService::cancelTransferRequested,
-                         browser, &Browser::cancelDownload);
-        QObject::connect(service, &BrowserService::restartTransferRequested,
-                         browser, &Browser::restartDownload);
     }
 
     if (uiServiceNameRegistered && uiService->registered()) {

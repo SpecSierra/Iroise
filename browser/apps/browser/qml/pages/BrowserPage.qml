@@ -307,39 +307,33 @@ Page {
         property int value: 3
     }
 
-    Browser.DownloadRemorsePopup { id: downloadPopup }
-
-    // "Save destination" setting. Both keys were write-only: SettingsPage wrote
-    // them and nothing read them, so downloads always prompted and the chosen
-    // folder was ignored even as the dialog's starting directory.
-    ConfigurationValue {
-        id: useDownloadDirConf
-        key: "/apps/pacific-browser/settings/use_download_dir"
-        defaultValue: false
+    // Downloads go to the Downloads folder by themselves (see the Downloads page); these say when one starts
+    // and when it is done.
+    Nemo.Notification {
+        id: downloadNotification
+        appName: "Pacific"
+        appIcon: "icon-m-downloads"
     }
-
-    ConfigurationValue {
-        id: downloadDirConf
-        key: "/apps/pacific-browser/settings/download_dir"
-        defaultValue: ""
-    }
-
-    // Prompt the user for a "Save As" destination before a download starts,
-    // unless the settings page says to always save to a fixed folder.
     Connections {
-        target: DownloadManager
-        onSaveAsRequested: {
-            var dir = downloadDirConf.value || defaultDir
-            if (useDownloadDirConf.value && dir) {
-                // Auto-save: C++ sanitises and uniquifies the name so a repeat
-                // download cannot overwrite the previous file.
-                DownloadManager.confirmDownloadToDirectory(downloadId, dir, suggestedFileName)
-                return
-            }
-            pageStack.animatorPush(Qt.resolvedUrl("components/SaveDownloadDialog.qml"),
-                                   { "downloadId": downloadId,
-                                     "suggestedFileName": suggestedFileName,
-                                     "folder": dir })
+        target: Downloads
+        onStarted: {
+            downloadNotification.isTransient = true
+            //% "Downloading %1"
+            downloadNotification.previewSummary = qsTrId("sailfish_browser-no-downloading").arg(fileName)
+            downloadNotification.previewBody = ""
+            downloadNotification.summary = ""
+            downloadNotification.publish()
+        }
+        onFinished: {
+            downloadNotification.isTransient = false
+            //% "Download complete"
+            downloadNotification.summary = completed ? qsTrId("pacific-no-download_complete")
+                                                     //% "Download failed"
+                                                     : qsTrId("pacific-no-download_failed")
+            downloadNotification.body = fileName
+            downloadNotification.previewSummary = downloadNotification.summary
+            downloadNotification.previewBody = fileName
+            downloadNotification.publish()
         }
     }
 

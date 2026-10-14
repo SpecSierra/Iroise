@@ -27,17 +27,6 @@ void DBusAdaptor::activateNewTabView()
 {
     m_BrowserService->activateNewTabView();
 }
-
-void DBusAdaptor::cancelTransfer(int transferId)
-{
-    m_BrowserService->cancelTransfer(transferId);
-}
-
-void DBusAdaptor::restartTransfer(int transferId)
-{
-    m_BrowserService->restartTransfer(transferId);
-}
-
 UIServiceDBusAdaptor::UIServiceDBusAdaptor(BrowserUIService *browserService)
     : QDBusAbstractAdaptor(browserService)
     , m_BrowserService(browserService)

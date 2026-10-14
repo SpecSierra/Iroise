@@ -31,8 +31,6 @@ public slots:
     void openUrl(const QStringList &args);
     void activateNewTabView();
 
-    void cancelTransfer(int transferId);
-    void restartTransfer(int transferId);
 private:
     BrowserService *m_BrowserService;
 };

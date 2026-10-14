@@ -35,8 +35,6 @@ public slots:
     void openNewTabView();
 
 
-    void cancelDownload(int transferId);
-    void restartDownload(int transferid);
 
     // Debug helpers
 

@@ -963,6 +963,9 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
     Ladybird::AppGeolocationProvider::s_host = host.ptr();
     // Pages still ask the user first, each time (see the gate in create_view).
     WebView::Application::settings().set_geolocation_enabled(true);
+    // NB: The engine fetches a large download over several connections at once, in byte ranges. On a phone that
+    //     gains little, and the last range sometimes never completes, which leaves the file unfinished for good.
+    WebView::Application::settings().set_config_variable(WebView::ConfigVariableID::MaximumConnectionsPerDownload, 1);
     Ladybird::EmbeddedViews views { *host, TRY(Ladybird::load_theme()) };
     return app->execute();
 }

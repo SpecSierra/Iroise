@@ -1,7 +1,7 @@
 INCLUDEPATH += $$PWD
 
 CONFIG += link_pkgconfig
-PKGCONFIG += sailfishpolicy nemotransferengine-qt5 dsme_dbus_if mlite5
+PKGCONFIG += sailfishpolicy dsme_dbus_if mlite5
 
 QT += quick
 
@@ -9,7 +9,6 @@ QT += quick
 SOURCES += \
     $$PWD/browser.cpp \
     $$PWD/datafetcher.cpp \
-    $$PWD/downloadmanager.cpp \
     $$PWD/declarativewebutils.cpp \
     $$PWD/faviconmanager.cpp \
     $$PWD/inputregion.cpp \
@@ -23,8 +22,6 @@ HEADERS += \
     $$PWD/browser_p.h \
     $$PWD/datafetcher.h \
     $$PWD/declarativewebutils.h \
-    $$PWD/downloadmanager.h \
-    $$PWD/downloadstatus.h \
     $$PWD/faviconmanager.h \
     $$PWD/inputregion.h \
     $$PWD/logging.h \

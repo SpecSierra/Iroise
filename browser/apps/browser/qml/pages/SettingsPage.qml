@@ -34,16 +34,8 @@ Page {
     // WPE: stub for Gecko WebEngineSettings — wired to Nemo.Configuration
     QtObject {
         id: webEngineSettings
-        property bool doNotTrack: doNotTrackConf.value
-        property bool javascriptEnabled: jsEnabledConf.value
-        property bool useDownloadDir: useDownloadDirConf.value
-        property string downloadDir: downloadDirConf.value || StandardPaths.download
         property alias colorScheme: colorSchemeConf.value
     }
-    ConfigurationValue { id: doNotTrackConf; key: "/apps/pacific-browser/settings/do_not_track"; defaultValue: false }
-    ConfigurationValue { id: jsEnabledConf; key: "/apps/pacific-browser/settings/javascript_enabled"; defaultValue: true }
-    ConfigurationValue { id: useDownloadDirConf; key: "/apps/pacific-browser/settings/use_download_dir"; defaultValue: false }
-    ConfigurationValue { id: downloadDirConf; key: "/apps/pacific-browser/settings/download_dir"; defaultValue: "" }
     ConfigurationValue { id: adBlockConf; key: "/apps/pacific-browser/settings/adblock_enabled"; defaultValue: true }
     ConfigurationValue { id: cookieBannerConf; key: "/apps/pacific-browser/settings/cookie_banner_blocking"; defaultValue: true }
     // 0 = light, 1 = dark, 2 = follow ambience (applied by SettingManager)
@@ -186,50 +178,13 @@ Page {
                 }
             }
 
-            BrowserComboBox {
-                //% "Save destination"
-                label: qsTrId("settings_browser-la-save_destination")
+            SettingsLinkItem {
                 iconSource: "image://theme/icon-m-downloads"
-                value: {
-                    if (webEngineSettings.useDownloadDir) {
-                        //% "Download to %1"
-                        return qsTrId("sailfish_browser-me-download_to").arg(webEngineSettings.downloadDir.split("/").pop())
-                    } else {
-                        //% "Always ask"
-                        return qsTrId("sailfish_browser-me-always_ask")
-                    }
-                }
-                currentIndex: webEngineSettings.useDownloadDir
-                              ? 0 // for selection a download folder
-                              : 1 // for always ask
-
-                description: {
-                    if (webEngineSettings.useDownloadDir) {
-                        //% "Downloaded files will be saved to %1 folder"
-                        return qsTrId("sailfish_browser-me-will_be_saved_to_download").arg(webEngineSettings.downloadDir)
-                    } else {
-                        //% "You will be asked where to save files"
-                        return qsTrId("sailfish_browser-me-you_will_be_asked_where_to_save_files")
-                    }
-                }
-
-                menu: ContextMenu {
-                    MenuItem {
-                        //% "Select a download folder"
-                        text: qsTrId("sailfish_browser-me-select_download_folder")
-                        onClicked: {
-                            useDownloadDirConf.value = true
-                            // If the user will reject, choose download path as default
-                            downloadDirConf.value = StandardPaths.download
-                            pageStack.animatorPush(folderPickerPage)
-                        }
-                    }
-                    MenuItem {
-                        //% "Always ask"
-                        text: qsTrId("sailfish_browser-me-always_ask")
-                        onClicked: useDownloadDirConf.value = false
-                    }
-                }
+                //% "Downloads"
+                text: qsTrId("pacific-la-downloads")
+                //% "Files saved to the Downloads folder"
+                description: qsTrId("pacific-la-downloads_description")
+                onClicked: pageStack.push("DownloadsPage.qml")
             }
 
             // Backed by the encrypted CredentialStore.
@@ -527,18 +482,6 @@ Page {
             //% "Could not install %1 search"
             searchInstalledNotice.text = qsTrId("sailfish_browser-la-search_install_failed").arg(title)
             searchInstalledNotice.show()
-        }
-    }
-
-    Component {
-        id: folderPickerPage
-
-        FolderPickerPage {
-            showSystemFiles: false
-            //% "Download to"
-            dialogTitle: qsTrId("sailfish_browser-ti-download-to")
-
-            onSelectedPathChanged: downloadDirConf.value = selectedPath
         }
     }
 }
