@@ -222,6 +222,12 @@ void WPEQtView::engineMessage(const lb_embed_header& header, const QString& text
     case LB_EMBED_PAGE_COLOR:
         pageColorChanged(header.a, text);
         break;
+    case LB_EMBED_FULLSCREEN:
+        pageFullscreenChanged(header.a != 0);
+        break;
+    case LB_EMBED_MEDIA:
+        mediaStateChanged(header.a != 0, header.b != 0);
+        break;
     case LB_EMBED_PERMISSION: {
         QJsonObject question = QJsonDocument::fromJson(text.toUtf8()).object();
         permissionRequested(header.a, question.value(QStringLiteral("name")).toString(), question.value(QStringLiteral("origin")).toString());

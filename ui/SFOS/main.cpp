@@ -20,11 +20,13 @@
 #include <LibMain/Main.h>
 #include <LibWebCommon/CSS/PreferredColorScheme.h>
 #include <LibWebCommon/Geolocation/GeolocationPositionErrorCode.h>
+#include <LibWebCommon/HTML/AudioPlayState.h>
 #include <LibWebCommon/HTML/ColorPickerUpdateState.h>
 #include <LibWebCommon/HTML/FileFilter.h>
 #include <LibWebCommon/HTML/SelectItem.h>
 #include <LibWebCommon/HTML/SelectedFile.h>
 #include <LibWebCommon/Page/InputEvent.h>
+#include <LibWebCommon/Page/ScreenWakeLockState.h>
 #include <LibWebCommon/WebView/ConsoleOutput.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/FileDownloader.h>
@@ -125,6 +127,8 @@ public:
     // Every page that comes to host the tab, also after a cross-site navigation moved it to another process.
     Function<void(WebView::WebContentPage&)> on_prepare_page;
     bool desktop_mode { false };
+    bool plays_audio { false };
+    bool holds_wake_lock { false };
 
     void handle_pinch(Gfx::IntPoint position, double scale)
     {
@@ -489,6 +493,24 @@ private:
             m_host.send_text(id, LB_EMBED_COLOR_PICKER, text.bytes_as_string_view());
         };
 
+        // The page goes fullscreen within the view it has; the app hides everything around it.
+        view->on_fullscreen_window = [this, id, raw_view] {
+            raw_view->set_is_fullscreen(Web::ViewportIsFullscreen::Yes);
+            m_host.send_flags(id, LB_EMBED_FULLSCREEN, true);
+        };
+        view->on_exit_fullscreen_window = [this, id, raw_view] {
+            raw_view->set_is_fullscreen(Web::ViewportIsFullscreen::No);
+            m_host.send_flags(id, LB_EMBED_FULLSCREEN, false);
+        };
+        view->on_audio_play_state_changed = [this, id, raw_view](Web::HTML::AudioPlayState state) {
+            raw_view->plays_audio = state == Web::HTML::AudioPlayState::Playing;
+            m_host.send_flags(id, LB_EMBED_MEDIA, raw_view->plays_audio, raw_view->holds_wake_lock);
+        };
+        view->on_screen_wake_lock_state_changed = [this, id, raw_view](Web::ScreenWakeLockState state) {
+            raw_view->holds_wake_lock = state == Web::ScreenWakeLockState::Acquired;
+            m_host.send_flags(id, LB_EMBED_MEDIA, raw_view->plays_audio, raw_view->holds_wake_lock);
+        };
+
         view->on_request_permission = [this, id](Utf16String const& name, URL::Origin const& origin, Function<void(bool)> on_decided) {
             ask_permission(id, name.to_utf8(), origin, move(on_decided));
         };
@@ -753,6 +775,9 @@ private:
         case LB_EMBED_RESIZE:
             if (header.a > 0 && header.b > 0)
                 view.resize({ header.a, header.b }, max(header.scale, 1.0));
+            break;
+        case LB_EMBED_EXIT_FULLSCREEN:
+            view.exit_fullscreen();
             break;
         case LB_EMBED_SET_DESKTOP_MODE:
             view.desktop_mode = header.a != 0;

@@ -542,7 +542,7 @@ Page {
         y: Theme.paddingLarge
         icon.source: "image://theme/icon-m-close"
         onClicked: {
-            webView.sendAsyncMessage("embedui:exitFullscreen", {})
+            webView.contentItem.exitFullscreen()
         }
 
         Timer {

@@ -305,10 +305,8 @@ public:
     void notePopupRouted(const QString &url);
     bool popupGuardShouldBlock(const QString &url, int navigationType);
     void applyInitialDeviceScale(qreal scale);
-    void setFullscreenState(bool fullscreen);
-    void setNativeFullscreenRequested(bool fullscreen);
-    void setDomFullscreenActive(bool fullscreen);
-    void setMediaPlaybackState(bool audioActive, bool videoActive);
+    // Leaves the fullscreen the page asked for, from the interface's close button.
+    Q_INVOKABLE void exitFullscreen();
     void notifyPagePinchConsumed();
     void notifyPagePinchDeclined();
     void updateObservedMediaState(bool audioActive, bool videoActive, bool fullscreenActive,
@@ -593,8 +591,11 @@ private:
     bool m_chrome = true;
     bool m_forcedChrome = false;
     bool m_fullscreen = false;
-    bool m_nativeFullscreenRequested = false;
-    bool m_domFullscreenActive = false;
+    bool m_playsAudio = false;
+    bool m_keepsScreenOn = false;
+    void pageFullscreenChanged(bool fullscreen) override;
+    void mediaStateChanged(bool playsAudio, bool keepsScreenOn) override;
+    void updateMediaState();
     bool m_mediaAudioActive = false;
     bool m_mediaVideoActive = false;
     qreal m_mediaVolume = 1.0;
@@ -660,7 +661,6 @@ private:
     bool m_uiGestureTracking = false;
     bool m_pendingFullscreenEntry = false;
     QTimer m_pendingFullscreenEntryGuard;
-    QTimer m_fullscreenEnteredGuard;
     QElapsedTimer m_lastNativeFullscreenEnter;
     QElapsedTimer m_perfFrameLogWindow;
     int m_perfFramesInWindow = 0;

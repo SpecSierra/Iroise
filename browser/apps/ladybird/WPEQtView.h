@@ -134,6 +134,8 @@ protected:
     virtual void dialogRequested(int kind, const QByteArray& json) { Q_UNUSED(kind); Q_UNUSED(json); }
     // A message from the page agent (see WPEWebPage): a kind and what came with it.
     virtual void pageMessage(const QString& kind, const QJsonValue& data) { Q_UNUSED(kind); Q_UNUSED(data); }
+    virtual void pageFullscreenChanged(bool fullscreen) { Q_UNUSED(fullscreen); }
+    virtual void mediaStateChanged(bool playsAudio, bool keepsScreenOn) { Q_UNUSED(playsAudio); Q_UNUSED(keepsScreenOn); }
     virtual void permissionRequested(int question, const QString& name, const QString& origin) { Q_UNUSED(question); Q_UNUSED(name); Q_UNUSED(origin); }
 
     void sendToEngine(lb_embed_message_type type, int a = 0, int b = 0, int c = 0, int d = 0, const QByteArray& text = QByteArray());

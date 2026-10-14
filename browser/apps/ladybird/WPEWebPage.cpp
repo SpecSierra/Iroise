@@ -838,29 +838,42 @@ void WPEWebPage::applyInitialDeviceScale(qreal scale)
     Q_UNUSED(scale);
 }
 
-void WPEWebPage::setFullscreenState(bool fullscreen)
+void WPEWebPage::pageFullscreenChanged(bool fullscreen)
 {
-    Q_UNUSED(fullscreen);
-}
-
-void WPEWebPage::setNativeFullscreenRequested(bool fullscreen)
-{
-    if (m_nativeFullscreenRequested == fullscreen)
+    if (m_fullscreen == fullscreen)
         return;
-    m_nativeFullscreenRequested = fullscreen;
+    m_fullscreen = fullscreen;
+    emit fullscreenChanged();
+    updateMediaState();
 }
 
-void WPEWebPage::setDomFullscreenActive(bool fullscreen)
+void WPEWebPage::exitFullscreen()
 {
-    if (m_domFullscreenActive == fullscreen)
-        return;
-    m_domFullscreenActive = fullscreen;
+    if (m_fullscreen)
+        sendToEngine(LB_EMBED_EXIT_FULLSCREEN);
 }
 
-void WPEWebPage::setMediaPlaybackState(bool audioActive, bool videoActive)
+void WPEWebPage::mediaStateChanged(bool playsAudio, bool keepsScreenOn)
 {
-    Q_UNUSED(audioActive);
-    Q_UNUSED(videoActive);
+    m_playsAudio = playsAudio;
+    m_keepsScreenOn = keepsScreenOn;
+    updateMediaState();
+}
+
+void WPEWebPage::updateMediaState()
+{
+    // NB: The engine reports sound, not video. A page in fullscreen is nearly always showing one, and a page that
+    //     wants the screen on asks for it.
+    bool audio = m_playsAudio;
+    bool video = m_keepsScreenOn || (m_fullscreen && m_playsAudio);
+    if (audio != m_mediaAudioActive) {
+        m_mediaAudioActive = audio;
+        emit mediaAudioActiveChanged();
+    }
+    if (video != m_mediaVideoActive) {
+        m_mediaVideoActive = video;
+        emit mediaVideoActiveChanged();
+    }
 }
 
 void WPEWebPage::notifyPagePinchConsumed()

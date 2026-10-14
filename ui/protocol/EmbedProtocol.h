@@ -63,6 +63,7 @@ enum lb_embed_message_type {
     LB_EMBED_FILE_PICKER_CLOSED = 22, /* text = the chosen files' paths, one per line; empty for none */
     LB_EMBED_COLOR_PICKED = 23,       /* a = 1 if a colour was chosen; text = it, as #rrggbb */
     LB_EMBED_PERMISSION_DECIDED = 28, /* a = the question's id (LB_EMBED_PERMISSION); b = 1 to grant */
+    LB_EMBED_EXIT_FULLSCREEN = 32,    /* the user left fullscreen (LB_EMBED_FULLSCREEN) from the app's side */
     LB_EMBED_SET_DESKTOP_MODE = 31,   /* a = 1 for the view to present itself as a desktop browser, where no site
                                          option says otherwise */
 
@@ -90,6 +91,8 @@ enum lb_embed_message_type {
                                      console.log(LB_EMBED_PAGE_MESSAGE_MARKER, text). Any script in the page can
                                      post one too, so the app treats these as hints, never as proof. */
     LB_EMBED_PAGE_COLOR = 115,
+    LB_EMBED_FULLSCREEN = 120,    /* a = 1 when the page went fullscreen (a video, usually), 0 when it left */
+    LB_EMBED_MEDIA = 121,         /* a = 1 while the page plays sound; b = 1 while it holds a screen wake lock */
     LB_EMBED_PERMISSION = 117,    /* a = an id for the answer, LB_EMBED_PERMISSION_DECIDED; text = JSON {"name"
                                      ("geolocation" or "microphone"), "origin"}. The page waits for the answer. */    /* a = lb_embed_page_color; text = the colour as #rrggbb, empty when the page
                                      no longer names one */
