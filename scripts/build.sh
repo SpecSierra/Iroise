@@ -8,7 +8,7 @@ UP="$ROOT/upstream"
 JOBS="${JOBS:-12}"
 
 # Apply our patches once; the front end itself lives in this repo and is linked in.
-for p in "$ROOT"/patches/*.patch; do
+for p in "$ROOT"/patches/[0-9]*.patch; do
     if ! patch -d "$UP" -p1 -R --dry-run -s -f < "$p" >/dev/null 2>&1; then
         patch -d "$UP" -p1 < "$p"
     fi
@@ -30,6 +30,12 @@ BUILD="$UP/Build/release"
 
 cd "$UP"
 python3 Meta/ladybird.py vcpkg --preset Release -j "$JOBS"
+# Skia's GL backend would link the desktop GL; ours gets its entry points from GLESContext (patch 0009). vcpkg picks
+# up an overlay of its own skia port with that one change.
+OVERLAY="$UP/Meta/CMake/vcpkg/overlay-ports/skia"
+rm -rf "$OVERLAY"
+cp -r "$VCPKG_ROOT/ports/skia" "$OVERLAY"
+patch -d "$OVERLAY" -p1 -s < "$ROOT/patches/vcpkg-skia-gl-without-system-libraries.patch"
 if [ ! -f "$BUILD/build.ninja" ]; then
     cmake --preset Release -S "$UP" -B "$BUILD" \
         -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \

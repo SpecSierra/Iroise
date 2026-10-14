@@ -1,0 +1,16 @@
+--- a/portfile.cmake
++++ b/portfile.cmake
+@@ -190,9 +190,11 @@
+ endif()
+ 
+ if("gl" IN_LIST FEATURES)
++    # Ladybird for Sailfish OS: the GL entry points come from a GrGLInterface the caller assembles, from an EGL it
++    # loads privately (the Compositor also carries ANGLE, which exports the same symbol names). So Skia links no
++    # GL library and uses no native interface of its own.
+     if (VCPKG_TARGET_IS_LINUX OR VCPKG_TARGET_IS_BSD)
+-        list(APPEND required_externals gl)
+-        string(APPEND OPTIONS " skia_use_egl=true")
++        string(APPEND OPTIONS " skia_use_egl=false skia_use_x11=false")
+     endif()
+     string(APPEND OPTIONS " skia_use_gl=true")
+ else()

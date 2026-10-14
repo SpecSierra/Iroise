@@ -65,25 +65,20 @@ settings live in an `engine` directory inside the browser's own
 `org.pacific/pacificbrowser` data and cache directories, so the sandbox needs no
 further exceptions and removing the browser's data removes the engine's.
 
-## GPU painting (Vulkan through libhybris)
+## GPU painting (GLES through libhybris)
 
-Works on the Jolla Phone 2 (Mali-G610, Vulkan 1.3) with Jolla's `libhybris-libvulkan`
-package, which is in the phone's repos but not installed by default
-(`devel-su zypper install libhybris-libvulkan`).
+The Jolla Store allows `libEGL` and `libGLESv2` but not Vulkan, so the engine paints with Skia's GL backend on the
+system's GLES (patch 0009, `USE_GLES_HYBRIS`; Vulkan is not built).
 
-- The wrapper exports most entry points as IFUNCs that only resolve after
-  `vkCreateInstance`, so LibGfx must be linked `-z lazy` and must not store
-  `&vkGetDeviceProcAddr` (patch 0004). A `-z now` binary that calls them segfaults
-  before `main`.
-- Helper processes get a filtered environment; `HYBRIS_*` has to reach the
-  compositor (patch 0005).
-- The compositor's seccomp filter has to allow the Mali kernel driver's ioctls
-  (type 0x80, patch 0007); with that, GPU runs work with the sandbox on.
-- The driver imports dma-bufs but cannot export its own memory: `vkGetMemoryFdKHR`
-  returns success with fd -1. Shared images are therefore allocated from
-  `/dev/dma_heap/system` and imported on both sides (patch 0006). The driver takes
-  BGRA with the LINEAR modifier as a render target this way.
-- With the package installed no `HYBRIS_*` settings are needed.
+- `LibGfx/GLESContext` loads `libEGL.so.1` and `libGLESv2.so.2` with `dlopen(RTLD_LOCAL | RTLD_DEEPBIND)` and hands
+  Skia a GL interface assembled from them. Nothing links a GL library by name: the Compositor also carries ANGLE
+  for WebGL, which exports the same symbol names. Skia is built with its `gl` feature but no native interface
+  (`patches/vcpkg-skia-gl-without-system-libraries.patch`, applied to an overlay of vcpkg's port by `build.sh`).
+- The Compositor has no window: a 1x1 pbuffer keeps the context current, with `EGL_PLATFORM=null`.
+- Each backing store is a gralloc buffer allocated through libhybris' `EGL_HYBRIS_native_buffer2`, bound as an
+  `EGLImage` texture behind a framebuffer that Skia renders into. Its pixel dma-buf goes to the interface, which
+  wraps it the same way to show it. The software read/write usage bits keep the Mali gralloc from choosing AFBC.
+- The Compositor's seccomp filter allows the Mali kernel driver's ioctls (type 0x80, patch 0007).
 
 ## Browser interface
 

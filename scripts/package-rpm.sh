@@ -76,13 +76,12 @@ cat > "$S/etc/sailjail/permissions/pacific-browser.profile" <<'PROFILE'
 # -*- mode: sh -*-
 # Pacific Browser: per-application Sailjail (firejail) profile, included because of the desktop file's name.
 
-# The GPU is an Android driver behind libhybris, and the engine paints into buffers from the kernel's dma-heap.
-# Base's disable-common.inc would hide these.
+# The GPU is an Android driver behind libhybris. Base's disable-common.inc would hide these.
+# FIXME: Needed for Vulkan; check whether GLES works without them (a Jolla Store app cannot ship this profile).
 noblacklist /usr/libexec/droid-hybris
 noblacklist /usr/libexec/pacific
 noblacklist /odm
 noblacklist /vendor/firmware_mnt
-noblacklist /dev/dma_heap
 
 # The interface's QML and data. Base only lets through what is named under /usr/share.
 whitelist /usr/share/pacific-browser
@@ -126,7 +125,7 @@ fpm -s dir -t rpm -n pacific-browser -v "$VERSION" --iteration "$RELEASE" --arch
     --license "BSD-2-Clause and MPL-2.0" --url "https://github.com/SpecSierra/Pacific" \
     --after-install "$post" --after-remove "$post" \
     --rpm-auto-add-directories --no-auto-depends --rpm-rpmbuild-define "_build_id_links none" \
-    --depends sailjail --depends firejail --depends xdg-dbus-proxy --depends libhybris-libvulkan \
+    --depends sailjail --depends firejail --depends xdg-dbus-proxy \
     --depends sailfishsilica-qt5 --depends qt5-qtdeclarative \
     --force -p "$OUT/pacific-browser-$VERSION-$RELEASE.aarch64.rpm" -C "$S" .
 ls -la "$OUT"

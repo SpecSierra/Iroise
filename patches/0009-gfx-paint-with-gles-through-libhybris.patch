@@ -1,0 +1,826 @@
+diff --git a/Libraries/LibGfx/CMakeLists.txt b/Libraries/LibGfx/CMakeLists.txt
+index 1373f954..4a92e6b6 100644
+--- a/Libraries/LibGfx/CMakeLists.txt
++++ b/Libraries/LibGfx/CMakeLists.txt
+@@ -70,6 +70,10 @@ if (HAS_VULKAN)
+     list(APPEND SOURCES SkiaVulkanMemoryAllocator.cpp VulkanContext.cpp VulkanImage.cpp)
+ endif()
+ 
++if (USE_GLES_HYBRIS)
++    list(APPEND SOURCES GLESContext.cpp)
++endif()
++
+ if (HAS_FONTCONFIG)
+     list(APPEND SOURCES Font/GlobalFontConfig.cpp)
+ endif()
+@@ -111,6 +115,12 @@ if (HAS_DIRECTX)
+     target_link_libraries(LibGfx PRIVATE d3d12 dxgi d3dcompiler)
+ endif()
+ 
++if (USE_GLES_HYBRIS)
++    # Only for the DRM format names; EGL and GLES are loaded at run time (see GLESContext).
++    pkg_check_modules(LibDRM REQUIRED libdrm)
++    target_include_directories(LibGfx PUBLIC ${LibDRM_INCLUDE_DIRS})
++endif()
++
+ if (HAS_VULKAN)
+     # Public LibGfx headers include <vulkan/vulkan.h>. Only LibGfx calls the Vulkan loader.
+     target_link_libraries(LibGfx PUBLIC Vulkan::Headers)
+diff --git a/Libraries/LibGfx/GLESContext.cpp b/Libraries/LibGfx/GLESContext.cpp
+new file mode 100644
+index 00000000..ec75604b
+--- /dev/null
++++ b/Libraries/LibGfx/GLESContext.cpp
+@@ -0,0 +1,330 @@
++/*
++ * Pacific: the Sailfish OS front end for the Ladybird engine.
++ *
++ * SPDX-License-Identifier: BSD-2-Clause
++ */
++
++#include <AK/Format.h>
++#include <AK/Vector.h>
++#include <LibGfx/GLESContext.h>
++
++#include <EGL/egl.h>
++#include <EGL/eglext.h>
++#include <GLES2/gl2.h>
++#include <GLES2/gl2ext.h>
++#include <dlfcn.h>
++#include <libdrm/drm_fourcc.h>
++#include <stdlib.h>
++#include <string.h>
++#include <unistd.h>
++
++namespace Gfx {
++
++// libhybris' extension for Android buffers, and Android's names for what we ask gralloc for.
++static constexpr EGLenum egl_native_buffer_hybris = 0x3140;
++static constexpr EGLint android_pixel_format_bgra_8888 = 5;
++// NB: The software read and write bits make the Mali gralloc lay the buffer out as plain rows rather than AFBC, which
++//     is what lets other processes read it as an ordinary BGRA dma-buf.
++static constexpr EGLint gralloc_usage = 0x33 /* software read/write often */ | 0x100 /* texture */ | 0x200 /* render target */;
++
++namespace {
++
++struct Functions {
++#define ENUMERATE_EGL_FUNCTIONS(X)  \
++    X(eglGetDisplay)                \
++    X(eglInitialize)                \
++    X(eglTerminate)                 \
++    X(eglBindAPI)                   \
++    X(eglChooseConfig)              \
++    X(eglCreateContext)             \
++    X(eglDestroyContext)            \
++    X(eglCreatePbufferSurface)      \
++    X(eglDestroySurface)            \
++    X(eglMakeCurrent)               \
++    X(eglGetError)                  \
++    X(eglQueryString)               \
++    X(eglGetProcAddress)
++#define ENUMERATE_GL_FUNCTIONS(X)   \
++    X(glGenTextures)                \
++    X(glDeleteTextures)             \
++    X(glBindTexture)                \
++    X(glTexParameteri)              \
++    X(glGenFramebuffers)            \
++    X(glDeleteFramebuffers)         \
++    X(glBindFramebuffer)            \
++    X(glFramebufferTexture2D)       \
++    X(glGenRenderbuffers)           \
++    X(glDeleteRenderbuffers)        \
++    X(glBindRenderbuffer)           \
++    X(glRenderbufferStorage)        \
++    X(glFramebufferRenderbuffer)    \
++    X(glCheckFramebufferStatus)
++#define DECLARE(name) decltype(&::name) name { nullptr };
++    ENUMERATE_EGL_FUNCTIONS(DECLARE)
++    ENUMERATE_GL_FUNCTIONS(DECLARE)
++#undef DECLARE
++
++    using CreateNativeBuffer = EGLBoolean (*)(EGLint width, EGLint height, EGLint usage, EGLint format, EGLint* stride, EGLClientBuffer*);
++    using GetNativeBufferInfo = void (*)(EGLClientBuffer, int* int_count, int* fd_count);
++    using SerializeNativeBuffer = void (*)(EGLClientBuffer, int* ints, int* fds);
++    using ReleaseNativeBuffer = EGLBoolean (*)(EGLClientBuffer);
++    CreateNativeBuffer create_native_buffer { nullptr };
++    GetNativeBufferInfo get_native_buffer_info { nullptr };
++    SerializeNativeBuffer serialize_native_buffer { nullptr };
++    ReleaseNativeBuffer release_native_buffer { nullptr };
++    PFNEGLCREATEIMAGEKHRPROC create_image { nullptr };
++    PFNEGLDESTROYIMAGEKHRPROC destroy_image { nullptr };
++    PFNGLEGLIMAGETARGETTEXTURE2DOESPROC image_target_texture { nullptr };
++
++    void* egl_library { nullptr };
++    void* gles_library { nullptr };
++};
++
++Functions const* load_functions()
++{
++    static Functions functions;
++    static bool loaded = [] {
++        // NB: RTLD_DEEPBIND makes the libraries resolve their own symbols first, not ANGLE's of the same name.
++        int flags = RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND;
++        functions.egl_library = dlopen("libEGL.so.1", flags);
++        functions.gles_library = dlopen("libGLESv2.so.2", flags);
++        if (!functions.egl_library || !functions.gles_library) {
++            dbgln("GLES: cannot load the system's EGL or GLES: {}", dlerror());
++            return false;
++        }
++#define LOAD(name, library) functions.name = reinterpret_cast<decltype(functions.name)>(dlsym(functions.library, #name));
++#define LOAD_EGL(name) LOAD(name, egl_library)
++#define LOAD_GL(name) LOAD(name, gles_library)
++        ENUMERATE_EGL_FUNCTIONS(LOAD_EGL)
++        ENUMERATE_GL_FUNCTIONS(LOAD_GL)
++#undef LOAD_GL
++#undef LOAD_EGL
++#undef LOAD
++        auto extension = [](char const* name) { return functions.eglGetProcAddress ? functions.eglGetProcAddress(name) : nullptr; };
++        functions.create_native_buffer = reinterpret_cast<Functions::CreateNativeBuffer>(extension("eglHybrisCreateNativeBuffer"));
++        functions.get_native_buffer_info = reinterpret_cast<Functions::GetNativeBufferInfo>(extension("eglHybrisGetNativeBufferInfo"));
++        functions.serialize_native_buffer = reinterpret_cast<Functions::SerializeNativeBuffer>(extension("eglHybrisSerializeNativeBuffer"));
++        functions.release_native_buffer = reinterpret_cast<Functions::ReleaseNativeBuffer>(extension("eglHybrisReleaseNativeBuffer"));
++        functions.create_image = reinterpret_cast<PFNEGLCREATEIMAGEKHRPROC>(extension("eglCreateImageKHR"));
++        functions.destroy_image = reinterpret_cast<PFNEGLDESTROYIMAGEKHRPROC>(extension("eglDestroyImageKHR"));
++        functions.image_target_texture = reinterpret_cast<PFNGLEGLIMAGETARGETTEXTURE2DOESPROC>(extension("glEGLImageTargetTexture2DOES"));
++#define CHECK(name)                                    \
++    if (!functions.name) {                             \
++        dbgln("GLES: the system has no {}", #name);    \
++        return false;                                  \
++    }
++        ENUMERATE_EGL_FUNCTIONS(CHECK)
++        ENUMERATE_GL_FUNCTIONS(CHECK)
++        CHECK(create_native_buffer)
++        CHECK(get_native_buffer_info)
++        CHECK(serialize_native_buffer)
++        CHECK(release_native_buffer)
++        CHECK(create_image)
++        CHECK(destroy_image)
++        CHECK(image_target_texture)
++#undef CHECK
++        return true;
++    }();
++    return loaded ? &functions : nullptr;
++}
++
++Functions const& gl()
++{
++    auto const* functions = load_functions();
++    VERIFY(functions);
++    return *functions;
++}
++
++bool is_dmabuf(int fd)
++{
++    char path[64];
++    char target[64];
++    snprintf(path, sizeof(path), "/proc/self/fd/%d", fd);
++    auto length = readlink(path, target, sizeof(target) - 1);
++    if (length < 0)
++        return false;
++    target[length] = 0;
++    return !strncmp(target, "/dmabuf:", 8) || !strncmp(target, "anon_inode:dmabuf", 17);
++}
++
++}
++
++ErrorOr<NonnullRefPtr<GLESContext>> GLESContext::create()
++{
++    // NB: The Compositor has no window. Without this, libhybris would look for a Wayland display to attach to.
++    setenv("EGL_PLATFORM", "null", 0);
++
++    auto const* functions = load_functions();
++    if (!functions)
++        return Error::from_string_literal("No usable system EGL and GLES");
++    auto const& f = *functions;
++
++    auto context = adopt_ref(*new GLESContext);
++    auto display = f.eglGetDisplay(EGL_DEFAULT_DISPLAY);
++    if (display == EGL_NO_DISPLAY || !f.eglInitialize(display, nullptr, nullptr))
++        return Error::from_string_literal("eglInitialize failed");
++    context->m_display = display;
++
++    if (!f.eglBindAPI(EGL_OPENGL_ES_API))
++        return Error::from_string_literal("eglBindAPI failed");
++
++    static constexpr EGLint config_attributes[] = {
++        EGL_SURFACE_TYPE, EGL_PBUFFER_BIT,
++        EGL_RENDERABLE_TYPE, EGL_OPENGL_ES2_BIT,
++        EGL_RED_SIZE, 8, EGL_GREEN_SIZE, 8, EGL_BLUE_SIZE, 8, EGL_ALPHA_SIZE, 8,
++        EGL_NONE
++    };
++    EGLConfig config {};
++    EGLint config_count = 0;
++    if (!f.eglChooseConfig(display, config_attributes, &config, 1, &config_count) || config_count < 1)
++        return Error::from_string_literal("No EGL config for a GLES pbuffer");
++
++    static constexpr EGLint context_attributes[] = { EGL_CONTEXT_CLIENT_VERSION, 3, EGL_NONE };
++    auto egl_context = f.eglCreateContext(display, config, EGL_NO_CONTEXT, context_attributes);
++    if (egl_context == EGL_NO_CONTEXT)
++        return Error::from_string_literal("eglCreateContext failed");
++    context->m_context = egl_context;
++
++    // NB: Everything we draw goes to framebuffers of our own; the context only needs some surface to be current with.
++    static constexpr EGLint surface_attributes[] = { EGL_WIDTH, 1, EGL_HEIGHT, 1, EGL_NONE };
++    auto surface = f.eglCreatePbufferSurface(display, config, surface_attributes);
++    if (surface == EGL_NO_SURFACE)
++        return Error::from_string_literal("eglCreatePbufferSurface failed");
++    context->m_surface = surface;
++
++    context->make_current();
++    return context;
++}
++
++GLESContext::~GLESContext()
++{
++    auto const& f = gl();
++    if (m_display) {
++        f.eglMakeCurrent(m_display, EGL_NO_SURFACE, EGL_NO_SURFACE, EGL_NO_CONTEXT);
++        if (m_surface)
++            f.eglDestroySurface(m_display, m_surface);
++        if (m_context)
++            f.eglDestroyContext(m_display, m_context);
++    }
++}
++
++void GLESContext::make_current() const
++{
++    VERIFY(gl().eglMakeCurrent(m_display, m_surface, m_surface, m_context));
++}
++
++void* GLESContext::get_proc_address(char const* name) const
++{
++    auto const& f = gl();
++    if (auto* function = dlsym(f.gles_library, name))
++        return function;
++    if (auto* function = dlsym(f.egl_library, name))
++        return function;
++    return reinterpret_cast<void*>(f.eglGetProcAddress(name));
++}
++
++GLESImage::GLESImage(NonnullRefPtr<GLESContext> context)
++    : context(move(context))
++{
++}
++
++ErrorOr<NonnullRefPtr<GLESImage>> GLESImage::create(GLESContext& context, IntSize size)
++{
++    auto const& f = gl();
++    auto image = adopt_ref(*new GLESImage(context));
++    image->size = size;
++
++    EGLint stride = 0;
++    EGLClientBuffer buffer = nullptr;
++    if (!f.create_native_buffer(size.width(), size.height(), gralloc_usage, android_pixel_format_bgra_8888, &stride, &buffer) || !buffer)
++        return Error::from_string_literal("gralloc could not allocate a buffer");
++    image->native_buffer = buffer;
++    image->pitch = static_cast<size_t>(stride) * 4;
++
++    // The buffer's handle carries gralloc's own descriptors besides the pixels; the pixels are the one dma-buf.
++    int int_count = 0;
++    int fd_count = 0;
++    f.get_native_buffer_info(buffer, &int_count, &fd_count);
++    Vector<int> ints;
++    Vector<int> fds;
++    TRY(ints.try_resize(int_count));
++    TRY(fds.try_resize(fd_count));
++    f.serialize_native_buffer(buffer, ints.data(), fds.data());
++    for (auto fd : fds) {
++        if (!is_dmabuf(fd))
++            continue;
++        if (image->dmabuf_fd >= 0)
++            return Error::from_string_literal("gralloc buffer has more than one dma-buf");
++        image->dmabuf_fd = fd;
++    }
++    if (image->dmabuf_fd < 0)
++        return Error::from_string_literal("gralloc buffer has no dma-buf");
++
++    context.make_current();
++    image->egl_image = f.create_image(context.display(), EGL_NO_CONTEXT, egl_native_buffer_hybris, buffer, nullptr);
++    if (image->egl_image == EGL_NO_IMAGE_KHR) {
++        image->egl_image = nullptr;
++        return Error::from_string_literal("eglCreateImage failed for a gralloc buffer");
++    }
++
++    f.glGenTextures(1, &image->texture);
++    f.glBindTexture(GL_TEXTURE_2D, image->texture);
++    f.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++    f.glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++    f.image_target_texture(GL_TEXTURE_2D, image->egl_image);
++
++    // Skia draws paths with the stencil buffer when there is one.
++    f.glGenRenderbuffers(1, &image->stencil);
++    f.glBindRenderbuffer(GL_RENDERBUFFER, image->stencil);
++    f.glRenderbufferStorage(GL_RENDERBUFFER, GL_STENCIL_INDEX8, size.width(), size.height());
++
++    f.glGenFramebuffers(1, &image->framebuffer);
++    f.glBindFramebuffer(GL_FRAMEBUFFER, image->framebuffer);
++    f.glFramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0, GL_TEXTURE_2D, image->texture, 0);
++    f.glFramebufferRenderbuffer(GL_FRAMEBUFFER, GL_STENCIL_ATTACHMENT, GL_RENDERBUFFER, image->stencil);
++    auto status = f.glCheckFramebufferStatus(GL_FRAMEBUFFER);
++    f.glBindFramebuffer(GL_FRAMEBUFFER, 0);
++    if (status != GL_FRAMEBUFFER_COMPLETE)
++        return Error::from_string_literal("A gralloc buffer cannot be rendered to");
++
++    return image;
++}
++
++GLESImage::~GLESImage()
++{
++    auto const& f = gl();
++    context->make_current();
++    if (framebuffer)
++        f.glDeleteFramebuffers(1, &framebuffer);
++    if (stencil)
++        f.glDeleteRenderbuffers(1, &stencil);
++    if (texture)
++        f.glDeleteTextures(1, &texture);
++    if (egl_image)
++        f.destroy_image(context->display(), egl_image);
++    // NB: Releasing the buffer closes its descriptors, the dma-buf among them.
++    if (native_buffer)
++        f.release_native_buffer(native_buffer);
++}
++
++LinuxDmaBufHandle duplicate_linux_dmabuf_handle(GLESImage const& image)
++{
++    auto fd = dup(image.dmabuf_fd);
++    VERIFY(fd >= 0);
++    return LinuxDmaBufHandle {
++        .bitmap_format = BitmapFormat::BGRA8888,
++        .alpha_type = AlphaType::Premultiplied,
++        .size = image.size,
++        .drm_format = DRM_FORMAT_ARGB8888,
++        .pitch = image.pitch,
++        .modifier = DRM_FORMAT_MOD_LINEAR,
++        .file = IPC::File::adopt_fd(fd),
++    };
++}
++
++SharedImage duplicate_shared_image(GLESImage const& image)
++{
++    return SharedImage { duplicate_linux_dmabuf_handle(image) };
++}
++
++}
+diff --git a/Libraries/LibGfx/GLESContext.h b/Libraries/LibGfx/GLESContext.h
+new file mode 100644
+index 00000000..ee39a433
+--- /dev/null
++++ b/Libraries/LibGfx/GLESContext.h
+@@ -0,0 +1,61 @@
++/*
++ * Pacific: the Sailfish OS front end for the Ladybird engine.
++ *
++ * SPDX-License-Identifier: BSD-2-Clause
++ */
++
++#pragma once
++
++#include <AK/AtomicRefCounted.h>
++#include <AK/Error.h>
++#include <AK/NonnullRefPtr.h>
++#include <LibGfx/SharedImage.h>
++#include <LibGfx/Size.h>
++
++namespace Gfx {
++
++// GPU painting through the system's EGL and GLES (libhybris on Sailfish OS). Both libraries are loaded privately:
++// the Compositor also carries ANGLE for WebGL, which exports the same symbol names. Callers never see EGL or GL types.
++class GLESContext : public AtomicRefCounted<GLESContext> {
++public:
++    static ErrorOr<NonnullRefPtr<GLESContext>> create();
++    ~GLESContext();
++
++    void make_current() const;
++    // Any EGL or GL entry point, for Skia's GL interface.
++    void* get_proc_address(char const* name) const;
++
++    void* display() const { return m_display; }
++
++private:
++    GLESContext() = default;
++
++    void* m_display { nullptr };
++    void* m_context { nullptr };
++    void* m_surface { nullptr };
++};
++
++// An image painted by GL and shown by another process: a gralloc buffer, allocated through libhybris, rendered to as
++// a texture behind a framebuffer. Its pixels are shared as a dma-buf with plain BGRA rows.
++struct GLESImage : public AtomicRefCounted<GLESImage> {
++    static ErrorOr<NonnullRefPtr<GLESImage>> create(GLESContext&, IntSize);
++    ~GLESImage();
++
++    NonnullRefPtr<GLESContext> context;
++    IntSize size;
++    size_t pitch { 0 };
++    int dmabuf_fd { -1 };
++    void* native_buffer { nullptr };
++    void* egl_image { nullptr };
++    u32 texture { 0 };
++    u32 stencil { 0 };
++    u32 framebuffer { 0 };
++
++private:
++    explicit GLESImage(NonnullRefPtr<GLESContext>);
++};
++
++LinuxDmaBufHandle duplicate_linux_dmabuf_handle(GLESImage const&);
++SharedImage duplicate_shared_image(GLESImage const&);
++
++}
+diff --git a/Libraries/LibGfx/PaintingSurface.cpp b/Libraries/LibGfx/PaintingSurface.cpp
+index c4c70ebf..d53b5b11 100644
+--- a/Libraries/LibGfx/PaintingSurface.cpp
++++ b/Libraries/LibGfx/PaintingSurface.cpp
+@@ -26,6 +26,10 @@
+ #    include <LibGfx/VulkanImage.h>
+ #    include <gpu/ganesh/vk/GrVkBackendSurface.h>
+ #    include <gpu/ganesh/vk/GrVkTypes.h>
++#elif defined(USE_GLES_HYBRIS)
++#    include <LibGfx/GLESContext.h>
++#    include <gpu/ganesh/gl/GrGLBackendSurface.h>
++#    include <gpu/ganesh/gl/GrGLTypes.h>
+ #elif defined(USE_DIRECTX)
+ #    include <AK/Windows.h>
+ #    include <LibGfx/D3DSharedTexture.h>
+@@ -45,7 +49,7 @@ struct PaintingSurface::Impl {
+     bool wraps_shared_image { false };
+ };
+ 
+-#if defined(AK_OS_MACOS) || defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX)
++#if defined(AK_OS_MACOS) || defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX) || defined(USE_GLES_HYBRIS)
+ static GrSurfaceOrigin origin_to_sk_origin(PaintingSurface::Origin origin)
+ {
+     switch (origin) {
+@@ -163,6 +167,26 @@ NonnullRefPtr<PaintingSurface> PaintingSurface::wrap_bitmap(Bitmap& bitmap)
+     return adopt_ref(*new PaintingSurface(make<Impl>(RefPtr<SkiaBackendContext> {}, size, surface, bitmap)));
+ }
+ 
++#ifdef USE_GLES_HYBRIS
++NonnullRefPtr<PaintingSurface> PaintingSurface::create_from_gles_image(NonnullRefPtr<SkiaBackendContext> context, NonnullRefPtr<GLESImage> image, Origin origin)
++{
++    // NB: GL sees the BGRA gralloc buffer as an RGBA texture; the driver keeps the bytes in BGRA order in memory.
++    static constexpr GrGLenum gl_rgba8 = 0x8058;
++    GrGLFramebufferInfo framebuffer_info {};
++    framebuffer_info.fFBOID = image->framebuffer;
++    framebuffer_info.fFormat = gl_rgba8;
++    auto render_target = GrBackendRenderTargets::MakeGL(image->size.width(), image->size.height(), 0, 8, framebuffer_info);
++
++    auto size = image->size;
++    // Skia holds a reference to the image until it lets go of the surface.
++    image->ref();
++    auto surface = SkSurfaces::WrapBackendRenderTarget(context->sk_context(), render_target, origin_to_sk_origin(origin), kRGBA_8888_SkColorType,
++        SkColorSpace::MakeSRGB(), nullptr, [](void* image) { static_cast<GLESImage*>(image)->unref(); }, image.ptr());
++    VERIFY(surface);
++    return adopt_ref(*new PaintingSurface(make<Impl>(context, size, surface, nullptr, true)));
++}
++#endif
++
+ #ifdef AK_OS_MACOS
+ NonnullRefPtr<PaintingSurface> PaintingSurface::create_from_shared_image_buffer(SharedImageBuffer& shared_image_buffer, NonnullRefPtr<SkiaBackendContext> context, Origin origin)
+ {
+diff --git a/Libraries/LibGfx/PaintingSurface.h b/Libraries/LibGfx/PaintingSurface.h
+index 96fa13b9..a1323012 100644
+--- a/Libraries/LibGfx/PaintingSurface.h
++++ b/Libraries/LibGfx/PaintingSurface.h
+@@ -22,6 +22,14 @@ struct VulkanImage;
+ }
+ #endif
+ 
++#ifdef USE_GLES_HYBRIS
++namespace Gfx {
++
++struct GLESImage;
++
++}
++#endif
++
+ #ifdef USE_DIRECTX
+ #    include <AK/Error.h>
+ 
+@@ -63,6 +71,10 @@ public:
+     static NonnullRefPtr<PaintingSurface> create_from_vkimage(NonnullRefPtr<SkiaBackendContext> context, NonnullRefPtr<VulkanImage> vulkan_image, Origin origin);
+ #endif
+ 
++#ifdef USE_GLES_HYBRIS
++    static NonnullRefPtr<PaintingSurface> create_from_gles_image(NonnullRefPtr<SkiaBackendContext>, NonnullRefPtr<GLESImage>, Origin = Origin::TopLeft);
++#endif
++
+ #ifdef USE_DIRECTX
+     static ErrorOr<NonnullRefPtr<PaintingSurface>> create_from_d3d_texture(NonnullRefPtr<SkiaBackendContext>, NonnullRefPtr<D3DSharedTexture>, Origin = Origin::TopLeft);
+ #endif
+diff --git a/Libraries/LibGfx/SharedImage.h b/Libraries/LibGfx/SharedImage.h
+index d05e33ae..efd083d5 100644
+--- a/Libraries/LibGfx/SharedImage.h
++++ b/Libraries/LibGfx/SharedImage.h
+@@ -41,6 +41,11 @@ struct WindowsD3DHandle {
+ };
+ #endif
+ 
++// Shared images that travel between processes as Linux dma-bufs.
++#if defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_GLES_HYBRIS)
++#    define USE_LINUX_DMABUF_SHARED_IMAGES 1
++#endif
++
+ #ifdef USE_VULKAN_DMABUF_IMAGES
+ struct VulkanImage;
+ SharedImage duplicate_shared_image(VulkanImage const&);
+diff --git a/Libraries/LibGfx/SharedImageBuffer.cpp b/Libraries/LibGfx/SharedImageBuffer.cpp
+index 222159de..f9c01ec1 100644
+--- a/Libraries/LibGfx/SharedImageBuffer.cpp
++++ b/Libraries/LibGfx/SharedImageBuffer.cpp
+@@ -7,7 +7,7 @@
+ #include <LibGfx/Bitmap.h>
+ #include <LibGfx/SharedImageBuffer.h>
+ 
+-#ifdef USE_VULKAN_DMABUF_IMAGES
++#ifdef USE_LINUX_DMABUF_SHARED_IMAGES
+ #    include <libdrm/drm_fourcc.h>
+ #    include <sys/mman.h>
+ #endif
+@@ -33,7 +33,7 @@ SharedImageBuffer::SharedImageBuffer(Core::IOSurfaceHandle&& iosurface_handle, N
+ #else
+ static constexpr auto shared_image_buffer_format = BitmapFormat::BGRA8888;
+ static constexpr auto shared_image_buffer_alpha_type = AlphaType::Premultiplied;
+-#    ifdef USE_VULKAN_DMABUF_IMAGES
++#    ifdef USE_LINUX_DMABUF_SHARED_IMAGES
+ static constexpr auto shared_image_buffer_drm_format = DRM_FORMAT_ARGB8888;
+ 
+ static NonnullRefPtr<Bitmap> create_bitmap_from_linux_dmabuf(LinuxDmaBufHandle const& dmabuf)
+@@ -56,7 +56,7 @@ SharedImageBuffer::SharedImageBuffer(NonnullRefPtr<Bitmap> bitmap)
+ {
+ }
+ 
+-#    ifdef USE_VULKAN_DMABUF_IMAGES
++#    ifdef USE_LINUX_DMABUF_SHARED_IMAGES
+ SharedImageBuffer::SharedImageBuffer(NonnullRefPtr<Bitmap> bitmap, LinuxDmaBufHandle&& dmabuf)
+     : m_linux_dmabuf_handle(move(dmabuf))
+     , m_bitmap(move(bitmap))
+@@ -95,7 +95,7 @@ SharedImageBuffer SharedImageBuffer::import_from_shared_image(SharedImage shared
+             return SharedImageBuffer(*shareable_bitmap.bitmap());
+         },
+         [](LinuxDmaBufHandle& dmabuf) -> SharedImageBuffer {
+-#    ifdef USE_VULKAN_DMABUF_IMAGES
++#    ifdef USE_LINUX_DMABUF_SHARED_IMAGES
+             auto bitmap = create_bitmap_from_linux_dmabuf(dmabuf);
+             return SharedImageBuffer(move(bitmap), move(dmabuf));
+ #    else
+diff --git a/Libraries/LibGfx/SharedImageBuffer.h b/Libraries/LibGfx/SharedImageBuffer.h
+index 6e3fe63a..fa6baad3 100644
+--- a/Libraries/LibGfx/SharedImageBuffer.h
++++ b/Libraries/LibGfx/SharedImageBuffer.h
+@@ -42,7 +42,7 @@ public:
+ 
+ #ifdef AK_OS_MACOS
+     Core::IOSurfaceHandle const& iosurface_handle() const { return m_iosurface_handle; }
+-#elif defined(USE_VULKAN_DMABUF_IMAGES)
++#elif defined(USE_LINUX_DMABUF_SHARED_IMAGES)
+     LinuxDmaBufHandle const* linux_dmabuf_handle() const { return m_linux_dmabuf_handle.has_value() ? &m_linux_dmabuf_handle.value() : nullptr; }
+ #elif defined(USE_DIRECTX)
+     WindowsD3DHandle const* windows_d3d_handle() const { return m_windows_d3d_handle.has_value() ? &m_windows_d3d_handle.value() : nullptr; }
+@@ -54,7 +54,7 @@ private:
+     Core::IOSurfaceHandle m_iosurface_handle;
+ #else
+     explicit SharedImageBuffer(NonnullRefPtr<Bitmap>);
+-#    ifdef USE_VULKAN_DMABUF_IMAGES
++#    ifdef USE_LINUX_DMABUF_SHARED_IMAGES
+     SharedImageBuffer(NonnullRefPtr<Bitmap>, LinuxDmaBufHandle&&);
+     Optional<LinuxDmaBufHandle> m_linux_dmabuf_handle;
+ #    endif
+diff --git a/Libraries/LibGfx/SkiaBackendContext.cpp b/Libraries/LibGfx/SkiaBackendContext.cpp
+index 1907c0eb..c62203f6 100644
+--- a/Libraries/LibGfx/SkiaBackendContext.cpp
++++ b/Libraries/LibGfx/SkiaBackendContext.cpp
+@@ -35,6 +35,12 @@ template<>
+ constexpr bool AllocatedWithSystemAllocator<skgpu::VulkanExtensions> = true;
+ #endif
+ 
++#ifdef USE_GLES_HYBRIS
++#    include <gpu/ganesh/gl/GrGLAssembleInterface.h>
++#    include <gpu/ganesh/gl/GrGLDirectContext.h>
++#    include <gpu/ganesh/gl/GrGLInterface.h>
++#endif
++
+ #ifdef AK_OS_MACOS
+ #    include <gpu/ganesh/GrBackendSurface.h>
+ #    include <gpu/ganesh/mtl/GrMtlBackendContext.h>
+@@ -44,7 +50,7 @@ constexpr bool AllocatedWithSystemAllocator<skgpu::VulkanExtensions> = true;
+ 
+ namespace Gfx {
+ 
+-#if defined(AK_OS_MACOS) || defined(USE_DIRECTX) || defined(USE_VULKAN)
++#if defined(AK_OS_MACOS) || defined(USE_DIRECTX) || defined(USE_VULKAN) || defined(USE_GLES_HYBRIS)
+ static constexpr size_t skia_resource_cache_limit = 256 * MiB;
+ #endif
+ static constexpr auto skia_deferred_cleanup_interval = AK::Duration::from_seconds(1);
+@@ -160,6 +166,13 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_independent_gpu_backend()
+     }
+     auto vulkan_context = maybe_vulkan_context.release_value();
+     return create_vulkan_context(vulkan_context);
++#elif defined(USE_GLES_HYBRIS)
++    auto gles_context = Gfx::GLESContext::create();
++    if (gles_context.is_error()) {
++        dbgln("GLES context creation failed: {}", gles_context.error());
++        return {};
++    }
++    return create_gles_context(gles_context.release_value());
+ #else
+     return {};
+ #endif
+@@ -332,4 +345,59 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_metal_context(NonnullRefPt
+ }
+ #endif
+ 
++
++#ifdef USE_GLES_HYBRIS
++class SkiaGLESBackendContext final : public SkiaBackendContext {
++    AK_MAKE_NONCOPYABLE(SkiaGLESBackendContext);
++    AK_MAKE_NONMOVABLE(SkiaGLESBackendContext);
++
++public:
++    SkiaGLESBackendContext(sk_sp<GrDirectContext> context, NonnullRefPtr<GLESContext> gles_context)
++        : m_context(move(context))
++        , m_gles_context(move(gles_context))
++    {
++    }
++
++    ~SkiaGLESBackendContext() override
++    {
++        m_gles_context->make_current();
++        m_context.reset();
++    }
++
++    GrDirectContext* sk_context() const override { return m_context.get(); }
++
++    VulkanContext const& vulkan_context() override { VERIFY_NOT_REACHED(); }
++
++    MetalContext& metal_context() override { VERIFY_NOT_REACHED(); }
++
++    GLESContext& gles_context() override { return m_gles_context; }
++
++private:
++    sk_sp<GrDirectContext> m_context;
++    NonnullRefPtr<GLESContext> m_gles_context;
++};
++
++RefPtr<SkiaBackendContext> SkiaBackendContext::create_gles_context(NonnullRefPtr<GLESContext> gles_context)
++{
++    auto interface = GrGLMakeAssembledInterface(gles_context.ptr(), [](void* context, char const* name) -> GrGLFuncPtr {
++        return reinterpret_cast<GrGLFuncPtr>(static_cast<GLESContext*>(context)->get_proc_address(name));
++    });
++    if (!interface) {
++        dbgln("Skia could not assemble a GLES interface");
++        return {};
++    }
++
++    GrContextOptions options;
++    options.fReduceOpsTaskSplitting = GrContextOptions::Enable::kNo;
++
++    auto context = GrDirectContexts::MakeGL(move(interface), options);
++    if (!context) {
++        dbgln("Skia GLES context creation failed");
++        return {};
++    }
++    context->setResourceCacheLimit(skia_resource_cache_limit);
++    return adopt_ref(*new SkiaGLESBackendContext(move(context), move(gles_context)));
++}
++#endif
++
+ }
+diff --git a/Libraries/LibGfx/SkiaBackendContext.h b/Libraries/LibGfx/SkiaBackendContext.h
+index efd0e9eb..28640599 100644
+--- a/Libraries/LibGfx/SkiaBackendContext.h
++++ b/Libraries/LibGfx/SkiaBackendContext.h
+@@ -22,6 +22,10 @@
+ #    include <LibGfx/MetalContext.h>
+ #endif
+ 
++#ifdef USE_GLES_HYBRIS
++#    include <LibGfx/GLESContext.h>
++#endif
++
+ class GrDirectContext;
+ class SkSurface;
+ 
+@@ -49,6 +53,10 @@ public:
+     static RefPtr<SkiaBackendContext> create_metal_context(NonnullRefPtr<MetalContext>);
+ #endif
+ 
++#ifdef USE_GLES_HYBRIS
++    static RefPtr<SkiaBackendContext> create_gles_context(NonnullRefPtr<GLESContext>);
++#endif
++
+     static void initialize_gpu_backend();
+     static RefPtr<SkiaBackendContext> create_independent_gpu_backend();
+     static RefPtr<SkiaBackendContext> the_main_thread_context();
+@@ -64,6 +72,9 @@ public:
+     virtual MetalContext& metal_context() = 0;
+     virtual VulkanContext const& vulkan_context() = 0;
+     virtual Direct3DContext& direct3d_context() { VERIFY_NOT_REACHED(); }
++#ifdef USE_GLES_HYBRIS
++    virtual GLESContext& gles_context() { VERIFY_NOT_REACHED(); }
++#endif
+ 
+ private:
+     void perform_post_flush_cleanup();
+diff --git a/Meta/CMake/check_for_dependencies.cmake b/Meta/CMake/check_for_dependencies.cmake
+index d6763069..993fefde 100644
+--- a/Meta/CMake/check_for_dependencies.cmake
++++ b/Meta/CMake/check_for_dependencies.cmake
+@@ -41,7 +41,16 @@ if (NOT APPLE AND NOT ANDROID AND NOT WIN32)
+     add_cxx_compile_definitions(USE_FONTCONFIG=1)
+ endif()
+ 
+-if (NOT APPLE AND NOT WIN32)
++# Ladybird for Sailfish OS paints with the system's EGL and GLES (libhybris): the Jolla Store allows those
++# libraries and not Vulkan.
++if (LADYBIRD_UI_SFOS OR DEFINED ENV{LADYBIRD_UI_SFOS})
++    set(USE_GLES_HYBRIS ON CACHE BOOL "" FORCE)
++    add_cxx_compile_definitions(USE_GLES_HYBRIS=1)
++else()
++    set(USE_GLES_HYBRIS OFF CACHE BOOL "" FORCE)
++endif()
++
++if (NOT APPLE AND NOT WIN32 AND NOT USE_GLES_HYBRIS)
+     find_package(VulkanHeaders CONFIG QUIET)
+     find_package(Vulkan QUIET)
+     find_program(GLSLANG_VALIDATOR glslangValidator)
+diff --git a/Services/Compositor/BackingStoreManager.cpp b/Services/Compositor/BackingStoreManager.cpp
+index 4a2cd467..52eedc07 100644
+--- a/Services/Compositor/BackingStoreManager.cpp
++++ b/Services/Compositor/BackingStoreManager.cpp
+@@ -21,9 +21,13 @@
+ #    include <LibGfx/D3DSharedTexture.h>
+ #endif
+ 
++#ifdef USE_GLES_HYBRIS
++#    include <LibGfx/GLESContext.h>
++#endif
++
+ namespace Compositor {
+ 
+-#if defined(USE_DIRECTX) || defined(USE_VULKAN)
++#if defined(USE_DIRECTX) || defined(USE_VULKAN) || defined(USE_GLES_HYBRIS)
+ static NonnullRefPtr<Gfx::PaintingSurface> create_gpu_painting_surface_with_bitmap_flush(Gfx::IntSize size, Gfx::SharedImageBuffer& buffer, RefPtr<Gfx::SkiaBackendContext> const& skia_backend_context)
+ {
+     auto surface = Gfx::PaintingSurface::create_with_size(size, Gfx::BitmapFormat::BGRA8888, Gfx::AlphaType::Premultiplied, skia_backend_context);
+@@ -41,7 +45,7 @@ static NonnullRefPtr<Gfx::PaintingSurface> create_shareable_bitmap_backing_store
+     if (skia_backend_context)
+         return Gfx::PaintingSurface::create_from_shared_image_buffer(buffer, *skia_backend_context);
+ #else
+-#    if defined(USE_DIRECTX) || defined(USE_VULKAN)
++#    if defined(USE_DIRECTX) || defined(USE_VULKAN) || defined(USE_GLES_HYBRIS)
+     if (skia_backend_context)
+         return create_gpu_painting_surface_with_bitmap_flush(size, buffer, skia_backend_context);
+ #    else
+@@ -52,7 +56,7 @@ static NonnullRefPtr<Gfx::PaintingSurface> create_shareable_bitmap_backing_store
+     return Gfx::PaintingSurface::wrap_bitmap(*buffer.bitmap());
+ }
+ 
+-#if defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX)
++#if defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX) || defined(USE_GLES_HYBRIS)
+ struct GpuBackingStore {
+     RefPtr<Gfx::PaintingSurface> surface;
+     Gfx::SharedImage shared_image;
+@@ -74,6 +78,19 @@ static ErrorOr<GpuBackingStore> create_shared_gpu_backing_store(Gfx::IntSize siz
+ }
+ #endif
+ 
++#ifdef USE_GLES_HYBRIS
++static ErrorOr<GpuBackingStore> create_shared_gpu_backing_store(Gfx::IntSize size, Gfx::SkiaBackendContext& skia_backend_context)
++{
++    auto image = TRY(Gfx::GLESImage::create(skia_backend_context.gles_context(), size));
++    auto shared_image = Gfx::duplicate_shared_image(*image);
++
++    return GpuBackingStore {
++        .surface = Gfx::PaintingSurface::create_from_gles_image(skia_backend_context, move(image)),
++        .shared_image = move(shared_image),
++    };
++}
++#endif
++
+ #ifdef USE_DIRECTX
+ static ErrorOr<GpuBackingStore> create_shared_gpu_backing_store(Gfx::IntSize size, Gfx::SkiaBackendContext& skia_backend_context)
+ {
+@@ -164,7 +181,7 @@ Optional<BackingStoreManager::Publication> BackingStoreManager::allocate_backing
+         return index == 0 ? BufferState::Presented : BufferState::Available;
+     };
+ 
+-#if defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX)
++#if defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX) || defined(USE_GLES_HYBRIS)
+     if (skia_backend_context && gpu_sharing == GpuSharing::Allowed) {
+         Vector<Gfx::SharedImage> shared_images;
+         shared_images.ensure_capacity(buffer_count);
+diff --git a/vcpkg.json b/vcpkg.json
+index 574dba01..95d6f8dc 100644
+--- a/vcpkg.json
++++ b/vcpkg.json
+@@ -213,6 +213,7 @@
+         "fontconfig",
+         "harfbuzz",
+         "icu",
++        "gl",
+         "vulkan"
+       ]
+     },
