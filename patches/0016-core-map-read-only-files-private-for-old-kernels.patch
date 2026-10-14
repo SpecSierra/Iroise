@@ -1,0 +1,16 @@
+diff --git a/Libraries/LibCore/MappedFile.cpp b/Libraries/LibCore/MappedFile.cpp
+index fbd02727..023d94ef 100644
+--- a/Libraries/LibCore/MappedFile.cpp
++++ b/Libraries/LibCore/MappedFile.cpp
+@@ -63,7 +63,10 @@ ErrorOr<NonnullOwnPtr<MappedFile>> MappedFile::map_from_fd_range_and_close(int f
+     switch (mode) {
+     case Mode::ReadOnly:
+         protection = PROT_READ;
+-        flags = MAP_SHARED;
++        // NB: Private, not shared: kernels before 6.7 refuse a shared mapping of a write-sealed memfd even read-only
++        //     (EPERM), and the font service seals its catalog that way. Pages nobody writes still show the file's
++        //     contents, so readers see no difference.
++        flags = MAP_PRIVATE;
+         break;
+     case Mode::ReadWrite:
+         protection = PROT_READ | PROT_WRITE;

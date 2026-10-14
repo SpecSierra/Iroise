@@ -1,0 +1,28 @@
+diff --git a/Meta/CMake/cmake_options.cmake b/Meta/CMake/cmake_options.cmake
+index 7a122bcb..e1648ff5 100644
+--- a/Meta/CMake/cmake_options.cmake
++++ b/Meta/CMake/cmake_options.cmake
+@@ -36,6 +36,7 @@ option(ENABLE_INSTALL_FREEDESKTOP_FILES "Enable installing .desktop and .service
+ option(LADYBIRD_ENABLE_CPPTRACE "Enable use of cpptrace as the default library for stacktraces. If not available falls back to backtrace.h" ON)
+ option(LADYBIRD_GENERATE_DSYM "Generate dSYM bundles for binaries and libraries (macOS only)" OFF)
+ option(ENABLE_CI_BASELINE_CPU "Use a baseline CPU target for improved ccache sharing" OFF)
++option(ENABLE_ARMV8_BASELINE_CPU "Target plain ARMv8.0 on aarch64 instead of the build host's CPU, for older phones" OFF)
+ 
+ # lto1 uses a crazy amount of RAM in static builds.
+ # Disable LTO for static gcc builds unless explicitly asked for.
+diff --git a/Meta/CMake/compile_options.cmake b/Meta/CMake/compile_options.cmake
+index 062721ff..199ecd16 100644
+--- a/Meta/CMake/compile_options.cmake
++++ b/Meta/CMake/compile_options.cmake
+@@ -69,6 +69,11 @@ if (ENABLE_CI_BASELINE_CPU)
+         add_cxx_compile_options(-march=x86-64-v3)
+         set(RUSTC_TARGET_CPU_FLAGS -Ctarget-cpu=x86-64-v3)
+     endif()
++elseif (ENABLE_ARMV8_BASELINE_CPU AND CMAKE_SYSTEM_PROCESSOR MATCHES "^(aarch64|arm64)$")
++    # The build host is newer than the phones the build runs on (Cortex-A53/A73 have no ARMv8.1+ instructions).
++    # Atomics still pick LSE at run time where the CPU has it, through GCC's outline atomics.
++    add_cxx_compile_options(-march=armv8-a)
++    set(RUSTC_TARGET_CPU_FLAGS -Ctarget-cpu=generic)
+ elseif (CMAKE_SYSTEM_PROCESSOR STREQUAL "riscv64")
+     # On RISC-V the generic -march=native is not yet supported and both gcc and clang require an explicit
+     # ISA or target string. Unfortunately hardware probing is also neither easy nor reliable at the moment.

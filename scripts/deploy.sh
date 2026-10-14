@@ -4,8 +4,8 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 OPTS=(-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR -o ConnectTimeout=8)
-sshpass -e scp -P 2222 "${OPTS[@]}" "$ROOT/dist/harbour-pacific.tar.gz" defaultuser@localhost:/tmp/
-sshpass -e ssh -p 2222 "${OPTS[@]}" defaultuser@localhost \
+sshpass -e scp -P 2222 "${OPTS[@]}" "$ROOT/dist/harbour-pacific.tar.gz" defaultuser@127.0.0.1:/tmp/
+sshpass -e ssh -p 2222 "${OPTS[@]}" defaultuser@127.0.0.1 \
     'sh /tmp/ladybird/stop.sh 2>/dev/null; rm -rf /tmp/ladybird && mkdir /tmp/ladybird &&
      tar xzf /tmp/harbour-pacific.tar.gz -C /tmp/ladybird --strip-components=1 && rm /tmp/harbour-pacific.tar.gz'
-sshpass -e scp -P 2222 "${OPTS[@]}" "$ROOT"/scripts/phone/*.sh defaultuser@localhost:/tmp/ladybird/
+sshpass -e scp -P 2222 "${OPTS[@]}" "$ROOT"/scripts/phone/*.sh defaultuser@127.0.0.1:/tmp/ladybird/

@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibSandbox/Seccomp.cpp b/Libraries/LibSandbox/Seccomp.cpp
-index 9cad1ca7..1a45f367 100644
+index 9cad1ca7..34ccf2a9 100644
 --- a/Libraries/LibSandbox/Seccomp.cpp
 +++ b/Libraries/LibSandbox/Seccomp.cpp
-@@ -1849,13 +1849,17 @@ void SeccompPolicy::allow_gpu_device_operations()
+@@ -1849,13 +1849,20 @@ void SeccompPolicy::allow_gpu_device_operations()
          // NVIDIA Tegra's nvmap and nvhost interfaces.
          'N',
          'H',
@@ -10,6 +10,9 @@ index 9cad1ca7..1a45f367 100644
 +        static_cast<char>(0x80),
 +        // MediaTek's gralloc_extra device, which gralloc uses for every buffer it allocates.
 +        'g',
++        // Qualcomm Adreno's kernel driver (kgsl), and the ION allocator its gralloc uses on older kernels.
++        static_cast<char>(0x09),
++        'I',
  #endif
      };
      append(BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_ioctl, 0, 2 * types.size() + 3));

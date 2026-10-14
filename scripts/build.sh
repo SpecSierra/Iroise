@@ -43,10 +43,21 @@ OVERLAY="$UP/Meta/CMake/vcpkg/overlay-ports/skia"
 rm -rf "$OVERLAY"
 cp -r "$VCPKG_ROOT/ports/skia" "$OVERLAY"
 patch -d "$OVERLAY" -p1 -s < "$ROOT/patches/vcpkg-skia-gl-without-system-libraries.patch"
+# mimalloc compiles itself for ARMv8.1 (its MI_OPT_ARCH) on arm64, which the Xperia 10 II's cores do not have.
+OVERLAY="$UP/Meta/CMake/vcpkg/overlay-ports/mimalloc"
+rm -rf "$OVERLAY"
+# NB: An overlay replaces the version Ladybird pins, so it must be that version's port (2.2.7, this git tree from
+#     versions/m-/mimalloc.json), not the newer one in ports/.
+mkdir -p "$OVERLAY"
+git -C "$VCPKG_ROOT" archive 5b9c09b6d1592392634727afb0abbe0b14e030a2 | tar -x -C "$OVERLAY"
+sed -i 's/^\( *\)-DMI_USE_CXX=ON\(\r\?\)$/\1-DMI_USE_CXX=ON\2\n\1-DMI_NO_OPT_ARCH=ON\2/' "$OVERLAY/portfile.cmake"
+grep -q MI_NO_OPT_ARCH "$OVERLAY/portfile.cmake"
 if [ ! -f "$BUILD/build.ninja" ]; then
     cmake --preset Release -S "$UP" -B "$BUILD" \
         -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \
         -DPKG_CONFIG_EXECUTABLE="$(command -v pkg-config)" \
         -DBUILD_TESTING=OFF
 fi
+# Plain ARMv8.0, not the build host's CPU: the Xperia 10 II's Cortex-A73/A53 have none of the host's ARMv8.2 extras.
+grep -q '^ENABLE_ARMV8_BASELINE_CPU:BOOL=ON' "$BUILD/CMakeCache.txt" || cmake -B "$BUILD" -DENABLE_ARMV8_BASELINE_CPU=ON
 exec ninja -C "$BUILD" -j "$JOBS" "${1:-ladybird}"
