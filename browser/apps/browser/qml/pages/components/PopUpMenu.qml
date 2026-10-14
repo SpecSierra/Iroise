@@ -215,6 +215,7 @@ SilicaControl {
                         blurSource: menuBlur
                         alignParent: popUpMenu
                         sampleDY: popUpMenu.blurOffsetY
+                        track: menuFlickable.y
                         radius: 0
                         tintAlpha: 0.6
                         y: Math.max(0, headerItem.y - menuFlickable.contentY)
@@ -248,6 +249,7 @@ SilicaControl {
                         blurSource: menuBlur
                         alignParent: popUpMenu
                         sampleDY: popUpMenu.blurOffsetY
+                        track: menuFlickable.y
                         radius: 0
                         tintAlpha: 0.6
                         y: Math.max(0, headerItem.y - menuFlickable.contentY)
@@ -290,6 +292,7 @@ SilicaControl {
                                 item.blurSource = menuBlur
                                 item.alignParent = popUpMenu
                                 item.sampleDY = Qt.binding(function() { return popUpMenu.blurOffsetY })
+                                item.track = Qt.binding(function() { return menuFlickable.y })
                             }
                         }
                     }

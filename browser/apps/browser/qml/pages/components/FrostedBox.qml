@@ -29,6 +29,9 @@ Item {
     // differently-cropped backdrop (e.g. the popup menu vs the start page).
     property real sampleDX: 0
     property real sampleDY: 0
+    // Where the box is in alignParent is worked out from its own geometry. When an ancestor moves it instead (the
+    // popup menu slides in), bind something that changes with that move here, or the sampled slice stays behind.
+    property real track: 0
 
     default property alias content: contentArea.data
 
@@ -53,7 +56,7 @@ Item {
             sourceRect: {
                 // Reference the layout drivers so the binding re-evaluates when the
                 // box (or the page) is laid out / rotated, then map to align space.
-                var driver = box.x + box.y + box.width + box.height + box.sampleDX + box.sampleDY
+                var driver = box.x + box.y + box.width + box.height + box.sampleDX + box.sampleDY + box.track
                         + (box.alignParent ? box.alignParent.width + box.alignParent.height : 0)
                 var p = box.alignParent ? box.mapToItem(box.alignParent, 0, 0) : Qt.point(0, 0)
                 return Qt.rect(p.x + box.sampleDX, p.y + box.sampleDY, box.width, box.height)
