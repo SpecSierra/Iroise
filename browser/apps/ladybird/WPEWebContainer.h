@@ -198,6 +198,8 @@ private:
     void activatePage(int tabId);
     void setActiveTabRendered(bool r);
     void connectPage(WPEWebPage *page);
+    // A view the engine opened for a page, waiting for the tab that shows it to be created.
+    quint32 m_viewForNextPage = 0;
 
     // --- Tab discarding (Lever 2): reclaim a backgrounded tab's whole
     // WebProcess (RSS + GPU) when it falls outside the live-tab budget. The

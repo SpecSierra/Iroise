@@ -5,6 +5,8 @@
  */
 
 #include "WPEWebContainer.h"
+
+#include "LadybirdEngine.h"
 #include "WPEWebPage.h"
 #include "WPERuntimePaths.h"
 #include "declarativehistorymodel.h"
@@ -48,6 +50,14 @@ QSizeF screenSizeOrFallback(QScreen *screen)
 WPEWebContainer::WPEWebContainer(QQuickItem *parent)
     : QQuickItem(parent)
 {
+    // A page that opens a window (a link with a target, window.open) gets a new tab, showing the engine's view.
+    connect(LadybirdEngine::instance(), &LadybirdEngine::viewOffered, this, [this](quint32 view) {
+        m_viewForNextPage = view;
+        if (!m_tabModel || !m_tabModel->newTab(QString(), false))
+            LadybirdEngine::instance()->removeView(view);
+        m_viewForNextPage = 0;
+    });
+
     setAcceptedMouseButtons(Qt::AllButtons);
     setFiltersChildMouseEvents(false);
 
@@ -799,6 +809,10 @@ WPEWebPage *WPEWebContainer::getOrCreatePage(int tabId)
     // then reparent via setParentItem() to trigger configureWindow() correctly.
     WPEWebPage *page = new WPEWebPage(nullptr);
     page->setTabId(tabId);
+    if (m_viewForNextPage) {
+        page->adoptEngineView(m_viewForNextPage);
+        m_viewForNextPage = 0;
+    }
     // Tag the page with the mode it was born into, BEFORE it is parented (which
     // triggers web-view creation): private pages must be constructed against the
     // ephemeral network session. A page keeps this for its whole life — the two
@@ -828,6 +842,7 @@ WPEWebPage *WPEWebContainer::getOrCreatePage(int tabId)
 
 void WPEWebContainer::connectPage(WPEWebPage *page)
 {
+    connect(page, &WPEQtView::closeRequested, this, [this, page] { closeTab(page->tabId()); });
     // Keep tab metadata (URL/title/mode) in sync with the tab model that created this page.
     // Using the model captured at page-creation time avoids cross-updating when switching
     // between persistent/private models later.

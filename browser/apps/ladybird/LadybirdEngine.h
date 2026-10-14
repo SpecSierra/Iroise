@@ -50,7 +50,7 @@ class LadybirdEngine : public QObject {
 public:
     static LadybirdEngine* instance();
 
-    quint32 addView(LadybirdEngineClient*, const QSize& size, qreal devicePixelRatio);
+    quint32 addView(LadybirdEngineClient*, const QSize& size, qreal devicePixelRatio, bool isPrivate);
     void removeView(quint32 view);
 
     void send(quint32 view, lb_embed_message_type type, int a = 0, int b = 0, int c = 0, int d = 0,
@@ -58,8 +58,13 @@ public:
 
     bool isConnected() const { return m_connection >= 0; }
 
+    // A view the engine opened for a page (LB_EMBED_NEW_VIEW) belongs to whoever claims it; what the engine says
+    // about it until then is kept for them.
+    void claimView(quint32 view, LadybirdEngineClient*);
+
 signals:
     void connectedChanged();
+    void viewOffered(quint32 view);
 
 private slots:
     void acceptEngine();
@@ -97,6 +102,7 @@ private:
     QVector<Queued> m_queue;
 
     QHash<quint32, LadybirdEngineClient*> m_views;
+    QHash<quint32, QVector<QPair<lb_embed_header, QString>>> m_unclaimedViews;
     quint32 m_nextView = 1;
     QVector<Mapping> m_mappings;
     quint64 m_frameSerial = 0;

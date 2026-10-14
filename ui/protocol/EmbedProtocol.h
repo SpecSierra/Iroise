@@ -17,16 +17,20 @@
 #define LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE "LADYBIRD_SFOS_EMBED_SOCKET"
 #define LB_EMBED_TEXT_MAX 32768
 #define LB_EMBED_PAGE_MESSAGE_MARKER "\001pacific"
+#define LB_EMBED_FIRST_ENGINE_VIEW 0x40000000u
 
 enum lb_embed_message_type {
-    /* Silica app -> engine. Every message names a view; the app picks the numbers. */
+    /* Silica app -> engine. Every message names a view. The app picks the numbers, except for views the engine
+       opens itself (LB_EMBED_NEW_VIEW), whose numbers start at LB_EMBED_FIRST_ENGINE_VIEW. */
     LB_EMBED_LOAD = 1,        /* text = URL */
     LB_EMBED_TOUCH = 2,       /* a = lb_embed_touch_phase, b = touch id, c = x, d = y (device pixels) */
     LB_EMBED_RESIZE = 3,      /* a = width, b = height (device pixels), scale = device pixel ratio */
     LB_EMBED_GO_BACK = 4,
     LB_EMBED_GO_FORWARD = 5,
     LB_EMBED_RELOAD = 6,
-    LB_EMBED_CREATE_VIEW = 7, /* a = width, b = height (device pixels), scale = device pixel ratio */
+    LB_EMBED_CREATE_VIEW = 7, /* a = width, b = height (device pixels), scale = device pixel ratio; c = 1 for a
+                                 private view (its own cookies and storage, nothing kept). Views a page opens
+                                 are private when the page's is. */
     LB_EMBED_DESTROY_VIEW = 8,
     LB_EMBED_SET_VISIBLE = 9, /* a = 1 for the view on screen, 0 for one in the background */
     LB_EMBED_STOP = 10,
@@ -91,6 +95,9 @@ enum lb_embed_message_type {
                                      console.log(LB_EMBED_PAGE_MESSAGE_MARKER, text). Any script in the page can
                                      post one too, so the app treats these as hints, never as proof. */
     LB_EMBED_PAGE_COLOR = 115,
+    LB_EMBED_NEW_VIEW = 122,      /* the engine opened this view for a page (a link with a target, window.open);
+                                     a = 1 to show it now. The app adopts it as a new tab and sends its size. */
+    LB_EMBED_CLOSE_VIEW = 123,    /* the page asked to close its view (window.close) */
     LB_EMBED_FULLSCREEN = 120,    /* a = 1 when the page went fullscreen (a video, usually), 0 when it left */
     LB_EMBED_MEDIA = 121,         /* a = 1 while the page plays sound; b = 1 while it holds a screen wake lock */
     LB_EMBED_PERMISSION = 117,    /* a = an id for the answer, LB_EMBED_PERMISSION_DECIDED; text = JSON {"name"

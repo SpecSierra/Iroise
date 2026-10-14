@@ -168,6 +168,12 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   tab is going: a load the interface asks for, the start of any load, and every page that comes to host the tab.
   A link to another site has already asked for its document by the time the engine hears of it, so that one
   request goes out with the previous site's options. JavaScript off also stops the interface's page agent there.
+- New windows: a link with a target or `window.open` makes the engine open a view of its own
+  (`LB_EMBED_NEW_VIEW`, numbered from `LB_EMBED_FIRST_ENGINE_VIEW`), which the interface adopts as a new tab;
+  `window.close` closes it again (`LB_EMBED_CLOSE_VIEW`). Private tabs are private views in the engine (their own
+  cookies and storage, nothing kept), and the windows they open are too.
+- Video: the engine's FFmpeg has no H.264 decoder (a patent-encumbered codec, left out upstream), so pages get
+  `""` from `canPlayType` for it; VP9, AV1 and the other free codecs play.
 - Ad blocking is the engine's own: Ladybird ships Brave's `adblock` crate with
   request blocking, cosmetic filtering and built-in list subscriptions, all off by
   default. The interface's "Adblock" switch turns on EasyList, EasyPrivacy, the

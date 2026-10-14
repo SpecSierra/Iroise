@@ -135,17 +135,26 @@ void LadybirdEngine::acceptEngine()
     emit connectedChanged();
 }
 
-quint32 LadybirdEngine::addView(LadybirdEngineClient* client, const QSize& size, qreal devicePixelRatio)
+quint32 LadybirdEngine::addView(LadybirdEngineClient* client, const QSize& size, qreal devicePixelRatio, bool isPrivate)
 {
     quint32 view = m_nextView++;
     m_views.insert(view, client);
-    send(view, LB_EMBED_CREATE_VIEW, size.width(), size.height(), 0, 0, devicePixelRatio);
+    send(view, LB_EMBED_CREATE_VIEW, size.width(), size.height(), isPrivate ? 1 : 0, 0, devicePixelRatio);
     return view;
+}
+
+void LadybirdEngine::claimView(quint32 view, LadybirdEngineClient* client)
+{
+    auto early = m_unclaimedViews.take(view);
+    m_views.insert(view, client);
+    for (const auto& message : early)
+        client->engineMessage(message.first, message.second);
 }
 
 void LadybirdEngine::removeView(quint32 view)
 {
-    if (m_views.remove(view))
+    bool unclaimed = m_unclaimedViews.remove(view);
+    if (m_views.remove(view) || unclaimed)
         send(view, LB_EMBED_DESTROY_VIEW);
 }
 
@@ -239,9 +248,16 @@ void LadybirdEngine::receive()
                 LadybirdGeolocation::instance()->start(header.a, header.b != 0);
             } else if (header.type == LB_EMBED_GEOLOCATION_STOP) {
                 LadybirdGeolocation::instance()->stop(header.a);
+            } else if (header.type == LB_EMBED_NEW_VIEW && header.view >= LB_EMBED_FIRST_ENGINE_VIEW) {
+                m_unclaimedViews.insert(header.view, {});
+                emit viewOffered(header.view);
             } else if (LadybirdEngineClient* client = m_views.value(header.view)) {
                 size_t textLength = qMin(static_cast<size_t>(header.text_length), static_cast<size_t>(length) - sizeof(lb_embed_header));
                 client->engineMessage(header, QString::fromUtf8(buffer.text, static_cast<int>(textLength)));
+            } else if (m_unclaimedViews.contains(header.view)) {
+                // NB: Frames are not kept: the claimant sends its size, and the engine paints for it again.
+                size_t textLength = qMin(static_cast<size_t>(header.text_length), static_cast<size_t>(length) - sizeof(lb_embed_header));
+                m_unclaimedViews[header.view].append(qMakePair(header, QString::fromUtf8(buffer.text, static_cast<int>(textLength))));
             }
         }
         if (fd >= 0)

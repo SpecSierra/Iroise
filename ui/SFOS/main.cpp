@@ -68,10 +68,11 @@ public:
         Cancel,
     };
 
-    static NonnullOwnPtr<PresentedWebView> create(Core::AnonymousBuffer theme, Gfx::IntSize size, double device_pixel_ratio)
+    // A view for the app's tab, or, given a traversable, for one a page opened.
+    static NonnullOwnPtr<PresentedWebView> create(Core::AnonymousBuffer theme, Gfx::IntSize size, double device_pixel_ratio, WebView::IsPrivate is_private, Optional<WebView::CanonicalTraversable&> traversable = {})
     {
-        auto view = adopt_own(*new PresentedWebView(move(theme), size, device_pixel_ratio));
-        view->initialize_tab(Web::HTML::VisibilityState::Visible);
+        auto view = adopt_own(*new PresentedWebView(move(theme), size, device_pixel_ratio, is_private));
+        view->initialize_tab(Web::HTML::VisibilityState::Visible, traversable);
         view->handle_resize();
         view->set_has_system_focus(true);
         return view;
@@ -126,6 +127,7 @@ public:
 
     // Every page that comes to host the tab, also after a cross-site navigation moved it to another process.
     Function<void(WebView::WebContentPage&)> on_prepare_page;
+    Gfx::IntSize size() const { return viewport_size().to_type<int>(); }
     bool desktop_mode { false };
     bool plays_audio { false };
     bool holds_wake_lock { false };
@@ -144,8 +146,8 @@ private:
     // A finger has to travel this far, in device pixels, before a touch becomes a scroll rather than a tap.
     static constexpr int touch_slop = 24;
 
-    PresentedWebView(Core::AnonymousBuffer theme, Gfx::IntSize size, double device_pixel_ratio)
-        : WebView::HeadlessWebView(move(theme), size.to_type<Web::DevicePixels>())
+    PresentedWebView(Core::AnonymousBuffer theme, Gfx::IntSize size, double device_pixel_ratio, WebView::IsPrivate is_private)
+        : WebView::HeadlessWebView(move(theme), size.to_type<Web::DevicePixels>(), is_private)
     {
         m_device_pixel_ratio = device_pixel_ratio;
         m_frame_timer.start();
@@ -394,12 +396,25 @@ private:
         Function<void()> on_change;
     };
 
-    void create_view(u32 id, Gfx::IntSize size, double device_pixel_ratio)
+    void create_view(u32 id, Gfx::IntSize size, double device_pixel_ratio, WebView::IsPrivate is_private)
     {
-        if (m_views.contains(id) || size.is_empty())
+        if (m_views.contains(id) || size.is_empty() || id >= LB_EMBED_FIRST_ENGINE_VIEW)
             return;
-        auto view = PresentedWebView::create(m_theme, size, device_pixel_ratio);
+        add_view(id, PresentedWebView::create(m_theme, size, device_pixel_ratio, is_private));
+    }
+
+    PresentedWebView& add_view(u32 id, NonnullOwnPtr<PresentedWebView> view)
+    {
         auto* raw_view = view.ptr();
+
+        // A page opening a window gets a view of its own, which the app shows as a new tab.
+        view->on_new_web_view = [this, raw_view](Web::HTML::ActivateTab activate, Web::HTML::WebViewHints, WebView::CanonicalTraversable& traversable) -> String {
+            auto child_id = m_next_engine_view++;
+            auto& child = add_view(child_id, PresentedWebView::create(m_theme, raw_view->size(), raw_view->device_pixel_ratio(), raw_view->is_private(), traversable));
+            m_host.send_numbers(child_id, LB_EMBED_NEW_VIEW, activate == Web::HTML::ActivateTab::Yes);
+            return child.handle();
+        };
+        view->on_close = [this, id] { m_host.send_numbers(id, LB_EMBED_CLOSE_VIEW, 0); };
 
         view->on_present = [this, id](Gfx::LinuxDmaBufHandle const& dmabuf, Gfx::IntSize painted_size) {
             m_host.send_frame(id, dmabuf, painted_size);
@@ -550,6 +565,7 @@ private:
         }
 
         m_views.set(id, move(view));
+        return *raw_view;
     }
 
     // The view's own handler for a geolocation request, kept for when the user said yes.
@@ -743,7 +759,7 @@ private:
             return;
         }
         if (header.type == LB_EMBED_CREATE_VIEW) {
-            create_view(header.view, { header.a, header.b }, max(header.scale, 1.0));
+            create_view(header.view, { header.a, header.b }, max(header.scale, 1.0), header.c ? WebView::IsPrivate::Yes : WebView::IsPrivate::No);
             return;
         }
         auto found = m_views.get(header.view);
@@ -914,6 +930,7 @@ private:
     HashMap<ByteString, ByteString> m_site_user_agents;
     Vector<ByteString> m_no_script_sites;
     i32 m_next_permission_question { 1 };
+    u32 m_next_engine_view { LB_EMBED_FIRST_ENGINE_VIEW };
 };
 
 }

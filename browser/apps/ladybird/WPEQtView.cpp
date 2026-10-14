@@ -67,7 +67,13 @@ void WPEQtView::ensureEngineView()
     // The engine lays a page out for the size it is created with, so wait until we know ours.
     if (m_view || width() < 1 || height() < 1)
         return;
-    m_view = LadybirdEngine::instance()->addView(this, QSize(static_cast<int>(width()), static_cast<int>(height())), m_deviceScaleFactor);
+    if (m_adoptedView) {
+        m_view = m_adoptedView;
+        LadybirdEngine::instance()->claimView(m_view, this);
+        LadybirdEngine::instance()->send(m_view, LB_EMBED_RESIZE, static_cast<int>(width()), static_cast<int>(height()), 0, 0, m_deviceScaleFactor);
+    } else {
+        m_view = LadybirdEngine::instance()->addView(this, QSize(static_cast<int>(width()), static_cast<int>(height())), m_deviceScaleFactor, m_privateBrowsing);
+    }
     if (!m_engineVisible)
         sendToEngine(LB_EMBED_SET_VISIBLE, 0);
     emit webViewCreated();
@@ -262,6 +268,9 @@ void WPEQtView::engineMessage(const lb_embed_header& header, const QString& text
             m_pageWantsTextInput = header.a != 0;
             emit pageWantsTextInputChanged();
         }
+        break;
+    case LB_EMBED_CLOSE_VIEW:
+        emit closeRequested();
         break;
     case LB_EMBED_CRASHED:
         emit engineCrashed();

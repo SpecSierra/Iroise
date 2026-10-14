@@ -59,6 +59,8 @@ public:
     bool canGoForward() const { return m_canGoForward; }
 
     Q_INVOKABLE void setUserAgent(const QString&) { }
+    // Called before the item gets a size: show the view the engine opened for a page (LB_EMBED_NEW_VIEW).
+    void adoptEngineView(quint32 view) { m_adoptedView = view; }
     Q_INVOKABLE void setDeviceScaleFactor(qreal scale);
     qreal deviceScaleFactor() const { return m_deviceScaleFactor; }
 
@@ -93,6 +95,8 @@ public Q_SLOTS:
 
 Q_SIGNALS:
     void webViewCreated();
+    // The page asked to close (window.close).
+    void closeRequested();
     void urlChanged();
     void titleChanged();
     void loadingChanged(WPEQtViewLoadRequest* loadRequest);
@@ -146,6 +150,8 @@ private:
     void setLoadProgress(int);
 
     quint32 m_view = 0;
+    // A view the engine opened for a page, which this one shows instead of asking for a view of its own.
+    quint32 m_adoptedView = 0;
     QUrl m_url;
     QUrl m_pendingUrl;
     QString m_title;
