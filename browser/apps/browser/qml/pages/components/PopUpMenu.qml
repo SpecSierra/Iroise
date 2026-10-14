@@ -9,8 +9,8 @@
 import QtQuick 2.2
 import QtGraphicalEffects 1.0
 import Sailfish.Silica 1.0
-import Sailfish.Silica.private 1.0 as Private
 import "." as Components
+import "../../shared" as Shared
 
 SilicaControl {
     id: popUpMenu
@@ -37,7 +37,7 @@ SilicaControl {
 
     signal closed
 
-    Private.AnimatedLoader {
+    Shared.AnimatedLoader {
         id: menuLoader
 
         width: popUpMenu.width
@@ -194,7 +194,7 @@ SilicaControl {
                     height: Theme.paddingLarge
                 }
 
-                Private.AnimatedLoader {
+                Shared.AnimatedLoader {
                     id: contentLoader
 
                     y: headerItem.y + headerItem.height
@@ -271,7 +271,7 @@ SilicaControl {
                     MouseArea {
                         anchors.fill: footerLoader
                     },
-                    Private.AnimatedLoader {
+                    Shared.AnimatedLoader {
                         id: footerLoader
 
                         y: menuFlickable.height - height

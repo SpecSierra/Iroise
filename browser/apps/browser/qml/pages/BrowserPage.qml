@@ -14,7 +14,6 @@ import QtQuick 2.2
 import QtQuick.Window 2.2 as QuickWindow
 import Sailfish.Silica 1.0
 import Sailfish.Pickers 1.0
-import Sailfish.Silica.private 1.0 as Private
 import harbour.pacific 1.0
 import Nemo.Configuration 1.0
 import Nemo.Notifications 1.0 as Nemo
@@ -272,7 +271,7 @@ Page {
         id: historyModel
     }
 
-    Private.VirtualKeyboardObserver {
+    Shared.VirtualKeyboardObserver {
         id: virtualKeyboardObserver
 
         active: webView.enabled

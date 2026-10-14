@@ -11,7 +11,6 @@
 
 import QtQuick 2.1
 import Sailfish.Silica 1.0
-import Sailfish.Silica.private 1.0 as Private
 import harbour.pacific 1.0
 import "../../shared" as Shared
 SilicaControl {
@@ -39,7 +38,16 @@ SilicaControl {
 
     anchors.fill: parent
 
-    Private.TabView {
+    // Leaves one set of tabs for the other; a pending "close all" of the one left happens now.
+    function switchMode(toPrivate) {
+        if (toPrivate === privateMode)
+            return
+        if (_remorsePopup)
+            _remorsePopup.trigger()
+        privateMode = toPrivate
+    }
+
+    Item {
         id: tabs
 
         anchors {
@@ -47,123 +55,147 @@ SilicaControl {
             bottomMargin: tabsToolBar.height
         }
 
-        header: Private.TabBar {
-            model: modeModel
-            delegate: Private.TabButton {
-                id: tabButton
+        // The two sets of tabs, each a button with its count.
+        Item {
+            id: header
 
-                icon.source: {
-                    if (!model.privateMode) {
-                        return "image://theme/icon-m-tabs"
-                    } else if (tabView._emptyPrivateIcon) {
-                        return "image://theme/icon-m-incognito"
-                    }
-
-                    return "image://theme/icon-m-incognito-selected"
-                }
-                icon.color: palette.primaryColor
-
-                icon.children: Label {
-                    anchors.centerIn: tabButton.icon
-
-                    font.pixelSize: Theme.fontSizeExtraSmall
-                    font.bold: true
-                    color: {
-                        if (model.privateMode) {
-                            return tabView.palette.colorScheme === Theme.LightOnDark
-                                    ? Theme.darkPrimaryColor
-                                    : Theme.lightPrimaryColor
-                        } else if (highlighted || tabButton.isCurrentTab) {
-                            return palette.highlightColor
-                        }
-
-                        return tabView.palette.colorScheme === Theme.LightOnDark
-                                ? Theme.lightPrimaryColor
-                                : Theme.darkPrimaryColor
-                    }
-
-                    text: model.privateMode
-                            ? (!tabView._emptyPrivateIcon ? webView.privateTabModel.count : "")
-                            : (!tabView.privateMode && tabView._closingAllTabs ? 0 : webView.persistentTabModel.count)
-                }
-            }
+            width: parent.width
+            height: Theme.itemSizeMedium
 
             Shared.Background {
                 anchors.fill: parent
                 z: -100
             }
+
+            Row {
+                anchors.fill: parent
+
+                Repeater {
+                    model: 2
+
+                    BackgroundItem {
+                        id: modeButton
+
+                        readonly property bool privateTabs: index === 1
+                        readonly property bool isCurrentTab: privateTabs === tabView.privateMode
+
+                        width: header.width / 2
+                        height: header.height
+                        highlighted: down
+                        onClicked: tabView.switchMode(privateTabs)
+
+                        Icon {
+                            id: modeIcon
+
+                            anchors.centerIn: parent
+                            highlighted: modeButton.highlighted || modeButton.isCurrentTab
+                            source: {
+                                if (!modeButton.privateTabs) {
+                                    return "image://theme/icon-m-tabs"
+                                } else if (tabView._emptyPrivateIcon) {
+                                    return "image://theme/icon-m-incognito"
+                                }
+                                return "image://theme/icon-m-incognito-selected"
+                            }
+                        }
+
+                        Label {
+                            anchors.centerIn: modeIcon
+
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            font.bold: true
+                            color: {
+                                if (modeButton.privateTabs) {
+                                    return tabView.palette.colorScheme === Theme.LightOnDark
+                                            ? Theme.darkPrimaryColor
+                                            : Theme.lightPrimaryColor
+                                } else if (modeIcon.highlighted) {
+                                    return tabView.palette.highlightColor
+                                }
+                                return tabView.palette.colorScheme === Theme.LightOnDark
+                                        ? Theme.lightPrimaryColor
+                                        : Theme.darkPrimaryColor
+                            }
+                            text: modeButton.privateTabs
+                                    ? (!tabView._emptyPrivateIcon ? webView.privateTabModel.count : "")
+                                    : (!tabView.privateMode && tabView._closingAllTabs ? 0 : webView.persistentTabModel.count)
+                        }
+
+                        Rectangle {
+                            anchors.bottom: parent.bottom
+                            width: parent.width
+                            height: Theme.paddingSmall / 2
+                            color: tabView.palette.highlightColor
+                            visible: modeButton.isCurrentTab
+                        }
+                    }
+                }
+            }
         }
-        _headerBackgroundVisible: false
-        model: modeModel
-        interactive: false
-        currentIndex: privateMode ? 1 : 0
-        delegate: Private.TabItem {
-            id: tabItem
 
-            property bool privateMode: model.privateMode
+        Repeater {
+            model: 2
 
-            allowDeletion: false
-            flickable: _tabView
+            Item {
+                id: modePage
 
-            TabGridView {
-                id: _tabView
+                readonly property bool privateTabs: index === 1
+                readonly property bool isCurrentItem: privateTabs === tabView.privateMode
 
-                horizontalMargin: tabView.horizontalMargin
-                portrait: tabView.portrait
-                model: TabFilterModel {
-                    sourceModel: tabItem.privateMode ? webView.privateTabModel : webView.persistentTabModel
-                    showHidden: false
+                anchors {
+                    top: header.bottom
+                    left: parent.left
+                    right: parent.right
+                    bottom: parent.bottom
                 }
-                header: Item {
-                    width: 1
-                    height: Theme.paddingLarge
+                visible: isCurrentItem
+
+                function takeOver() {
+                    if (!isCurrentItem)
+                        return
+                    _remorsePopup = Qt.binding(function() { return grid.remorsePopup })
+                    _closingAllTabs = Qt.binding(function() { return grid.closingAllTabs })
                 }
 
-                onHide: tabView.hide()
-                onEnterNewTabUrl: tabView.enterNewTabUrl()
-                onActivateTab: tabView.activateTab(index)
-                onCloseTab: tabView.closeTab(index)
-                onCloseAll: tabView.closeAll()
-                onCloseAllCanceled: tabView.closeAllCanceled()
-                onCloseAllPending: tabView.closeAllPending()
-            }
+                onIsCurrentItemChanged: takeOver()
+                Component.onCompleted: takeOver()
 
-            onIsCurrentItemChanged: {
-                if (isCurrentItem) {
-                    _remorsePopup = Qt.binding(function() { return _tabView.remorsePopup })
-                    _closingAllTabs = Qt.binding(function() { return _tabView.closingAllTabs })
+                TabGridView {
+                    id: grid
+
+                    anchors.fill: parent
+                    horizontalMargin: tabView.horizontalMargin
+                    portrait: tabView.portrait
+                    model: TabFilterModel {
+                        sourceModel: modePage.privateTabs ? webView.privateTabModel : webView.persistentTabModel
+                        showHidden: false
+                    }
+                    header: Item {
+                        width: 1
+                        height: Theme.paddingLarge
+                    }
+
+                    onHide: tabView.hide()
+                    onEnterNewTabUrl: tabView.enterNewTabUrl()
+                    onActivateTab: tabView.activateTab(index)
+                    onCloseTab: tabView.closeTab(index)
+                    onCloseAll: tabView.closeAll()
+                    onCloseAllCanceled: tabView.closeAllCanceled()
+                    onCloseAllPending: tabView.closeAllPending()
                 }
-            }
 
-            Connections {
-                target: popupMenu
-                onCloseAllTabs: {
-                    if (isCurrentItem)
-                        _tabView.closeAllTabs()
+                Connections {
+                    target: popupMenu
+                    onCloseAllTabs: {
+                        if (modePage.isCurrentItem)
+                            grid.closeAllTabs()
+                    }
                 }
-            }
 
-            PrivateModeTexture {
-                visible: privateMode
-                z: -1
-            }
-        }
-
-        onCurrentIndexChanged: {
-            if (_remorsePopup) {
-                _remorsePopup.trigger()
-            }
-            privateMode = currentIndex !== 0
-        }
-
-        ListModel {
-            id: modeModel
-
-            ListElement {
-                privateMode: false
-            }
-            ListElement {
-                privateMode: true
+                PrivateModeTexture {
+                    visible: modePage.privateTabs
+                    z: -1
+                }
             }
         }
     }
@@ -213,9 +245,7 @@ SilicaControl {
                             text: qsTrId("sailfish_browser-la-new_tab")
                             onClicked: {
                                 popupMenu.visible = false
-                                // override to block animation
-                                tabs.currentIndex = privateMode ? 1 : 0
-                                tabView.privateMode = false
+                                tabView.switchMode(false)
                                 tabView.enterNewTabUrl()
                             }
                         }
@@ -229,9 +259,7 @@ SilicaControl {
                             text: qsTrId("sailfish_browser-la-new_private_tab")
                             onClicked: {
                                 popupMenu.visible = false
-                                // override to block animation
-                                tabs.currentIndex = privateMode ? 1 : 0
-                                tabView.privateMode = true
+                                tabView.switchMode(true)
                                 tabView.enterNewTabUrl()
                             }
                         }

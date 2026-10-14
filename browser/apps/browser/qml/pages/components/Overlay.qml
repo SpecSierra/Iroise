@@ -10,7 +10,6 @@
 import QtQuick 2.2
 import QtQuick.Window 2.2 as QuickWindow
 import Sailfish.Silica 1.0
-import Sailfish.Silica.private 1.0 as Private
 import harbour.pacific 1.0
 import Sailfish.WebView.Controls 1.0
 import Sailfish.WebView.Popups 1.0
@@ -106,7 +105,7 @@ Shared.Background {
     // `visible` is controlled by Browser.OverlayAnimator
     enabled: visible
 
-    Private.VirtualKeyboardObserver {
+    Shared.VirtualKeyboardObserver {
         id: virtualKeyboardObserver
 
         active: overlay.active && !overlayAnimator.atBottom
