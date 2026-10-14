@@ -43,8 +43,9 @@ QList<WebPage *> &livePages()
 const int kThumbnailIntervalMs = 4000;
 const int kThumbnailMaxWidth = 540;
 
-// The engine reports neither scrolling nor selections. This script, run in each page, does: it posts where the page
-// is scrolled to and what is selected, at most once a frame, as page messages (LB_EMBED_PAGE_MESSAGE). Running it
+// The engine reports neither scrolling nor selections, nor whether a video plays. This script, run in each page, does:
+// it posts where the page is scrolled to, what is selected and whether a video is playing, at most once a frame, as
+// page messages (LB_EMBED_PAGE_MESSAGE). Running it
 // again does nothing. If the page replaced console.log, a hidden frame lends us a working one.
 const char kPageAgentScript[] =
     "(function(){"
@@ -77,7 +78,21 @@ const char kPageAgentScript[] =
     "document.addEventListener('submit',function(e){login(e.target);},true);"
     "document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('button,input[type=submit],[role=button]');if(b)login(b.closest('form'));},true);"
     "document.addEventListener('keydown',function(e){if(e.key==='Enter'&&e.target.type==='password')login(e.target.form);},true);"
+    // Whether a video is playing, for the screen to stay on. Media events do not bubble, so they are caught on the way
+    // down.
+    "var video=false;"
+    "function sendVideo(){var v=Array.prototype.some.call(document.querySelectorAll('video'),function(m){return !m.paused&&!m.ended&&m.videoWidth>0;});"
+    "if(v!==video){video=v;post('video',v);}}"
+    "['playing','pause','ended','emptied'].forEach(function(t){document.addEventListener(t,function(){soon('video',sendVideo);},true);});"
+    "sendVideo();"
     "return 0;})()";
+
+// Pauses every <video> and <audio> of the page, and of the frames in it that the page can reach.
+const char kPauseMediaScript[] =
+    "(function(){"
+    "function pause(d){try{d.querySelectorAll('video,audio').forEach(function(m){m.pause();});"
+    "d.querySelectorAll('iframe').forEach(function(f){try{pause(f.contentDocument);}catch(e){}});}catch(e){}}"
+    "pause(document);return 0;})()";
 
 // Fills a saved login into the login form the user just focused, if the page is still at the origin it was saved
 // for. %1 = JSON {o: origin, u: username, p: password}. Values go through the input's own setter, with input and
@@ -339,6 +354,10 @@ void WebPage::onLoadingChanged(EngineViewLoadRequest *loadRequest)
         // offered for saving now that it has gone on.
         offerCapturedLogin();
         handleJsSelectionClear();
+        if (m_playsVideo) {
+            m_playsVideo = false;
+            updateMediaState();
+        }
         if (!m_permissionQuestions.isEmpty())
             answerPermissions(QString(), false);
         m_findText.clear();
@@ -813,6 +832,12 @@ void WebPage::exitFullscreen()
         sendToEngine(LB_EMBED_EXIT_FULLSCREEN);
 }
 
+void WebPage::pauseAllMedia()
+{
+    for (WebPage *page : livePages())
+        page->evaluate(QString::fromLatin1(kPauseMediaScript));
+}
+
 void WebPage::mediaStateChanged(bool playsAudio, bool keepsScreenOn)
 {
     m_playsAudio = playsAudio;
@@ -822,10 +847,10 @@ void WebPage::mediaStateChanged(bool playsAudio, bool keepsScreenOn)
 
 void WebPage::updateMediaState()
 {
-    // NB: The engine reports sound, not video. A page in fullscreen is nearly always showing one, and a page that
-    //     wants the screen on asks for it.
+    // NB: The engine reports sound, not video; the page agent reports the page's own videos. A page in fullscreen is
+    //     nearly always showing one (a video in a frame included), and a page that wants the screen on asks for it.
     bool audio = m_playsAudio;
-    bool video = m_keepsScreenOn || (m_fullscreen && m_playsAudio);
+    bool video = m_keepsScreenOn || m_playsVideo || (m_fullscreen && m_playsAudio);
     if (audio != m_mediaAudioActive) {
         m_mediaAudioActive = audio;
         emit mediaAudioActiveChanged();
@@ -1357,6 +1382,9 @@ void WebPage::pageMessage(const QString &kind, const QJsonValue &data)
         QJsonArray position = data.toArray();
         if (position.size() == 3)
             emit scrollPositionChanged(position.at(0).toDouble(), position.at(1).toDouble(), position.at(2).toDouble());
+    } else if (kind == QLatin1String("video")) {
+        m_playsVideo = data.toBool();
+        updateMediaState();
     } else if (kind == QLatin1String("login")) {
         // NB: The site is the one the tab is at, never anything the page says.
         if (url().scheme() != QLatin1String("https") || privateBrowsing())

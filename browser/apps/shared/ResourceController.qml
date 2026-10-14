@@ -91,6 +91,21 @@ Item {
         }
     }
 
+    // A call coming in or going on pauses what is playing, as other players on the phone do.
+    DBusInterface {
+        bus: DBus.SystemBus
+        service: 'com.nokia.mce'
+        path: '/com/nokia/mce/signal'
+        iface: 'com.nokia.mce.signal'
+        signalsEnabled: true
+
+        function sig_call_state_ind(state, type) {
+            if ((state === "ringing" || state === "active") && webPage) {
+                webPage.pauseAllMedia()
+            }
+        }
+    }
+
     DisplayBlanking {
         // This is stopping screen blank timer.
         preventBlanking: videoActive

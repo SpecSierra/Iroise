@@ -281,6 +281,8 @@ public:
     // the original tab to the ad).
     // Leaves the fullscreen the page asked for, from the interface's close button.
     Q_INVOKABLE void exitFullscreen();
+    // Pauses the media of every tab: a call has come in.
+    Q_INVOKABLE void pauseAllMedia();
 
     Q_INVOKABLE void loadTab(const QString &url, bool force = false);
     // Re-request the URL already showing (setUrl() dedupes such an assignment away).
@@ -543,6 +545,7 @@ private:
     bool m_fullscreen = false;
     bool m_playsAudio = false;
     bool m_keepsScreenOn = false;
+    bool m_playsVideo = false;
     void pageFullscreenChanged(bool fullscreen) override;
     void faviconReceived(const QString &dataUrl) override { setFavicon(dataUrl); }
     void mediaStateChanged(bool playsAudio, bool keepsScreenOn) override;
