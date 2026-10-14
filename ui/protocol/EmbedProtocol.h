@@ -100,6 +100,8 @@ enum lb_embed_message_type {
     LB_EMBED_NEW_VIEW = 122,      /* the engine opened this view for a page (a link with a target, window.open);
                                      a = 1 to show it now. The app adopts it as a new tab and sends its size. */
     LB_EMBED_CLOSE_VIEW = 123,    /* the page asked to close its view (window.close) */
+    LB_EMBED_FAVICON = 124,       /* text = the page's icon as a data:image/png;base64 URL, empty when it has none.
+                                     An icon too large for one message is left out. */
     LB_EMBED_FULLSCREEN = 120,    /* a = 1 when the page went fullscreen (a video, usually), 0 when it left */
     LB_EMBED_MEDIA = 121,         /* a = 1 while the page plays sound; b = 1 while it holds a screen wake lock */
     LB_EMBED_PERMISSION = 117,    /* a = an id for the answer, LB_EMBED_PERMISSION_DECIDED; text = JSON {"name"

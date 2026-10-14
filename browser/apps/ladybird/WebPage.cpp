@@ -631,18 +631,6 @@ void WebPage::setFavicon(const QString &favicon)
     m_favicon = favicon;
     emit faviconChanged();
 }
-
-QStringList WebPage::faviconCandidates() const
-{
-    return m_faviconCandidates;
-}
-
-void WebPage::setFaviconCandidates(const QStringList &candidates)
-{
-    if (m_faviconCandidates == candidates)
-        return;
-    m_faviconCandidates = candidates;
-}
 qreal WebPage::fullscreenHeight() const
 {
     return m_fullscreenHeight;

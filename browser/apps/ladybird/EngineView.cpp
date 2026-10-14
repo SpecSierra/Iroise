@@ -222,6 +222,9 @@ void EngineView::engineMessage(const lb_embed_header& header, const QString& tex
     case LB_EMBED_PAGE_COLOR:
         pageColorChanged(header.a, text);
         break;
+    case LB_EMBED_FAVICON:
+        faviconReceived(text);
+        break;
     case LB_EMBED_FULLSCREEN:
         pageFullscreenChanged(header.a != 0);
         break;

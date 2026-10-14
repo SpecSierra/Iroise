@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#include <AK/Base64.h>
 #include <AK/Format.h>
 #include <AK/HashMap.h>
 #include <AK/JsonArray.h>
@@ -16,6 +17,7 @@
 #include <LibCore/EventLoop.h>
 #include <LibCore/Timer.h>
 #include <LibGfx/Bitmap.h>
+#include <LibGfx/ImageFormats/PNGWriter.h>
 #include <LibGfx/SystemTheme.h>
 #include <LibMain/Main.h>
 #include <LibWebCommon/CSS/PreferredColorScheme.h>
@@ -492,6 +494,20 @@ private:
         view->on_request_prompt = [send_dialog](Utf16String const& message, Utf16String const& default_text) { send_dialog(LB_EMBED_DIALOG_PROMPT, message, default_text); };
 
         // The app paints the part of the screen it keeps the page out of (around a camera notch) in the page's colour.
+        view->on_favicon_change = [this, id](Optional<Gfx::Bitmap const&> bitmap) {
+            String url;
+            if (bitmap.has_value()) {
+                // NB: An icon too large for one message is left out rather than cut short.
+                auto png = Gfx::PNGWriter::encode(*bitmap);
+                if (png.is_error())
+                    return;
+                auto base64 = encode_base64(png.value());
+                if (base64.is_error() || base64.value().bytes().size() + 32 > LB_EMBED_TEXT_MAX)
+                    return;
+                url = MUST(String::formatted("data:image/png;base64,{}", base64.value()));
+            }
+            m_host.send_text(id, LB_EMBED_FAVICON, url.bytes_as_string_view());
+        };
         view->on_theme_color_change = [this, id](Gfx::Color color) {
             auto text = color.alpha() ? color.to_string_without_alpha() : String {};
             m_host.send_text(id, LB_EMBED_PAGE_COLOR, text.bytes_as_string_view(), LB_EMBED_PAGE_COLOR_THEME);

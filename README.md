@@ -182,6 +182,9 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   RequestServer (`LB_EMBED_SET_CERTIFICATE_EXCEPTIONS`, patch 0010), which then skips verification for exactly
   them. The security panel's details (issuer, dates, cipher, errors) come from a TLS connection of the interface's
   own (`QSslSocket`), once per host and run, since the engine does not hand out the certificates it checked.
+- Favicons: the engine decodes the page's icon and sends it as a PNG data URL (`LB_EMBED_FAVICON`; an icon too
+  large for one message is left out). The interface keeps it per site for the tab overview, favourites and
+  history, except for private tabs.
 - Ad blocking is the engine's own: Ladybird ships Brave's `adblock` crate with
   request blocking, cosmetic filtering and built-in list subscriptions, all off by
   default. The interface's "Adblock" switch turns on EasyList, EasyPrivacy, the

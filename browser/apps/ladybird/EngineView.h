@@ -134,6 +134,7 @@ protected:
     // A message from the page agent (see WebPage): a kind and what came with it.
     virtual void pageMessage(const QString& kind, const QJsonValue& data) { Q_UNUSED(kind); Q_UNUSED(data); }
     virtual void pageFullscreenChanged(bool fullscreen) { Q_UNUSED(fullscreen); }
+    virtual void faviconReceived(const QString& dataUrl) { Q_UNUSED(dataUrl); }
     virtual void mediaStateChanged(bool playsAudio, bool keepsScreenOn) { Q_UNUSED(playsAudio); Q_UNUSED(keepsScreenOn); }
     virtual void permissionRequested(int question, const QString& name, const QString& origin) { Q_UNUSED(question); Q_UNUSED(name); Q_UNUSED(origin); }
 

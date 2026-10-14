@@ -13,9 +13,6 @@
 
 #include <QObject>
 #include <QMap>
-#include <QPointer>
-#include <QSet>
-#include <QSize>
 #include <QStringList>
 
 class WebPage;
@@ -33,7 +30,6 @@ public:
 
     Q_INVOKABLE QString get(const QString &type, const QString &hostname);
 
-    Q_INVOKABLE void grabIcon(const QString &type, WebPage *webPage, const QSize &size);
     Q_INVOKABLE void clear(const QString &type);
 
     static QString defaultDesktopBookmarkIcon();
@@ -51,10 +47,6 @@ private:
     void save(const QString &type);
     void load(const QString &type);
 
-    void fetchCandidate(const QString &type, const QString &pageUrl, const QStringList &candidates,
-                        int index, QPointer<WebPage> webPage, const QSize &size,
-                        bool allowThumbnailFallback);
-    void grabThumbnailFallback(const QString &type, QPointer<WebPage> webPage, const QSize &size);
 
     struct Favicon {
         QString favicon;
@@ -67,10 +59,6 @@ private:
     };
 
     QMap<QString, FaviconSet> m_faviconSets;
-    // Hosts whose stored entry is a page thumbnail and that have already been
-    // re-tried for a real favicon in this session. Without this, every load of
-    // an icon-less site would re-run the whole candidate chain.
-    QSet<QString> m_thumbnailUpgradeAttempted;
 };
 
 #endif // FAVICONMANAGER_H

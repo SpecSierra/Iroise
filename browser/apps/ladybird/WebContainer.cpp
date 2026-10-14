@@ -888,18 +888,13 @@ void WebContainer::onPageUrlChanged()
     }
 }
 
-// Favicon discovery has to be driven from here: the QML webPageComponent that
-// used to call FaviconManager.grabIcon() is never instantiated (pages are
-// created in getOrCreatePage above), so every handler inside it is dead code.
+// The engine's icon for the page, kept for the tab overview, favourites and history (not for private tabs).
 void WebContainer::onPageFaviconChanged()
 {
     WebPage *page = qobject_cast<WebPage *>(sender());
-    if (!page || page->privateBrowsing() || page->faviconCandidates().isEmpty())
+    if (!page || page->privateBrowsing() || !FaviconManager::isRealIcon(page->favicon()))
         return;
-
-    // Size is only used for the page-thumbnail fallback when no candidate
-    // yields a usable image.
-    FaviconManager::instance()->grabIcon(QStringLiteral("history"), page, QSize(96, 96));
+    FaviconManager::instance()->add(QStringLiteral("history"), page->url().toString(), page->favicon(), true);
 }
 
 void WebContainer::onPageTitleChanged()
