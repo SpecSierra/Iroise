@@ -1,0 +1,99 @@
+diff --git a/Libraries/LibMedia/FFmpeg/FFmpegFunctions.h b/Libraries/LibMedia/FFmpeg/FFmpegFunctions.h
+index d8d5f086..30ddb0f6 100644
+--- a/Libraries/LibMedia/FFmpeg/FFmpegFunctions.h
++++ b/Libraries/LibMedia/FFmpeg/FFmpegFunctions.h
+@@ -16,9 +16,11 @@ extern "C" {
+ 
+ // The decoders reach into these structs directly, so a libavcodec they run against must lay them out
+ // this way. Every major from 60 through 63 does; a newer one is refused until it has been checked.
++// 59 (FFmpeg 5.1, Sailfish OS's) lays them out the same and numbers the codecs and formats the decoders use the same,
++// except AV1, which moved down by one in 6.0: SystemFFmpegDecoders refuses AV1 below 60.
+ namespace Media::FFmpeg {
+ 
+-constexpr unsigned LOWEST_SUPPORTED_LIBAVCODEC_MAJOR = 60;
++constexpr unsigned LOWEST_SUPPORTED_LIBAVCODEC_MAJOR = 59;
+ constexpr unsigned HIGHEST_VERIFIED_LIBAVCODEC_MAJOR = 63;
+ 
+ }
+diff --git a/Libraries/LibMedia/FFmpeg/SystemFFmpeg.cpp b/Libraries/LibMedia/FFmpeg/SystemFFmpeg.cpp
+index 14775aad..53728c4a 100644
+--- a/Libraries/LibMedia/FFmpeg/SystemFFmpeg.cpp
++++ b/Libraries/LibMedia/FFmpeg/SystemFFmpeg.cpp
+@@ -49,6 +49,26 @@ static DecoderErrorOr<void> verify_library_layout(FFmpegFunctions const& functio
+     return {};
+ }
+ 
++// FFmpeg 7.0 added av_channel_layout_custom_init; for an older library, this does what it does, allocating with the
++// library's own av_malloc so that its av_channel_layout_uninit can free the map.
++static decltype(&::av_malloc) s_older_library_av_malloc;
++static int channel_layout_custom_init_for_older_library(AVChannelLayout* layout, int channel_count)
++{
++    if (channel_count <= 0)
++        return AVERROR(EINVAL);
++    auto* map = static_cast<AVChannelCustom*>(s_older_library_av_malloc(sizeof(AVChannelCustom) * static_cast<size_t>(channel_count)));
++    if (!map)
++        return AVERROR(ENOMEM);
++    memset(map, 0, sizeof(AVChannelCustom) * static_cast<size_t>(channel_count));
++    for (int i = 0; i < channel_count; i++)
++        map[i].id = AV_CHAN_UNKNOWN;
++    layout->order = AV_CHANNEL_ORDER_CUSTOM;
++    layout->nb_channels = channel_count;
++    layout->u.map = map;
++    layout->opaque = nullptr;
++    return 0;
++}
++
+ DecoderErrorOr<NonnullOwnPtr<SystemFFmpeg>> SystemFFmpeg::try_load(ByteString const& library_path)
+ {
+     auto* library_handle = dlopen(library_path.characters(), RTLD_NOW | RTLD_LOCAL);
+@@ -57,12 +77,16 @@ DecoderErrorOr<NonnullOwnPtr<SystemFFmpeg>> SystemFFmpeg::try_load(ByteString co
+     ArmedScopeGuard close_library = [&] { dlclose(library_handle); };
+ 
+     auto functions = DECODER_TRY_ALLOC(try_make<FFmpegFunctions>());
+-#define RESOLVE_FUNCTION(name)                                                           \
+-    functions->name = reinterpret_cast<decltype(&::name)>(dlsym(library_handle, #name)); \
+-    if (functions->name == nullptr)                                                      \
++#define RESOLVE_FUNCTION(name)                                                                                     \
++    functions->name = reinterpret_cast<decltype(&::name)>(dlsym(library_handle, #name));                           \
++    if (functions->name == nullptr && #name##sv != "av_channel_layout_custom_init"sv)                                \
+         return DecoderError::format(DecoderErrorCategory::NotImplemented, "{} does not provide {}", library_path, #name##sv);
+     FFMPEG_ENUMERATE_FUNCTIONS(RESOLVE_FUNCTION)
+ #undef RESOLVE_FUNCTION
++    if (functions->av_channel_layout_custom_init == nullptr) {
++        s_older_library_av_malloc = functions->av_malloc;
++        functions->av_channel_layout_custom_init = channel_layout_custom_init_for_older_library;
++    }
+ 
+     auto major = functions->avcodec_version() >> 16;
+     if (major < LOWEST_SUPPORTED_LIBAVCODEC_MAJOR || major > HIGHEST_VERIFIED_LIBAVCODEC_MAJOR)
+diff --git a/Libraries/LibMedia/FFmpeg/SystemFFmpegDecoders.cpp b/Libraries/LibMedia/FFmpeg/SystemFFmpegDecoders.cpp
+index a516ea75..8d76be20 100644
+--- a/Libraries/LibMedia/FFmpeg/SystemFFmpegDecoders.cpp
++++ b/Libraries/LibMedia/FFmpeg/SystemFFmpegDecoders.cpp
+@@ -11,10 +11,16 @@
+ 
+ namespace Media::FFmpeg {
+ 
++// Below 60, FFmpeg numbers AV1 one higher than the headers the decoders are built with (see FFmpegFunctions.h).
++static bool numbers_codec_as_built(SystemFFmpeg const& library, CodecID codec_id)
++{
++    return library.major() >= 60 || codec_id != CodecID::AV1;
++}
++
+ Optional<DecoderCapabilities> system_ffmpeg_video_decoder_capabilities(ParsedCodec const& codec)
+ {
+     auto const* library = SystemFFmpeg::the();
+-    if (library == nullptr)
++    if (library == nullptr || !numbers_codec_as_built(*library, codec.codec_id()))
+         return {};
+     return FFmpegVideoDecoder::capabilities(library->functions(), codec);
+ }
+@@ -30,7 +36,7 @@ Optional<DecoderCapabilities> system_ffmpeg_audio_decoder_capabilities(ParsedCod
+ DecoderErrorOr<NonnullOwnPtr<VideoDecoder>> create_system_ffmpeg_video_decoder(CodecID codec_id, ReadonlyBytes codec_initialization_data)
+ {
+     auto const* library = SystemFFmpeg::the();
+-    if (library == nullptr)
++    if (library == nullptr || !numbers_codec_as_built(*library, codec_id))
+         return DecoderError::with_description(DecoderErrorCategory::NotImplemented, "No system FFmpeg is loaded"sv);
+     return NonnullOwnPtr<VideoDecoder> { TRY(FFmpegVideoDecoder::try_create(library->functions(), codec_id, codec_initialization_data)) };
+ }
