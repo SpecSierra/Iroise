@@ -115,8 +115,7 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
 - `WPEQtView`, `WPEWebPage` and `WPEWebContainer` keep the names and the surface the
   interface was written against. `WPEWebPage` keeps every property and method the
   QML uses; what the engine protocol cannot do yet is a property that never changes
-  or a method that does nothing. Not wired yet: permissions, saved-login autofill,
-  extensions.
+  or a method that does nothing. Not wired yet: saved-login autofill, extensions.
 - The camera notch: the page is kept out of the band of the screen the notch is in
   (the `crop_notch` setting, on by default), and that band is painted in the page's
   `theme-color`, or failing that in the colour the page paints behind its content,
@@ -159,8 +158,11 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   agent's scroll messages.
 - Clearing the cache and clearing cookies and site data in Settings go to the
   engine's `clear_browsing_data`.
-- Permission prompts are not wired because the engine only ever asks for the
-  microphone; geolocation never reaches the front end as a question.
+- Permissions: the engine asks the front end about the microphone, and it grants geolocation to any page and then
+  wants a position. The front end puts both to the user (`LB_EMBED_PERMISSION`, the interface's permission banner)
+  before the view's own handling runs; an answer holds for that site and kind until the browser closes. Positions
+  come from the interface's Qt Positioning source (`LadybirdGeolocation`) through a `Core::GeolocationProvider` of
+  the front end's own.
 - Ad blocking is the engine's own: Ladybird ships Brave's `adblock` crate with
   request blocking, cosmetic filtering and built-in list subscriptions, all off by
   default. The interface's "Adblock" switch turns on EasyList, EasyPrivacy, the
