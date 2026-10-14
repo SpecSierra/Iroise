@@ -21,6 +21,7 @@
 #include "faviconmanager.h"
 #include "bookmarkmanager.h"
 #include "browserpaths.h"
+#include "opensearchconfigs.h"
 #include "declarativewebutils.h"
 #include "settingmanager.h"
 #include "DownloadModel.h"
@@ -212,6 +213,7 @@ extern "C" Q_DECL_EXPORT bool pacificBrowserRuntimeStart(QQuickView *view,
 
     // Before anything below opens the profile.
     BrowserPaths::migrateSharedProfile();
+    OpenSearchConfigs::setShippedPath(QString::fromLocal8Bit(dataPath ? dataPath : "") + QStringLiteral("searchEngines/"));
 
     registerBrowserQmlTypes();
 

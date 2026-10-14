@@ -15,10 +15,16 @@
 #include "opensearchconfigs.h"
 
 OpenSearchConfigs *OpenSearchConfigs::openSearchConfigs = 0;
+static QString s_shippedPath;
+
+void OpenSearchConfigs::setShippedPath(const QString &path)
+{
+    s_shippedPath = path;
+}
 
 OpenSearchConfigs::OpenSearchConfigs(QObject *parent):QObject(parent)
 {
-    m_openSearchPathList << QString(BROWSER_OPENSEARCH_PATH);
+    m_openSearchPathList << s_shippedPath;
     m_openSearchPathList << getOpenSearchConfigPath();
 }
 

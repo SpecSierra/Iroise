@@ -1,35 +1,41 @@
 #!/bin/bash
-# Collect a relocatable bundle in dist/ladybird: binaries, resources, and every
-# library that came out of our own build tree, plus gcc 14's libstdc++/libgcc_s
-# (the device's libstdc++ is older). Everything else resolves on the device.
+# Lay the app out as it is installed, in dist/harbour-pacific (and dist/harbour-pacific.tar.gz):
+#   bin/harbour-pacific                  the one executable (browser/apps/launcher)
+#   share/harbour-pacific/lib            the interface's libraries, the engine (libpacificengine.so) and the libraries
+#                                        of the engine's build it needs; they find each other by $ORIGIN
+#   share/harbour-pacific/share/Lagom    the engine's resources
+#   share/harbour-pacific/qml            the interface, with the search engines it ships
+#   share/harbour-pacific/translations
+# Run scripts/build.sh and scripts/build-browser.sh first.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BUILD="$ROOT/upstream/Build/release"
-OUT="$ROOT/dist/ladybird"
+UI="$ROOT/build/browser"
+OUT="$ROOT/dist/harbour-pacific"
+SHARE="$OUT/share/harbour-pacific"
 
 rm -rf "$OUT"
-mkdir -p "$OUT/lib"
-cp -a "$BUILD/bin" "$BUILD/libexec" "$BUILD/share" "$OUT/"
+mkdir -p "$OUT/bin" "$SHARE/lib" "$SHARE/share" "$SHARE/qml/shared" "$SHARE/translations"
 
-for f in "$OUT"/bin/* "$OUT"/libexec/*; do ldd "$f" 2>/dev/null; done |
-    awk '/=>/ {print $3}' | sort -u |
-    grep -E "^$BUILD/|/libstdc\+\+\.so|/libgcc_s\.so" |
-    while read -r lib; do cp -L "$lib" "$OUT/lib/"; done
+# The engine, what it loads from our own build, and gcc 14's C++ runtime, newer than the phone's (libcpptrace
+# needs CXXABI_1.3.15). Only engine processes load these: the app's executable loads either the engine or the
+# interface (browser/apps/launcher), and the interface uses the phone's own runtime with Qt.
+cp -L "$BUILD/lib/libpacificengine.so" "$SHARE/lib/"
+ldd "$BUILD/lib/libpacificengine.so" | awk '/=>/ {print $3}' | grep -E "^$BUILD/|/libstdc\+\+\.so|/libgcc_s\.so" | sort -u |
+    while read -r lib; do cp -L "$lib" "$SHARE/lib/"; done
+cp -a "$BUILD/share/Lagom" "$SHARE/share/"
+strip --strip-unneeded "$SHARE"/lib/*.so* 2>/dev/null || true
+for f in "$SHARE"/lib/*.so*; do patchelf --set-rpath '$ORIGIN' "$f"; done
 
-strip --strip-unneeded "$OUT"/lib/*.so* "$OUT"/libexec/* "$OUT"/bin/* 2>/dev/null || true
+# The interface.
+cp "$UI/launcher/harbour-pacific" "$OUT/bin/"
+cp "$UI/browser/libpacificui.so" "$SHARE/lib/"
+cp -a "$UI"/lib/libpacificbrowser.so.1* "$SHARE/lib/"
+cp -a "$ROOT"/browser/apps/browser/qml/. "$SHARE/qml/"
+cp "$ROOT"/browser/apps/shared/*.qml "$SHARE/qml/shared/"
+cp -a "$ROOT/browser/data/searchEngines" "$SHARE/qml/"
+cp "$UI"/browser/*.qm "$SHARE/translations/"
 
-# The build bakes in an absolute build-host RUNPATH, and helper processes are
-# spawned without our LD_LIBRARY_PATH, so make every ELF find lib/ by itself.
-for f in "$OUT"/bin/* "$OUT"/libexec/*; do patchelf --set-rpath '$ORIGIN/../lib' "$f"; done
-for f in "$OUT"/lib/*.so*; do patchelf --set-rpath '$ORIGIN' "$f"; done
-
-cat > "$OUT/run.sh" <<'RUN'
-#!/bin/sh
-HERE="$(cd "$(dirname "$0")" && pwd)"
-exec "$HERE/bin/Ladybird" "$@"
-RUN
-chmod +x "$OUT/run.sh"
-
-tar -C "$ROOT/dist" -czf "$ROOT/dist/ladybird.tar.gz" ladybird
-du -sh "$OUT" "$ROOT/dist/ladybird.tar.gz"
+tar -C "$ROOT/dist" -czf "$ROOT/dist/harbour-pacific.tar.gz" harbour-pacific
+du -sh "$OUT" "$ROOT/dist/harbour-pacific.tar.gz"

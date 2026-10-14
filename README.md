@@ -17,11 +17,12 @@ patches. Developed and tested on the Jolla Phone 2 (MT6858, Mali-G610).
 | `patches/` | patches applied to `upstream/` |
 | `ui/protocol/` | the socket protocol between the engine and the browser interface |
 | `browser/` | the browser interface (Qt 5.6, Silica): Atlantic's, with its WebKit layer replaced by `browser/apps/ladybird/` |
+| `browser/apps/launcher/` | the app's one executable, `harbour-pacific` |
 | `scripts/build.sh` | native aarch64 build of the engine on the build host |
 | `scripts/build-browser.sh` | builds `browser/` against the SFOS SDK target |
-| `scripts/bundle.sh`, `scripts/deploy.sh` | relocatable bundle, copied to `/tmp/ladybird` on the phone |
+| `scripts/bundle.sh`, `scripts/deploy.sh` | the app laid out as installed (`dist/harbour-pacific`), copied to `/tmp/ladybird` on the phone |
 | `scripts/phone/` | start/stop scripts for the browser on the phone |
-| `scripts/package-rpm.sh` | the `pacific-browser` RPM: engine, interface, launcher entry, Sailjail profile |
+| `scripts/package-rpm.sh` | the `pacific-browser` RPM of the layout before the single executable; to be replaced by the Jolla Store package |
 | `browser/data/icon-launcher-pacific.svg` | the launcher icon; the PNGs are rendered from it |
 | `scripts/embed-harness.py` | talks the embedding protocol to an engine on the build host: load a page, tap, print what comes back |
 
@@ -31,7 +32,10 @@ patches. Developed and tested on the Jolla Phone 2 (MT6858, Mali-G610).
 git clone https://github.com/LadybirdBrowser/ladybird.git upstream
 git -C upstream checkout "$(cat UPSTREAM_COMMIT)"
 python3 -m venv .venv && .venv/bin/pip install 'cmake>=3.30'
-scripts/build.sh            # builds target `ladybird` into upstream/Build/release
+scripts/build.sh            # the engine: upstream/Build/release (lib/libpacificengine.so, bin/Ladybird)
+scripts/build-browser.sh    # the interface and the app's executable: build/browser
+scripts/bundle.sh           # dist/harbour-pacific, laid out as installed
+scripts/deploy.sh           # to /tmp/ladybird on the phone; then sh /tmp/ladybird/start-browser.sh [url]
 ```
 
 Host needs: `g++-14 nasm autoconf autoconf-archive automake libtool glslang-tools
@@ -42,7 +46,33 @@ The build is native, not cross: the SFOS 5.x glibc (2.41) is newer than the
 Ubuntu 24.04 host's (2.39), so host-built binaries load on the device as long as
 the vcpkg-built libraries and gcc 14's `libstdc++` travel with them.
 
-## Package
+## One executable
+
+The Jolla Store allows an app a single executable, so everything runs as `bin/harbour-pacific`, a small C
+program (`browser/apps/launcher`). Started as `harbour-pacific --engine-role <name> ...` it loads
+`libpacificengine.so` and becomes that engine process (`Ladybird`, the engine the interface talks to, or one of its
+helpers: `WebContent`, `RequestServer`, `Compositor`, ...); otherwise it loads `libpacificui.so`, the interface.
+So an engine process loads nothing of Qt, and the engine can bring gcc 14's C++ runtime while the interface uses
+the phone's.
+
+`libpacificengine.so` (`ui/SFOS/CMakeLists.txt`) holds every process's `main.cpp`, each with its `ladybird_main`
+compiled under its own name, and `EngineMain.cpp` picks the one asked for. It tells the engine (patch 0011) to start
+its helpers through the same executable (`LADYBIRD_HELPER_LAUNCHER`) and where its resources are
+(`LADYBIRD_APPLICATION_DIRECTORY`), both worked out from where the library is. Everything else is found beside the
+libraries too:
+
+```
+bin/harbour-pacific
+share/harbour-pacific/lib/            the interface's libraries, the engine, and the libraries it needs
+share/harbour-pacific/share/Lagom/    the engine's resources
+share/harbour-pacific/qml/            the interface, and the search engines it ships
+share/harbour-pacific/translations/
+```
+
+On the host, `upstream/Build/release/bin/Ladybird` does the launcher's job for the engine alone (the embedding
+harness uses it).
+
+## Package (before the single executable)
 
 ```sh
 scripts/build.sh && scripts/bundle.sh && scripts/build-browser.sh
@@ -193,7 +223,7 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   profile and refreshes them daily. An embedded engine therefore keeps a real
   profile instead of a temporary one.
 
-On the phone: `sh /tmp/ladybird/start-browser.sh [url] [minutes]`.
+On the phone: `sh /tmp/ladybird/start-browser.sh [url] [minutes]` after `scripts/deploy.sh`.
 
 ## Milestones
 

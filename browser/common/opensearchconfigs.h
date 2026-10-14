@@ -21,6 +21,8 @@ public:
     static const StringMap getAvailableOpenSearchConfigs();
     static const QStringList getSearchEngineList();
     static const QString getOpenSearchConfigPath();
+    // The engines shipped with the browser, in its installation (set at start, before anything asks).
+    static void setShippedPath(const QString &path);
     // <ShortName> of a single description file, or empty if it has none
     // (or does not parse). This is the engine's identity everywhere else.
     static const QString getShortName(const QString &configFile);

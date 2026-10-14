@@ -78,10 +78,6 @@ void LadybirdEngine::start()
     m_listenerNotifier = new QSocketNotifier(m_listener, QSocketNotifier::Read, this);
     connect(m_listenerNotifier, &QSocketNotifier::activated, this, &LadybirdEngine::acceptEngine);
 
-    QString enginePath = QString::fromLocal8Bit(qgetenv("PACIFIC_ENGINE"));
-    if (enginePath.isEmpty())
-        enginePath = QStringLiteral("/usr/libexec/pacific/bin/Ladybird");
-
     QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
     environment.insert(QStringLiteral(LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE), m_socketPath);
     // The phone's kernel has no Landlock; this keeps the seccomp half of the engine's sandbox.
@@ -112,7 +108,8 @@ void LadybirdEngine::start()
     environment.insert(QStringLiteral("XDG_DOWNLOAD_DIR"), downloads);
     m_process.setProcessEnvironment(environment);
     m_process.setProcessChannelMode(QProcess::ForwardedChannels);
-    m_process.start(enginePath, QStringList());
+    // The engine is the app's own executable in another role (see launcher/launcher.c).
+    m_process.start(QCoreApplication::applicationFilePath(), QStringList { QStringLiteral("--engine-role"), QStringLiteral("Ladybird") });
 }
 
 void LadybirdEngine::acceptEngine()
