@@ -16,6 +16,7 @@
 #include <QOpenGLContext>
 #include <QOpenGLFunctions>
 #include <QQuickWindow>
+#include <QSGSimpleRectNode>
 #include <QSGSimpleTextureNode>
 #include <QTouchEvent>
 
@@ -158,6 +159,21 @@ void EngineView::setLoadProgress(int progress)
     emit loadProgressChanged();
 }
 
+static bool s_loadingCoverDark = false;
+
+void EngineView::setLoadingCoverDark(bool dark)
+{
+    s_loadingCoverDark = dark;
+}
+
+void EngineView::setCovered(bool covered)
+{
+    if (m_covered == covered)
+        return;
+    m_covered = covered;
+    update();
+}
+
 void EngineView::engineFrame(const LadybirdFrame& frame)
 {
     static const bool logFrames = !qgetenv("PACIFIC_LOG_ENGINE").isEmpty();
@@ -167,6 +183,8 @@ void EngineView::engineFrame(const LadybirdFrame& frame)
             int(width()), int(height()));
     }
     m_frame = frame;
+    if (!m_awaitingCommit)
+        setCovered(false);
     update();
     emit frameArrived();
 }
@@ -244,6 +262,10 @@ void EngineView::engineMessage(const lb_embed_header& header, const QString& tex
     }
     case LB_EMBED_LOADING: {
         m_loading = header.a != 0;
+        // The old page stays out of sight until the new one has a frame. A load that ends without a new page (a
+        // download, an error, stopped) shows the old one again.
+        m_awaitingCommit = m_loading;
+        setCovered(m_loading);
         // Answers the old page still owed will not come.
         if (m_loading)
             m_scripts.clear();
@@ -253,6 +275,9 @@ void EngineView::engineMessage(const lb_embed_header& header, const QString& tex
         emit loadingChanged(&request);
         break;
     }
+    case LB_EMBED_COMMIT:
+        m_awaitingCommit = false;
+        break;
     case LB_EMBED_HISTORY:
         if (m_canGoBack != (header.a != 0) || m_canGoForward != (header.b != 0)) {
             m_canGoBack = header.a != 0;
@@ -270,6 +295,8 @@ void EngineView::engineMessage(const lb_embed_header& header, const QString& tex
         emit closeRequested();
         break;
     case LB_EMBED_CRASHED:
+        m_awaitingCommit = false;
+        setCovered(false);
         emit engineCrashed();
         break;
     default:
@@ -292,6 +319,22 @@ void EngineView::geometryChanged(const QRectF& newGeometry, const QRectF& oldGeo
 
 QSGNode* EngineView::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*)
 {
+    if (m_covered) {
+        QSGSimpleRectNode* cover = m_coverNodeShown ? static_cast<QSGSimpleRectNode*>(oldNode) : nullptr;
+        if (!cover) {
+            delete oldNode;
+            cover = new QSGSimpleRectNode;
+            m_coverNodeShown = true;
+        }
+        cover->setRect(boundingRect());
+        cover->setColor(s_loadingCoverDark ? QColor(0x1e, 0x1e, 0x1e) : QColor(Qt::white));
+        return cover;
+    }
+    if (m_coverNodeShown) {
+        delete oldNode;
+        oldNode = nullptr;
+        m_coverNodeShown = false;
+    }
     QSGSimpleTextureNode* node = static_cast<QSGSimpleTextureNode*>(oldNode);
 
     // Where the GPU can sample the engine's buffer as it is, the frame is shown from there and nothing is copied.

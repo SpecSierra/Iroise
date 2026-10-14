@@ -54,6 +54,8 @@ public:
     QString title() const { return m_title; }
     bool canGoBack() const { return m_canGoBack; }
     bool isLoading() const { return m_loading; }
+    // The colour that stands in for a page while the next one loads: white, or dark grey for dark pages.
+    static void setLoadingCoverDark(bool dark);
     bool canGoForward() const { return m_canGoForward; }
 
     // Called before the item gets a size: show the view the engine opened for a page (LB_EMBED_NEW_VIEW).
@@ -144,6 +146,7 @@ protected:
 private:
     void ensureEngineView();
     void setLoadProgress(int);
+    void setCovered(bool);
 
     quint32 m_view = 0;
     // A view the engine opened for a page, which this one shows instead of asking for a view of its own.
@@ -161,6 +164,9 @@ private:
     qreal m_deviceScaleFactor = 2.5;
 
     LadybirdFrame m_frame;
+    // From the start of a load until the new page's first frame, a plain fill stands in for the old page.
+    bool m_covered = false;
+    bool m_awaitingCommit = false;
 
     quint32 m_nextScript = 1;
     QHash<quint32, std::function<void(const QJsonValue&)>> m_scripts;
@@ -182,6 +188,7 @@ private:
     DirectFrameTextures* m_directTextures = nullptr;
     quint64 m_directGeneration = 0;
     bool m_loggedPath = false;
+    bool m_coverNodeShown = false;
     QSGTexture* m_texture = nullptr;
     uint m_textureId = 0;
     QSize m_textureSize;

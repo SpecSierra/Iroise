@@ -1451,6 +1451,7 @@ void WebPage::resolveJsDialog(bool accepted, const QString &text)
 void WebPage::applyDarkModeGlobally(bool dark)
 {
     LadybirdEngine::instance()->send(0, LB_EMBED_SET_DARK_MODE, dark ? 1 : 0);
+    EngineView::setLoadingCoverDark(dark);
 }
 
 // --- Pickers, the file chooser, where the page is scrolled to, engine data -----------------------------------

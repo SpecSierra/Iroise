@@ -432,6 +432,7 @@ private:
         };
         view->on_load_start = [this, id] { m_host.send_flags(id, LB_EMBED_LOADING, true); };
         view->on_load_finish = [this, id](URL::URL const&) { m_host.send_flags(id, LB_EMBED_LOADING, false); };
+        view->on_top_level_navigation_commit = [this, id] { m_host.send_flags(id, LB_EMBED_COMMIT, true); };
         view->on_input_method_state_change = [this, id, raw_view] {
             m_host.send_flags(id, LB_EMBED_TEXT_INPUT, raw_view->input_method_state().is_enabled);
         };
