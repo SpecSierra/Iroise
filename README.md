@@ -189,6 +189,9 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   before the view's own handling runs; an answer holds for that site and kind until the browser closes. Positions
   come from the interface's Qt Positioning source (`LadybirdGeolocation`) through a `Core::GeolocationProvider` of
   the front end's own.
+- The engine presents itself as a touch phone (patch 0012): Chrome on Android's user agent and `navigator.platform`,
+  `pointer: coarse`, `hover: none` and five touch points, so sites send their mobile pages. Desktop mode sends
+  Chrome on Linux's user agent.
 - Per-site user agents, the per-site JavaScript switch and desktop mode: the engine gets the site map once
   (`LB_EMBED_SET_SITE_OPTIONS`; user agents are the engine's own presets) and applies it whenever it learns where a
   tab is going: a load the interface asks for, the start of any load, and every page that comes to host the tab.

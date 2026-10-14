@@ -1,0 +1,68 @@
+diff --git a/Libraries/LibWeb/HTML/Navigator.cpp b/Libraries/LibWeb/HTML/Navigator.cpp
+index 6cf45cc2..405e0db0 100644
+--- a/Libraries/LibWeb/HTML/Navigator.cpp
++++ b/Libraries/LibWeb/HTML/Navigator.cpp
+@@ -159,8 +159,8 @@ GC::Ref<WebXR::XRSystem> Navigator::xr()
+ // https://w3c.github.io/pointerevents/#dom-navigator-maxtouchpoints
+ WebIDL::Long Navigator::max_touch_points()
+ {
+-    // FIXME: Implement this for touch-capable devices.
+-    return 0;
++    // A phone's touch screen; Chrome on Android reports 5.
++    return 5;
+ }
+ 
+ GC::Ref<ServiceWorker::ServiceWorkerContainer> Navigator::service_worker()
+diff --git a/Libraries/LibWeb/HTML/Window.cpp b/Libraries/LibWeb/HTML/Window.cpp
+index a52089fa..477a677c 100644
+--- a/Libraries/LibWeb/HTML/Window.cpp
++++ b/Libraries/LibWeb/HTML/Window.cpp
+@@ -609,10 +609,11 @@ CSS::Parser::ValueParserFFI::FfiMediaFeatureValue Window::query_media_feature(CS
+ 
+     // https://www.w3.org/TR/mediaqueries-5/#media-descriptor-table
+     switch (media_feature) {
++    // A phone: a finger is the only pointer, and it cannot hover.
+     case CSS::MediaFeatureID::AnyHover:
+-        return ident_media_feature_value(CSS::Keyword::Hover);
++        return ident_media_feature_value(CSS::Keyword::None);
+     case CSS::MediaFeatureID::AnyPointer:
+-        return ident_media_feature_value(CSS::Keyword::Fine);
++        return ident_media_feature_value(CSS::Keyword::Coarse);
+     case CSS::MediaFeatureID::AspectRatio:
+         return ratio_media_feature_value(inner_width(), inner_height());
+     case CSS::MediaFeatureID::Color:
+@@ -645,7 +646,7 @@ CSS::Parser::ValueParserFFI::FfiMediaFeatureValue Window::query_media_feature(CS
+     case CSS::MediaFeatureID::HorizontalViewportSegments:
+         return integer_media_feature_value(1);
+     case CSS::MediaFeatureID::Hover:
+-        return ident_media_feature_value(CSS::Keyword::Hover);
++        return ident_media_feature_value(CSS::Keyword::None);
+     case CSS::MediaFeatureID::InvertedColors:
+         return ident_media_feature_value(CSS::Keyword::None);
+     case CSS::MediaFeatureID::Monochrome:
+@@ -659,7 +660,7 @@ CSS::Parser::ValueParserFFI::FfiMediaFeatureValue Window::query_media_feature(CS
+     case CSS::MediaFeatureID::OverflowInline:
+         return ident_media_feature_value(CSS::Keyword::Scroll);
+     case CSS::MediaFeatureID::Pointer:
+-        return ident_media_feature_value(CSS::Keyword::Fine);
++        return ident_media_feature_value(CSS::Keyword::Coarse);
+     case CSS::MediaFeatureID::PrefersColorScheme: {
+         // https://github.com/w3c/csswg-drafts/issues/7213
+         // An SVG used as an image answers with the used `color-scheme` of the element referencing
+diff --git a/Libraries/LibWebCommon/Loader/UserAgent.h b/Libraries/LibWebCommon/Loader/UserAgent.h
+index bb044b82..12082103 100644
+--- a/Libraries/LibWebCommon/Loader/UserAgent.h
++++ b/Libraries/LibWebCommon/Loader/UserAgent.h
+@@ -83,8 +83,10 @@ namespace Web {
+ #    define UA_PLATFORM_STRING "X11; Linux x86_64"
+ #endif
+ 
+-constexpr auto default_user_agent = "Mozilla/5.0 (" UA_PLATFORM_STRING ") " BROWSER_NAME "/" BROWSER_VERSION " " SAD_COMPATIBILITY_HACK ""sv;
+-constexpr auto default_platform = OS_STRING " " CPU_STRING ""sv;
++// Pacific runs on phones: sites must get their mobile pages, so the engine introduces itself as Chrome on Android,
++// the frozen token included (sites only recognise those), and so does navigator.platform.
++constexpr auto default_user_agent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Mobile Safari/537.36"sv;
++constexpr auto default_platform = "Linux armv81"sv;
+ constexpr auto default_navigator_compatibility_mode = NavigatorCompatibilityMode::Chrome;
+ 
+ }
