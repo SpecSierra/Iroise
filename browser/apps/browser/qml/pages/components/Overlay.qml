@@ -740,8 +740,6 @@ Shared.Background {
             onStatusChanged: browserPage.tabPageActive = (status == PageStatus.Active)
             cutoutMode: CutoutMode.FullScreen
 
-            Shared.NotchBand {}
-
             Browser.TabView {
                 id: tabViewItem
 

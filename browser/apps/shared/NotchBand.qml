@@ -1,9 +1,9 @@
 import QtQuick 2.2
 import Sailfish.Silica 1.0
 
-// The band of the screen the camera notch is in, black so the notch disappears into it. For pages that draw to the
-// screen's edges (CutoutMode.FullScreen); Silica keeps every other page out of the band itself. A child of the page,
-// so the page stack's own decorations (the back indicator) stay above it. The notch is at the top of the physical
+// The band of the screen the camera notch is in, black so the notch disappears into it. For the browser page, which
+// draws to the screen's edges (CutoutMode.FullScreen); Silica keeps other pages out of the band itself, and the tab
+// overview only keeps its header below it. A child of the page, so the page stack's own decorations stay above it. The notch is at the top of the physical
 // portrait screen, on a different edge of the rotated page per orientation.
 Rectangle {
     property Item page: parent
