@@ -32,7 +32,7 @@ mkdir -p "$DIST/bin" "$DIST/lib" "$DIST/share/shared" "$DIST/translations"
 cp browser/pacific-browser "$DIST/bin/"
 cp -a lib/libpacificbrowser.so.1* "$DIST/lib/"
 cp -a "$ROOT"/browser/apps/browser/qml/. "$DIST/share/"
-cp "$ROOT"/browser/apps/shared/*.qml "$ROOT"/browser/apps/shared/*.js "$DIST/share/shared/"
+cp "$ROOT"/browser/apps/shared/*.qml "$DIST/share/shared/"
 cp -a "$ROOT/browser/data/searchEngines" "$DIST/share/" 2>/dev/null || true
 cp browser/*.qm "$DIST/translations/" 2>/dev/null || true
 du -sh "$DIST"

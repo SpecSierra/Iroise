@@ -5,7 +5,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Nemo.Configuration 1.0
-import Sailfish.Silica.Background 1.0 as SilicaBackground
+import "../shared" as Shared
 
 // Per-site user-agent overrides. Entries are stored in dconf as a JSON
 // object { "host": "profile-id" }; BrowserPage.qml pushes the key into the
@@ -15,7 +15,7 @@ import Sailfish.Silica.Background 1.0 as SilicaBackground
 Page {
     id: page
 
-    SilicaBackground.Background {
+    Shared.Background {
         anchors.fill: parent
         z: -1
     }
@@ -199,7 +199,7 @@ Page {
 
             canAccept: hostField.text.trim().length > 0
 
-            SilicaBackground.Background {
+            Shared.Background {
                 anchors.fill: parent
                 z: -1
             }

@@ -10,15 +10,15 @@
 
 import QtQuick 2.0
 import Sailfish.Silica 1.0
-import Sailfish.Browser 1.0
+import harbour.pacific 1.0
 import Nemo.Configuration 1.0
-import Sailfish.Silica.Background 1.0 as SilicaBackground
+import "../shared" as Shared
 import "components"
 
 Page {
     id: page
 
-    SilicaBackground.Background {
+    Shared.Background {
         anchors.fill: parent
         z: -1
     }

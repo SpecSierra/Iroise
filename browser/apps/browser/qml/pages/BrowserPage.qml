@@ -15,8 +15,7 @@ import QtQuick.Window 2.2 as QuickWindow
 import Sailfish.Silica 1.0
 import Sailfish.Pickers 1.0
 import Sailfish.Silica.private 1.0 as Private
-import Sailfish.Browser 1.0
-import Sailfish.Policy 1.0
+import harbour.pacific 1.0
 import Nemo.Configuration 1.0
 import Nemo.Notifications 1.0 as Nemo
 import "components" as Browser
@@ -210,11 +209,8 @@ Page {
     }
 
     function activateNewTabView() {
-        // Only open new tab if not blocked MDM, otherwise just bring to foreground
-        if (AccessPolicy.browserEnabled) {
-            pageStack.pop(browserPage, PageStackAction.Immediate)
-            overlay.enterNewTabUrl(PageStackAction.Immediate)
-        }
+        pageStack.pop(browserPage, PageStackAction.Immediate)
+        overlay.enterNewTabUrl(PageStackAction.Immediate)
         bringToForeground(webView.chromeWindow)
         // after bringToForeground, webView has focus => activate chrome
         window.activate()
@@ -527,7 +523,7 @@ Page {
 
     // Use Connections so that target updates when model changes.
     Connections {
-        target: AccessPolicy.browserEnabled && webView && webView.tabModel || null
+        target: webView && webView.tabModel || null
         ignoreUnknownSignals: true
         // Animate overlay to top if needed.
         onCountChanged: {
@@ -826,13 +822,6 @@ Page {
     Connections {
         target: WebUtils
         onOpenUrlRequested: {
-            // Refuse if blocked by MDM
-            if (!AccessPolicy.browserEnabled) {
-                bringToForeground(webView.chromeWindow)
-                window.activate()
-                return
-            }
-
             // Url is empty when user tapped icon when browser was already open.
             // In case first use not done show the overlay immediately.
             if (url == "") {

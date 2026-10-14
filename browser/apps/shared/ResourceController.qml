@@ -14,7 +14,6 @@
 import QtQuick 2.0
 import Nemo.KeepAlive 1.2
 import Nemo.DBus 2.0
-import Nemo.Policy 1.0
 
 // QtObject cannot have children
 Item {
@@ -118,20 +117,6 @@ Item {
             if (suspendIntention) {
                 start()
             }
-        }
-    }
-
-    Permissions {
-        enabled: audioActive || videoActive
-        applicationClass: "player"
-        autoRelease: true
-
-        Resource {
-            type: Resource.AudioPlayback
-        }
-
-        Resource {
-            type: Resource.VideoPlayback
         }
     }
 }

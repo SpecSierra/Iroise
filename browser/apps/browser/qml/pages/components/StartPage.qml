@@ -9,10 +9,8 @@
 import QtQuick 2.2
 import QtGraphicalEffects 1.0
 import Sailfish.Silica 1.0
-import Sailfish.Ambience 1.0
-import Sailfish.Browser 1.0
+import harbour.pacific 1.0
 import "." as Browser
-import "../../shared/WallpaperUtils.js" as WallpaperUtils
 
 Item {
     id: root
@@ -54,7 +52,7 @@ Item {
 
     property var now: new Date()
 
-    property string wpUrl: WallpaperUtils.ambienceImageUrl(Ambience.source)
+    property string wpUrl: Theme.backgroundImage
 
     Timer {
         interval: 20000

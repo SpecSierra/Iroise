@@ -12,12 +12,10 @@
 import QtQuick 2.2
 import QtQuick.Window 2.2 as QuickWindow
 import Sailfish.Silica 1.0
-import Sailfish.Browser 1.0
+import harbour.pacific 1.0
 import Sailfish.WebView.Pickers 1.0 as Pickers
 import Sailfish.WebView.Popups 1.0 as Popups
 import Sailfish.WebView.Controls 1.0
-import Sailfish.Policy 1.0
-import Sailfish.TextLinking 1.0
 import Nemo.Configuration 1.0
 import "." as Browser
 
@@ -67,7 +65,6 @@ WebContainer {
         }
     }
 
-    property var linkHandler: LinkHandler {}
 
     property QtObject fixedToolbarConfig: ConfigurationValue {
         key: "/apps/pacific-browser/settings/fixed_toolbar"
@@ -161,8 +158,7 @@ WebContainer {
                                                    && (webView.contentItem.domContentLoaded
                                                        || webView.contentItem.painted)
 
-    touchBlocked: contentItem && contentItem.popupOpener && contentItem.popupOpener.active
-                  || !AccessPolicy.browserEnabled || false
+    touchBlocked: contentItem && contentItem.popupOpener && contentItem.popupOpener.active || false
 
     onKeyPressed: handleKeyPress(key)
 

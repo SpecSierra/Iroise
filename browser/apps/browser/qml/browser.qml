@@ -76,9 +76,6 @@ BrowserWindow {
             noTabsCoverLoader.active = false
         }
     }
-
-    //% "Web browsing"
-    activityDisabledByMdm: qsTrId("sailfish_browser-la-web_browsing")
     initialPage: Component {
         BrowserPage {
             id: browserPage

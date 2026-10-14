@@ -1,5 +1,5 @@
 TEMPLATE = subdirs
-SUBDIRS += apps settings
+SUBDIRS += apps
 
 tests.depends = apps
 

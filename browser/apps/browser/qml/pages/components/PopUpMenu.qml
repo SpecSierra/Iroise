@@ -9,11 +9,8 @@
 import QtQuick 2.2
 import QtGraphicalEffects 1.0
 import Sailfish.Silica 1.0
-import Sailfish.Silica.Background 1.0 as Background
 import Sailfish.Silica.private 1.0 as Private
-import Sailfish.Ambience 1.0
 import "." as Components
-import "../../shared/WallpaperUtils.js" as WallpaperUtils
 
 SilicaControl {
     id: popUpMenu
@@ -78,7 +75,7 @@ SilicaControl {
 
     // Blurred ambience wallpaper, in the menu's own coordinate space, for the
     // FrostedBox glass to sample by region (FBO-immune, unlike gl_FragCoord).
-    property string _wpUrl: WallpaperUtils.ambienceImageUrl(Ambience.source)
+    property string _wpUrl: Theme.backgroundImage
 
     // The raw wallpaper must be captured but never drawn (hideSource is unreliable
     // here), so keep it inside a zero-size clipped container; the capture SES below
@@ -299,33 +296,8 @@ SilicaControl {
                 ]
             }
 
-            ShaderEffectSource {
-                id: menuShaderSource
-
-                x: menuFlickable.x
-                y: menuFlickable.y
-                width: menuFlickable.width
-                height: menuFlickable.height
-
-                sourceItem: menuFlickable
-                hideSource: true
-            }
-
-            Background.Background {
-                id: menuShaderItem
-
-                x: menuShaderSource.x
-                y: menuShaderSource.y
-                width: menuShaderSource.width
-                height: menuShaderSource.height
-
-                radius: 0
-                sourceItem: menuShaderSource
-                fillMode: Background.Background.Stretch
-            }
-
             InverseMouseArea {
-                anchors.fill: menuShaderItem
+                anchors.fill: menuFlickable
                 enabled: popUpMenu.active
                 stealPress: true
                 onPressedOutside: closed()

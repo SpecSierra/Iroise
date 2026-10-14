@@ -9,8 +9,7 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
 import Sailfish.Silica.private 1.0 as Private
-import Sailfish.Silica.Background 1.0 as SilicaBackground
-import Sailfish.Browser 1.0
+import harbour.pacific 1.0
 import "." as Browser
 import "../../shared" as Shared
 

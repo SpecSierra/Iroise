@@ -169,7 +169,7 @@ static void registerBrowserQmlTypes()
         return;
     }
 
-    const char *uri = "Sailfish.Browser";
+    const char *uri = "harbour.pacific";
 
     qmlRegisterRevision<QQuickItem, 1>(uri, 1, 0);
     qmlRegisterRevision<QWindow, 1>(uri, 1, 0);

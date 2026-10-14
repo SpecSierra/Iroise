@@ -1,14 +1,12 @@
 import QtQuick 2.2
 import Sailfish.Silica 1.0
-import Sailfish.Ambience 1.0
-import "shared/WallpaperUtils.js" as WallpaperUtils
 
 ApplicationWindow {
     initialPage: Component {
         Page {
             id: splash
 
-            property string wpUrl: WallpaperUtils.ambienceImageUrl(Ambience.source)
+            property string wpUrl: Theme.backgroundImage
 
             // Ambience wallpaper backdrop (loads async so the splash shows instantly).
             Image {

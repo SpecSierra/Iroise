@@ -13,9 +13,7 @@
 import QtQuick 2.2
 import QtQuick.Window 2.2 as QuickWindow
 import Sailfish.Silica 1.0
-import Sailfish.Browser 1.0
-import Sailfish.Policy 1.0
-import com.jolla.settings.system 1.0
+import harbour.pacific 1.0
 
 ApplicationWindow {
     id: window
@@ -24,7 +22,6 @@ ApplicationWindow {
 
     property var rootPage
     property QtObject webView
-    property alias activityDisabledByMdm: mdmView.activity
 
     allowedOrientations: defaultAllowedOrientations
     _defaultPageOrientations: Orientation.LandscapeMask | Orientation.Portrait
@@ -39,20 +36,5 @@ ApplicationWindow {
 
     pageStack.pageBackground: Component { Background {} }
 
-    DisabledByMdmView {
-        id: mdmView
-
-        enabled: !AccessPolicy.browserEnabled
-        onEnabledChanged: {
-            if (enabled) {
-                webView.tabModel.clear()
-                webView.privateMode = true
-                pageStack.pop(null, PageStackAction.Immediate)
-                rootPage.overlay.toolBar.showOverlay()
-            } else {
-                webView.privateMode = false
-            }
-        }
-    }
 
 }

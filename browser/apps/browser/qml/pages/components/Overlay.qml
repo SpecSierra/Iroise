@@ -11,11 +11,9 @@ import QtQuick 2.2
 import QtQuick.Window 2.2 as QuickWindow
 import Sailfish.Silica 1.0
 import Sailfish.Silica.private 1.0 as Private
-import Sailfish.Browser 1.0
-import Sailfish.Policy 1.0
+import harbour.pacific 1.0
 import Sailfish.WebView.Controls 1.0
 import Sailfish.WebView.Popups 1.0
-import com.jolla.settings.system 1.0
 import Nemo.Configuration 1.0
 import "." as Browser
 import "../../shared" as Shared
@@ -385,8 +383,7 @@ Shared.Background {
             TextField {
                 id: searchField
 
-                readonly property bool requestingFocus: AccessPolicy.browserEnabled
-                                                        && overlayAnimator.atTop
+                readonly property bool requestingFocus: overlayAnimator.atTop
                                                         && browserPage.active
                                                         && !dragArea.moved
                                                         && (_showFindInPage || _showUrlEntry)
@@ -394,9 +391,6 @@ Shared.Background {
                 // Release focus when ever history list or favorite grid is moved and overlay itself starts moving
                 // from the top. After moving the overlay or the content, search field can be focused by tapping.
                 readonly property bool focusOut: dragArea.moved
-
-                readonly property bool browserEnabled: AccessPolicy.browserEnabled
-                onBrowserEnabledChanged: if (!browserEnabled) focus = false
 
                 property bool edited
                 property bool enteringNewTabUrl
