@@ -1,8 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 544 544" width="544" height="544">
-  <!-- Pacific launcher icon: a red wave. The outline is the Sailfish launcher shape the Atlantic icon used. -->
+  <!-- Pacific launcher icon: calm red swells. The outline is the Sailfish launcher shape: one large rounded corner,
+       the others square. -->
   <defs>
     <clipPath id="shape">
-      <path d="M0,544 L0,230 Q0,0 230,0 L496,0 Q544,0 544,48 L544,496 Q544,544 496,544 Z"/>
+      <path d="M0,544 L0,312 Q0,0 312,0 L544,0 L544,544 Z"/>
     </clipPath>
     <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#FFF8F0"/>
@@ -15,17 +16,11 @@
   </defs>
   <g clip-path="url(#shape)">
     <rect width="544" height="544" fill="url(#sky)"/>
-    <!-- a swell behind -->
-    <path d="M0,372 C90,318 170,318 262,366 S440,420 544,352 L544,544 L0,544 Z" fill="#FF9C8A"/>
-    <!-- the wave, breaking to the right -->
-    <path d="M0,544 L0,418 C84,410 150,346 196,262 C246,170 344,124 420,166 C484,202 490,290 436,320
-             C398,340 356,318 356,286 C356,262 380,248 402,260 C366,222 300,246 288,312
-             C276,384 366,440 544,424 L544,544 Z" fill="url(#wave)"/>
+    <!-- a swell far out -->
+    <path d="M0,278 C100,242 200,246 292,272 S462,304 544,266 L544,544 L0,544 Z" fill="#FF9C8A"/>
+    <!-- the main swell -->
+    <path d="M0,352 C96,300 206,298 302,334 S470,372 544,328 L544,544 L0,544 Z" fill="url(#wave)"/>
     <!-- water in front -->
-    <path d="M0,470 C96,430 190,440 284,476 S460,510 544,468 L544,544 L0,544 Z" fill="#8E0C18"/>
-    <!-- spray -->
-    <circle cx="470" cy="138" r="13" fill="#F2463A"/>
-    <circle cx="502" cy="186" r="8" fill="#F2463A"/>
-    <circle cx="440" cy="98" r="7" fill="#FF9C8A"/>
+    <path d="M0,428 C104,396 206,400 300,424 S462,452 544,418 L544,544 L0,544 Z" fill="#8E0C18"/>
   </g>
 </svg>
