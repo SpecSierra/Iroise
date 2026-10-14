@@ -11,6 +11,7 @@ import QtGraphicalEffects 1.0
 import Sailfish.Silica 1.0
 import harbour.pacific 1.0
 import "." as Browser
+import "../../shared" as Shared
 
 Item {
     id: root
@@ -52,8 +53,6 @@ Item {
 
     property var now: new Date()
 
-    property string wpUrl: Theme.backgroundImage
-
     Timer {
         interval: 20000
         repeat: true
@@ -65,13 +64,10 @@ Item {
     RemorsePopup { id: removeRemorse }
 
     // Wallpaper backdrop (sharp)
-    Image {
+    Shared.Wallpaper {
         id: bgImage
         anchors.fill: parent
-        source: root.wpUrl
-        fillMode: Image.PreserveAspectCrop
         asynchronous: true
-        cache: true
     }
 
     // Blurred copy of the backdrop, in the same coordinate space, sampled by the
@@ -102,9 +98,11 @@ Item {
             // Scrim brightness follows the ambience scheme: dark under light
             // text, light under black text (light/white ambiences).
             property real level: Theme.colorScheme === Theme.DarkOnLight ? 1 : 0
-            GradientStop { position: 0.0; color: Qt.rgba(scrimGradient.level, scrimGradient.level, scrimGradient.level, 0.6) }
-            GradientStop { position: 0.45; color: Qt.rgba(scrimGradient.level, scrimGradient.level, scrimGradient.level, 0.3) }
-            GradientStop { position: 1.0; color: Qt.rgba(scrimGradient.level, scrimGradient.level, scrimGradient.level, 0.65) }
+            // The compositor's wallpaper, there when ours cannot be read (see Wallpaper.qml), comes already dimmed.
+            property real strength: bgImage.status === Image.Ready ? 1 : 0.35
+            GradientStop { position: 0.0; color: Qt.rgba(scrimGradient.level, scrimGradient.level, scrimGradient.level, 0.6 * scrimGradient.strength) }
+            GradientStop { position: 0.45; color: Qt.rgba(scrimGradient.level, scrimGradient.level, scrimGradient.level, 0.3 * scrimGradient.strength) }
+            GradientStop { position: 1.0; color: Qt.rgba(scrimGradient.level, scrimGradient.level, scrimGradient.level, 0.65 * scrimGradient.strength) }
         }
     }
 

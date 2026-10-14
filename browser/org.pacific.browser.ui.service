@@ -1,3 +1,0 @@
-[D-BUS Service]
-Name=org.pacific.browser.ui
-Exec=/usr/bin/taskset -c 4-7 /usr/bin/invoker --type=browser,silica-qt5 -A -- /usr/bin/sailfish-browser -prestart

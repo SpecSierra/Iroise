@@ -22,8 +22,9 @@ patches. Developed and tested on the Jolla Phone 2 (MT6858, Mali-G610).
 | `scripts/build-browser.sh` | builds `browser/` against the SFOS SDK target |
 | `scripts/bundle.sh`, `scripts/deploy.sh` | the app laid out as installed (`dist/harbour-pacific`), copied to `/tmp/ladybird` on the phone |
 | `scripts/phone/` | start/stop scripts for the browser on the phone |
-| `scripts/package-rpm.sh` | the `pacific-browser` RPM of the layout before the single executable; to be replaced by the Jolla Store package |
-| `browser/data/icon-launcher-pacific.svg` | the launcher icon; the PNGs are rendered from it |
+| `scripts/build-sqlcipher.sh` | the SQLCipher the password vault opens, without ICU |
+| `scripts/package-rpm.sh` | the `harbour-pacific` RPM, as the Jolla Store takes it |
+| `browser/apps/browser/qml/icons/icon-launcher-pacific.svg` | the launcher icon; the PNGs are rendered from it |
 | `scripts/embed-harness.py` | talks the embedding protocol to an engine on the build host: load a page, tap, print what comes back |
 
 ## Build
@@ -34,6 +35,7 @@ git -C upstream checkout "$(cat UPSTREAM_COMMIT)"
 python3 -m venv .venv && .venv/bin/pip install 'cmake>=3.30'
 scripts/build.sh            # the engine: upstream/Build/release (lib/libpacificengine.so, bin/Ladybird)
 scripts/build-browser.sh    # the interface and the app's executable: build/browser
+scripts/build-sqlcipher.sh  # build/sqlcipher/libsqlcipher.so.0
 scripts/bundle.sh           # dist/harbour-pacific, laid out as installed
 scripts/deploy.sh           # to /tmp/ladybird on the phone; then sh /tmp/ladybird/start-browser.sh [url]
 ```
@@ -51,7 +53,7 @@ the vcpkg-built libraries and gcc 14's `libstdc++` travel with them.
 The Jolla Store allows an app a single executable, so everything runs as `bin/harbour-pacific`, a small C
 program (`browser/apps/launcher`). Started as `harbour-pacific --engine-role <name> ...` it loads
 `libpacificengine.so` and becomes that engine process (`Ladybird`, the engine the interface talks to, or one of its
-helpers: `WebContent`, `RequestServer`, `Compositor`, ...); otherwise it loads `libpacificui.so`, the interface.
+helpers: `WebContent`, `RequestServer`, `Compositor`, ...); otherwise it loads `libpacificbrowser.so.1`, the interface.
 So an engine process loads nothing of Qt, and the engine can bring gcc 14's C++ runtime while the interface uses
 the phone's.
 
@@ -63,7 +65,8 @@ libraries too:
 
 ```
 bin/harbour-pacific
-share/harbour-pacific/lib/            the interface's libraries, the engine, and the libraries it needs
+share/harbour-pacific/lib/            the interface's libraries (the executable's rpath)
+share/harbour-pacific/lib/engine/     the engine and the libraries it needs, apart so Qt never loads them
 share/harbour-pacific/share/Lagom/    the engine's resources
 share/harbour-pacific/qml/            the interface, and the search engines it ships
 share/harbour-pacific/translations/
@@ -72,28 +75,26 @@ share/harbour-pacific/translations/
 On the host, `upstream/Build/release/bin/Ladybird` does the launcher's job for the engine alone (the embedding
 harness uses it).
 
-## Package (before the single executable)
+## Package
 
 ```sh
-scripts/build.sh && scripts/bundle.sh && scripts/build-browser.sh
-scripts/package-rpm.sh 0.1.0 1        # dist/rpm/pacific-browser-0.1.0-1.aarch64.rpm (needs fpm, cairosvg)
+scripts/build.sh && scripts/build-browser.sh && scripts/build-sqlcipher.sh && scripts/bundle.sh
+scripts/package-rpm.sh 0.2.0 1        # dist/rpm/harbour-pacific-0.2.0-1.aarch64.rpm (needs fpm, cairosvg)
 ```
 
-One RPM. The engine bundle goes to `/usr/libexec/pacific` as it is (its binaries find
-their libraries by `$ORIGIN`), the interface to `/usr/bin/pacific-browser`,
-`/usr/lib64/libpacificbrowser.so.1` and `/usr/share/pacific-browser`. The package is
-not signed: install it with `devel-su rpm -U`.
+The Jolla Store's package: `/usr/bin/harbour-pacific`, everything else under `/usr/share/harbour-pacific`, the
+launcher entry and its icons, and nothing else (no profile, no D-Bus service files). It passes
+`sdk-harbour-rpmvalidator`, with one warning: the entry is `no-invoker`, because started through the booster
+`/proc/self/exe` would be the booster's, and the engine's processes are started from it. Sailjail confines the app
+by the entry's `[X-Sailjail]` alone, and the app owns `org.pacific.harbour-pacific` on the session bus: a second
+start (a link from another app) hands its arguments to the running one and leaves.
 
-The launcher entry and both D-Bus service files start
-`sailjail -p pacific-browser.desktop /usr/bin/pacific-browser`, so the browser and
-every engine process run inside Sailjail (firejail); the engine's own seccomp
-filters nest inside that. Sailjail only starts ELF binaries, so there is no wrapper
-script, and the per-application profile in `/etc/sailjail/permissions` carries what
-the defaults would hide: the libhybris GPU paths, `/dev/dma_heap`, the interface's
-QML under `/usr/share`, the ambience wallpaper. The engine's profile, cache and
-settings live in an `engine` directory inside the browser's own
-`org.pacific/pacificbrowser` data and cache directories, so the sandbox needs no
-further exceptions and removing the browser's data removes the engine's.
+The sandbox cannot read the ambience's wallpaper, so in the package the window asks lipstick to draw it behind
+(Silica's `_backgroundVisible`), and the surfaces over the web page are panels in the ambience's colour
+(`shared/Wallpaper.qml`).
+
+Not to be published (nor "Ladybird" named in anything users see) until the Ladybird project has guidelines for its
+name and for packaging.
 
 ## GPU painting (GLES through libhybris)
 
@@ -115,10 +116,8 @@ system's GLES (patch 0009, `USE_GLES_HYBRIS`; Vulkan is not built).
 
 The interface is Atlantic's Silica browser (MPL-2.0, itself derived from
 sailfish-browser), copied into `browser/` with its identities renamed so it cannot
-collide with an Atlantic install (`org.pacific.browser`, profile
-`org.pacific/pacificbrowser`, dconf `/apps/pacific-browser`). Atlantic's migration
-out of the stock browser's profile is disabled: Pacific never touches another
-browser's files.
+collide with an Atlantic install (data `org.pacific/harbour-pacific`, dconf
+`/apps/harbour-pacific`). Pacific never touches another browser's files.
 
 It cannot link the engine (Qt 5.6 and C++11 against C++23), and a separate page
 surface cannot sit under a Silica window on lipstick (see Atlantic's

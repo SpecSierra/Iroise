@@ -3,11 +3,7 @@
 
 #include <QtGlobal>
 
-class QGuiApplication;
-class QQuickView;
-
-extern "C" Q_DECL_EXPORT bool pacificBrowserRuntimeStart(QQuickView *view,
-                                                          QGuiApplication *app,
-                                                          const char *dataPath);
+// The interface's start, called by the app's executable (launcher/launcher.c) with its own arguments.
+extern "C" Q_DECL_EXPORT int pacific_ui_main(int argc, char *argv[]);
 
 #endif // PACIFIC_BROWSERRUNTIME_H

@@ -27,6 +27,16 @@
 #include "DownloadModel.h"
 
 #include <QGuiApplication>
+#include <unistd.h>
+#include <signal.h>
+#include <dlfcn.h>
+#include <QDBusMessage>
+#include <QDBusConnectionInterface>
+#include <QTranslator>
+#include <QSurfaceFormat>
+#include <QLocale>
+#include <QFileInfo>
+#include <QDir>
 #include <QCoreApplication>
 #include <QEvent>
 #include <QKeyEvent>
@@ -48,105 +58,6 @@
 #include <QWindow>
 #include <qpa/qplatformnativeinterface.h>
 #include <stdio.h>
-
-namespace {
-
-const char *applicationStateName(Qt::ApplicationState state)
-{
-    switch (state) {
-    case Qt::ApplicationSuspended:
-        return "suspended";
-    case Qt::ApplicationInactive:
-        return "inactive";
-    case Qt::ApplicationActive:
-        return "active";
-    default:
-        return "unknown";
-    }
-}
-
-void requestActivePageRenderRecovery(QQuickView *view, const char *reason)
-{
-    if (!view) {
-        return;
-    }
-
-    const QList<WebPage *> pages = WebPage::liveInstances();
-    int resumedPageCount = 0;
-    for (WebPage *page : pages) {
-        if (!page || !page->active()) {
-            continue;
-        }
-
-        page->resumeView();
-        ++resumedPageCount;
-    }
-
-    // NB: Atlantic also reloaded the whole interface here when no page existed, to recover from a render
-    //     stall. That fired during start-up, before the first page was made, and took the application down.
-    if (resumedPageCount > 0)
-        view->update();
-
-    fprintf(stderr, "[PACIFIC-RUNTIME] Render recovery (%s): resumed %d active page(s) out of %d\n",
-            reason ? reason : "unknown", resumedPageCount, pages.size());
-}
-
-void installRenderRecoveryHooks(QQuickView *view, QGuiApplication *app)
-{
-    if (!view || !app) {
-        return;
-    }
-
-    Qt::ApplicationState previousState = app->applicationState();
-
-    QObject::connect(app, &QGuiApplication::applicationStateChanged,
-                     view,
-                     [view, previousState](Qt::ApplicationState newState) mutable {
-        const Qt::ApplicationState oldState = previousState;
-        previousState = newState;
-
-        if (newState != Qt::ApplicationActive) {
-            return;
-        }
-
-        const bool resumedFromBackground = oldState == Qt::ApplicationInactive
-                || oldState == Qt::ApplicationSuspended;
-        if (!resumedFromBackground) {
-            return;
-        }
-
-        fprintf(stderr, "[PACIFIC-RUNTIME] Application state transition: %s -> %s\n",
-                applicationStateName(oldState), applicationStateName(newState));
-        requestActivePageRenderRecovery(view, "app-activated");
-    },
-                     Qt::UniqueConnection);
-
-    QObject::connect(view, &QQuickWindow::sceneGraphError,
-                     view,
-                     [view](QQuickWindow::SceneGraphError error, const QString &message) {
-        fprintf(stderr, "[PACIFIC-RUNTIME] Scene graph error (%d): %s\n",
-                static_cast<int>(error), message.toUtf8().constData());
-        requestActivePageRenderRecovery(view, "scenegraph-error");
-    },
-                     Qt::UniqueConnection);
-
-    QObject::connect(view, &QQuickWindow::sceneGraphInvalidated,
-                     view,
-                     [view, app]() {
-        fprintf(stderr, "[PACIFIC-RUNTIME] Scene graph invalidated\n");
-        // Minimizing tears down the scene graph while applicationState still
-        // reads Active (the state change lands later), so the app-state check
-        // alone is not enough. An unexposed window means this invalidation is
-        // part of normal hide/minimize — recovering here would reload the QML
-        // source over a live session. The app-activated hook handles resume.
-        if (app && app->applicationState() == Qt::ApplicationActive && view->isExposed()) {
-            requestActivePageRenderRecovery(view, "scenegraph-invalidated");
-        }
-    },
-                     Qt::UniqueConnection);
-}
-
-} // namespace
 
 static QObject *search_model_factory(QQmlEngine *, QJSEngine *)
 {
@@ -199,82 +110,80 @@ static void registerBrowserQmlTypes()
     registered = true;
 }
 
-extern "C" Q_DECL_EXPORT bool pacificBrowserRuntimeStart(QQuickView *view,
-                                                          QGuiApplication *app,
-                                                          const char *dataPath)
+// The installation's top directory (share/harbour-pacific): the parent of the lib/ this library is in. The
+// interface's QML is in qml/ and its translations in translations/ there.
+static QString installationPath()
 {
-    if (!view || !app) {
-        return false;
+    Dl_info info;
+    if (!dladdr(reinterpret_cast<void *>(&installationPath), &info) || !info.dli_fname)
+        return QString();
+    return QDir::cleanPath(QFileInfo(QString::fromLocal8Bit(info.dli_fname)).absolutePath() + QStringLiteral("/.."));
+}
+
+// Pacific: the interface's start. The app's executable (launcher/launcher.c) loads this library and calls this.
+extern "C" Q_DECL_EXPORT int pacific_ui_main(int argc, char *argv[])
+{
+    signal(SIGPIPE, SIG_IGN);
+    // So that closing the app from the task switcher really ends it.
+    signal(SIGTERM, SIG_DFL);
+
+    QSurfaceFormat format = QSurfaceFormat::defaultFormat();
+    format.setRenderableType(QSurfaceFormat::OpenGLES);
+    format.setProfile(QSurfaceFormat::NoProfile);
+    format.setSwapInterval(1);
+    QSurfaceFormat::setDefaultFormat(format);
+    QQuickWindow::setDefaultAlphaBuffer(true);
+
+    QGuiApplication app(argc, argv);
+    // Sailjail derives the app's directories and its bus name from these (the launcher entry's X-Sailjail).
+    app.setOrganizationName(QStringLiteral("org.pacific"));
+    app.setApplicationName(QStringLiteral("harbour-pacific"));
+
+    // Another app opening a link while the browser runs starts the app again: hand the link over and leave.
+    QDBusConnection bus = QDBusConnection::sessionBus();
+    if (bus.interface() && bus.interface()->isServiceRegistered(QStringLiteral(PACIFIC_SERVICE_NAME))) {
+        QDBusMessage call = QDBusMessage::createMethodCall(QStringLiteral(PACIFIC_SERVICE_NAME), QStringLiteral(PACIFIC_SERVICE_PATH),
+            QStringLiteral(PACIFIC_SERVICE_INTERFACE), QStringLiteral("openUrl"));
+        call << QStringList(app.arguments().mid(1));
+        bus.call(call);
+        return 0;
     }
 
-    if (view->property("pacificBrowserRuntimeLoaded").toBool()) {
-        return true;
-    }
+    app.setQuitOnLastWindowClosed(true);
+    app.setAttribute(Qt::AA_SynthesizeTouchForUnhandledMouseEvents, true);
 
-    // Before anything below opens the profile.
-    BrowserPaths::migrateSharedProfile();
-    OpenSearchConfigs::setShippedPath(QString::fromLocal8Bit(dataPath ? dataPath : "") + QStringLiteral("searchEngines/"));
+    const QString installation = installationPath();
+    const QString translations = installation + QStringLiteral("/translations");
+    QTranslator *engineeringEnglish = new QTranslator(&app);
+    engineeringEnglish->load(QStringLiteral("pacific-browser_eng_en"), translations);
+    app.installTranslator(engineeringEnglish);
+    QTranslator *translator = new QTranslator(&app);
+    translator->load(QLocale(), QStringLiteral("pacific-browser"), QStringLiteral("-"), translations);
+    app.installTranslator(translator);
 
+    OpenSearchConfigs::setShippedPath(installation + QStringLiteral("/qml/searchEngines/"));
     registerBrowserQmlTypes();
 
-    fprintf(stderr, "[PACIFIC-RUNTIME] Starting browser runtime\n");
-    BrowserService *service = new BrowserService(app);
-    if (service->registered()) {
-        fprintf(stderr, "[PACIFIC-RUNTIME] BrowserService registered\n");
-    } else {
-        fprintf(stderr, "[PACIFIC-RUNTIME] BrowserService registration failed; transfer callbacks unavailable\n");
-    }
+    QQuickView view;
+    view.setTitle(QStringLiteral("Pacific"));
+    Browser *browser = new Browser(&view, installation + QStringLiteral("/qml/"), &app);
 
-    Browser *browser = new Browser(view, QString::fromLocal8Bit(dataPath ? dataPath : ""), app);
-    static const QString kBrowserUiServiceName = QStringLiteral("org.pacific.browser.ui");
-    QDBusConnection sessionBus = QDBusConnection::sessionBus();
-
-    // Object BEFORE name, like BrowserService does for "/" — never the reverse.
-    // On a cold D-Bus activation ("open link in Pacific" with no instance
-    // running) dbus-daemon holds the caller's openUrl until this name appears
-    // and delivers it the instant it does. Registering the name first opened a
-    // window where the name was owned but /ui did not exist yet, so the call
-    // came back UnknownObject, the URL was dropped, and the browser finished
-    // starting on a blank tab — the "it opens but the link doesn't load" bug.
-    // The ctor still must not call registerService itself: that dispatches
-    // pending messages during construction and reenters.
-    BrowserUIService *uiService = new BrowserUIService(app);
-    const bool uiServiceNameRegistered = sessionBus.registerService(kBrowserUiServiceName);
-    if (!uiServiceNameRegistered) {
-        fprintf(stderr, "[PACIFIC-RUNTIME] BrowserUIService name registration failed for %s\n",
-                qPrintable(kBrowserUiServiceName));
-    }
-    if (uiServiceNameRegistered && uiService->registered()) {
-        fprintf(stderr, "[PACIFIC-RUNTIME] BrowserUIService registered\n");
-    } else if (!uiService->registered()) {
-        fprintf(stderr, "[PACIFIC-RUNTIME] BrowserUIService object registration failed\n");
-    }
-    installRenderRecoveryHooks(view, app);
-
-    if (service->registered()) {
-        QObject::connect(service, &BrowserService::openUrlRequested,
-                         browser, &Browser::openUrl);
-        QObject::connect(service, &BrowserService::activateNewTabViewRequested,
-                         browser, &Browser::openNewTabView);
-    }
-
-    if (uiServiceNameRegistered && uiService->registered()) {
-        QObject::connect(uiService, &BrowserUIService::openUrlRequested,
-                         browser, &Browser::openUrl);
-        QObject::connect(uiService, &BrowserUIService::openSettingsRequested,
-                         browser, &Browser::openSettings);
-        QObject::connect(uiService, &BrowserUIService::activateNewTabViewRequested,
-                         browser, &Browser::openNewTabView);
-    }
+    BrowserService *service = new BrowserService(&app);
+    if (!service->registered())
+        qWarning("Pacific: cannot own %s; links from other apps will start another browser", PACIFIC_SERVICE_NAME);
+    QObject::connect(service, &BrowserService::openUrlRequested, browser, &Browser::openUrl);
+    QObject::connect(service, &BrowserService::openSettingsRequested, browser, &Browser::openSettings);
+    QObject::connect(service, &BrowserService::activateNewTabViewRequested, browser, &Browser::openNewTabView);
 
     browser->load();
+
     // PACIFIC_GRAB_DIR=<dir> saves what the window shows once a second, as <dir>/grab-<n>.jpg (the last 20 are
     // kept). PACIFIC_GRAB_INTERVAL_MS makes that more often, to catch a transition; the files are then named by
     // the millisecond they were taken at, to set beside the log, and the last 80 are kept. The system screenshot service only writes under the home directory, which test runs stay out of.
     const QString grabDirectory = QString::fromLocal8Bit(qgetenv("PACIFIC_GRAB_DIR"));
     if (!grabDirectory.isEmpty()) {
-        QTimer *grabTimer = new QTimer(view);
-        QObject::connect(grabTimer, &QTimer::timeout, view, [view, grabDirectory]() {
+        QTimer *grabTimer = new QTimer(&view);
+        QObject::connect(grabTimer, &QTimer::timeout, &view, [&view, grabDirectory]() {
             static int count = 0;
             static QElapsedTimer clock;
             static QStringList fastGrabs;
@@ -282,20 +191,20 @@ extern "C" Q_DECL_EXPORT bool pacificBrowserRuntimeStart(QQuickView *view,
                 clock.start();
             if (qEnvironmentVariableIsSet("PACIFIC_GRAB_INTERVAL_MS")) {
                 QString name = QStringLiteral("%1/grab-%2.jpg").arg(grabDirectory).arg(clock.elapsed(), 7, 10, QLatin1Char('0'));
-                view->grabWindow().scaledToWidth(344).save(name, "JPG", 60);
+                view.grabWindow().scaledToWidth(344).save(name, "JPG", 60);
                 fastGrabs.append(name);
                 if (fastGrabs.size() > 80)
                     QFile::remove(fastGrabs.takeFirst());
             } else {
-                view->grabWindow().scaledToWidth(516).save(QStringLiteral("%1/grab-%2.jpg").arg(grabDirectory).arg(count % 20, 2, 10, QLatin1Char('0')), "JPG", 70);
+                view.grabWindow().scaledToWidth(516).save(QStringLiteral("%1/grab-%2.jpg").arg(grabDirectory).arg(count % 20, 2, 10, QLatin1Char('0')), "JPG", 70);
             }
             ++count;
         });
         grabTimer->start(qMax(50, qEnvironmentVariableIsSet("PACIFIC_GRAB_INTERVAL_MS") ? qEnvironmentVariableIntValue("PACIFIC_GRAB_INTERVAL_MS") : 1000));
     }
 
-    view->setProperty("pacificBrowserRuntimeLoaded", true);
-    view->raise();
-    view->requestActivate();
-    return true;
+    view.showFullScreen();
+    int result = app.exec();
+    // NB: Without this, the process can hang on in threads' cleanup after the window has gone.
+    _exit(result);
 }

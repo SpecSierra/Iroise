@@ -13,6 +13,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QGuiApplication>
 
 #include <dlfcn.h>
@@ -24,15 +25,14 @@
 // Private SQLCipher binding.
 //
 // SQLCipher (libsqlcipher) and stock libsqlite3 export the SAME `sqlite3_*`
-// symbols. The browser already loads libsqlite3 through Gecko (mozStorage's
-// cookie DB) and qtcontacts/qsqlite. If we *link* libsqlcipher, its symbols
+// symbols, and the browser already loads libsqlite3 through Qt's qsqlite. If we *link* libsqlcipher, its symbols
 // enter the global scope and interpose libsqlite3's: a buffer allocated by
 // libsqlite3 gets freed by SQLCipher's allocator (and vice-versa), corrupting
 // the heap. That crashed the cookie-DB thread on startup before the UI painted.
 //
 // So we never link SQLCipher. We dlopen it into a PRIVATE namespace:
 //   RTLD_LOCAL    keeps its sqlite3_* out of the global scope, so nothing else
-//                 (Gecko, qsqlite, qtcontacts) is interposed;
+//                 (qsqlite) is interposed;
 //   RTLD_DEEPBIND makes SQLCipher resolve its OWN sqlite3_* internally instead
 //                 of binding to the globally-visible libsqlite3.
 // The store then calls the API through the resolved function pointers below.
@@ -65,16 +65,12 @@ bool loadSqliteApi()
         return g_sq.handle != nullptr;
     g_sq.attempted = true;
 
-    // libsqlcipher on device (encrypts). libsqlite3 is still tried so the
-    // failure is diagnosable rather than a bare "cannot load", but it cannot
-    // be used as a fallback: encryptionAvailable() below rejects any library
-    // that does not answer PRAGMA cipher_version, and nothing opens a vault
-    // until it passes. Either way the handle stays private.
-    const char *const candidates[] = { "libsqlcipher.so.0", "libsqlite3.so.0" };
-    for (const char *name : candidates) {
-        g_sq.handle = dlopen(name, RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
-        if (g_sq.handle)
-            break;
+    // The app's own SQLCipher (scripts/build-sqlcipher.sh), beside this library: a Jolla Store app may not
+    // depend on the system's.
+    Dl_info info {};
+    if (dladdr(reinterpret_cast<void *>(&loadSqliteApi), &info) && info.dli_fname) {
+        const QByteArray path = QFileInfo(QString::fromLocal8Bit(info.dli_fname)).absolutePath().toLocal8Bit() + "/libsqlcipher.so.0";
+        g_sq.handle = dlopen(path.constData(), RTLD_NOW | RTLD_LOCAL | RTLD_DEEPBIND);
     }
     if (!g_sq.handle) {
         qWarning() << "[CredentialStore] cannot load SQLCipher/SQLite:" << dlerror();
@@ -213,7 +209,7 @@ bool CredentialStore::encryptionAvailable()
     if (cached != 1) {
         qWarning() << "[CredentialStore] the SQLite in use is NOT SQLCipher — it "
                       "cannot encrypt. The password vault is disabled rather than "
-                      "storing passwords in cleartext. Install the 'sqlcipher' package.";
+                      "storing passwords in cleartext.";
     }
     return cached == 1;
 }

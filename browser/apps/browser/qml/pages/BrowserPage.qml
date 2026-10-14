@@ -52,7 +52,7 @@ Page {
 
     ConfigurationValue {
         id: homePageConf
-        key: "/apps/pacific-browser/settings/home_page"
+        key: "/apps/harbour-pacific/settings/home_page"
         defaultValue: "http://jolla.com"
         // Settings live in dconf and only QML reads them (ConfigurationValue); each one is pushed into C++.
         onValueChanged: WebUtils.setHomePage(value)
@@ -61,7 +61,7 @@ Page {
 
     ConfigurationValue {
         id: privateBrowsingAutostart
-        key: "/apps/pacific-browser/settings/browser_privatebrowsing_autostart"
+        key: "/apps/harbour-pacific/settings/browser_privatebrowsing_autostart"
         defaultValue: false
         // "Start browser in private browsing mode". Startup only, deliberately no onValueChanged: flipping the switch
         // mid-session must not yank the current session into private mode.
@@ -70,7 +70,7 @@ Page {
 
     ConfigurationValue {
         id: closeAllTabsOnExit
-        key: "/apps/pacific-browser/settings/close_all_tabs"
+        key: "/apps/harbour-pacific/settings/close_all_tabs"
         defaultValue: false
         // Acted on when the app quits (SettingManager).
         onValueChanged: Settings.setCloseAllTabsOnExit(value)
@@ -79,7 +79,7 @@ Page {
 
     ConfigurationValue {
         id: adBlockEngine
-        key: "/apps/pacific-browser/settings/adblock_enabled"
+        key: "/apps/harbour-pacific/settings/adblock_enabled"
         defaultValue: true
         // webView.setAdBlockEnabled applies process-wide: every live tab plus
         // the init state handed to future WebProcesses. The old binding wrote
@@ -93,7 +93,7 @@ Page {
 
     ConfigurationValue {
         id: adBlockAllowlist
-        key: "/apps/pacific-browser/settings/adblock_allowlist"
+        key: "/apps/harbour-pacific/settings/adblock_allowlist"
         defaultValue: "[]"
         // JSON array of hosts on which the ad blocker is disabled ("Block ads
         // on this site" toggle in the popup menu). Same shape as adblock_enabled
@@ -122,7 +122,7 @@ Page {
 
     ConfigurationValue {
         id: javascriptBlocklist
-        key: "/apps/pacific-browser/settings/javascript_blocklist"
+        key: "/apps/harbour-pacific/settings/javascript_blocklist"
         defaultValue: "[]"
         // JSON array of hosts on which JavaScript is disabled ("Enable
         // JavaScript on this site" toggle in the popup menu). Default is JS-on
@@ -152,7 +152,7 @@ Page {
 
     ConfigurationValue {
         id: cookieBannerBlocking
-        key: "/apps/pacific-browser/settings/cookie_banner_blocking"
+        key: "/apps/harbour-pacific/settings/cookie_banner_blocking"
         defaultValue: true
         // Same shape as adblock_enabled above: dconf is the single source of
         // truth, applied process-wide (autoconsent user script on every tab).
@@ -162,7 +162,7 @@ Page {
 
     ConfigurationValue {
         id: siteUaOverrides
-        key: "/apps/pacific-browser/settings/site_ua_overrides"
+        key: "/apps/harbour-pacific/settings/site_ua_overrides"
         defaultValue: "{}"
         // Same shape as adblock_enabled above: dconf (JSON object of
         // host → UA profile id, edited by SiteUaSettingsPage) is the single
@@ -173,7 +173,7 @@ Page {
 
     ConfigurationValue {
         id: viewportInsetConfig
-        key: "/apps/pacific-browser/settings/viewport_inset_toolbar"
+        key: "/apps/harbour-pacific/settings/viewport_inset_toolbar"
         // NB: Off by default. With it on the page changes height whenever the
         // toolbar hides or shows, and the engine lays the whole page out again
         // for a new height: about 70 ms on a light page, over 700 ms measured on
@@ -190,7 +190,7 @@ Page {
 
     ConfigurationValue {
         id: cropNotchConfig
-        key: "/apps/pacific-browser/settings/crop_notch"
+        key: "/apps/harbour-pacific/settings/crop_notch"
         defaultValue: true
         // Read by _notchInset (webViewFrame). A pure QML binding, so no C++
         // side to restore on startup.
@@ -340,8 +340,12 @@ Page {
     readonly property real _notchInset: cropNotchConfig.value && Screen.hasCutouts
                                         ? Screen.topCutout.height : 0
 
+    // Around the page's content, in its colour. Only above the toolbar and only with a page, so that the
+    // compositor's wallpaper shows behind the start page and the toolbar.
     Rectangle {
-        anchors.fill: parent
+        width: parent.width
+        height: Math.ceil(overlay.y)
+        visible: !startPage.visible
         color: webView.contentItem ? webView.contentItem.surroundColor : "black"
     }
 
@@ -603,7 +607,7 @@ Page {
     ConfigurationValue {
         id: startPageFolder
 
-        key: "/apps/pacific-browser/settings/start_page_folder"
+        key: "/apps/harbour-pacific/settings/start_page_folder"
         defaultValue: ""
     }
 

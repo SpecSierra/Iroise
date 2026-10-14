@@ -22,4 +22,4 @@ qmake -spec "$SYSROOT/usr/share/qt5/mkspecs/linux-g++" "$ROOT/browser/apps/apps.
     "QMAKE_LINK=g++ --sysroot=$SYSROOT" \
     "QMAKE_LFLAGS+=-L$SYSROOT/usr/lib64 -Wl,-rpath-link,$SYSROOT/usr/lib64 -Wl,-rpath-link,$SYSROOT/lib64" \
     "SFOS_SYSROOT=$SYSROOT"
-make -j"$JOBS" sub-lib-all sub-browser-all sub-launcher-all
+make -j"$JOBS" sub-lib-all sub-launcher-all

@@ -21,6 +21,9 @@ Item {
     property Item alignParent
     property real radius: Theme.paddingMedium
     property real tintAlpha: 0.5
+    // A near-opaque panel in the ambience's colour instead of glass: for where the wallpaper cannot be read (see
+    // Wallpaper.qml) and the box lies over the web page, which is all there would be to see through it.
+    property bool panel
     // Light ambiences flip text to black, so the glass tint (and the edge
     // highlight/press flash) must flip to white/black accordingly.
     readonly property bool _lightScheme: Theme.colorScheme === Theme.DarkOnLight
@@ -51,6 +54,7 @@ Item {
         // The slice of the blurred wallpaper directly behind this box.
         ShaderEffectSource {
             anchors.fill: parent
+            visible: !box.panel
             sourceItem: box.blurSource
             live: true
             sourceRect: {
@@ -67,8 +71,9 @@ Item {
             anchors.fill: parent
             // In the light scheme the tint is boosted toward opaque white so the
             // glass reads as a bright surface under black text.
-            color: box._lightScheme ? Qt.rgba(1, 1, 1, Math.min(1, box.tintAlpha + 0.25))
-                                    : Qt.rgba(0, 0, 0, box.tintAlpha)
+            color: box.panel ? Theme.rgba(Theme.highlightDimmerColor, 0.92)
+                             : box._lightScheme ? Qt.rgba(1, 1, 1, Math.min(1, box.tintAlpha + 0.25))
+                             : Qt.rgba(0, 0, 0, box.tintAlpha)
         }
 
         Image {

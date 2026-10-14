@@ -29,12 +29,10 @@ ApplicationWindow {
     _clippingItem.opacity: 1.0
     _resizeContent: !window.rootPage.active
     _mainWindow: webView ? webView.chromeWindow : null
-    _backgroundVisible: false
     _opaque: false
 
     cover: null
 
-    pageStack.pageBackground: Component { Background {} }
 
 
 }

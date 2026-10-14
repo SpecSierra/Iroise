@@ -22,19 +22,17 @@ Item {
     // the blurred texture stays high-res enough not to look pixelated.
     property int blurDownscale: 4
 
-    property string wpUrl: Theme.backgroundImage
+    // Where the wallpaper cannot be read (see Wallpaper.qml), be a near-opaque panel in the ambience's colour
+    // rather than a light tint over the compositor's wallpaper: for surfaces over the web page (the toolbar).
+    property bool panel
 
     // Full-screen ambience wallpaper, rendered off-screen. It is captured only;
     // it is NOT positioned relative to this Background item, so that the chrome
     // can sample it in fixed screen-space coordinates (see gl_FragCoord below).
-    Image {
+    Browser.Wallpaper {
         id: wpImage
         width: Screen.width
         height: Screen.height
-        fillMode: Image.PreserveAspectCrop
-        source: wallpaper.wpUrl
-        asynchronous: false
-        cache: true
         layer.enabled: true
         layer.textureSize: Qt.size(Screen.width, Screen.height)
     }
@@ -93,9 +91,12 @@ Item {
         // dark ambiences, light on light ambiences so black text stays readable.
         // Light scheme needs a stronger tint: black text wants a near-white
         // surface, not a pastel wash of the wallpaper.
-        property color tint: Theme.colorScheme === Theme.DarkOnLight
-                             ? Qt.rgba(1.0, 1.0, 1.0, 0.82)
-                             : Qt.rgba(0.0, 0.0, 0.0, 0.62)
+        // Over the compositor's wallpaper (see Wallpaper.qml), which comes already dimmed, far less is needed.
+        readonly property bool _ownWallpaper: wpImage.status === Image.Ready
+        property color tint: wallpaper.panel && !_ownWallpaper ? Theme.rgba(Theme.highlightDimmerColor, 0.92)
+                             : Theme.colorScheme === Theme.DarkOnLight
+                             ? Qt.rgba(1.0, 1.0, 1.0, _ownWallpaper ? 0.82 : 0.45)
+                             : Qt.rgba(0.0, 0.0, 0.0, _ownWallpaper ? 0.62 : 0.2)
 
         vertexShader: "
             uniform highp mat4 qt_Matrix;
@@ -113,9 +114,8 @@ Item {
             void main() {
                 highp vec2 wpCoord = vec2(gl_FragCoord.x / screenSize.x,
                                           1.0 - gl_FragCoord.y / screenSize.y);
-                lowp vec4 c = texture2D(wpTexture, wpCoord);
-                c.rgb = mix(c.rgb, tint.rgb, tint.a);
-                c.a = 1.0;
+                // The tint over the wallpaper; over nothing where there is none (see Wallpaper.qml).
+                lowp vec4 c = texture2D(wpTexture, wpCoord) * (1.0 - tint.a) + vec4(tint.rgb, 1.0) * tint.a;
                 gl_FragColor = c * qt_Opacity;
             }
         "

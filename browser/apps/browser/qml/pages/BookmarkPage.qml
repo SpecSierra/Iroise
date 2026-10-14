@@ -54,7 +54,7 @@ Page {
     ConfigurationValue {
         id: startPageFolder
 
-        key: "/apps/pacific-browser/settings/start_page_folder"
+        key: "/apps/harbour-pacific/settings/start_page_folder"
         defaultValue: ""
     }
 

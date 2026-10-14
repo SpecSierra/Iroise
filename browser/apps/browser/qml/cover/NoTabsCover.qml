@@ -35,7 +35,7 @@ CoverBackground {
 
             Image {
                 anchors.horizontalCenter: parent.horizontalCenter
-                source: "file:///usr/share/pacific-browser/data/icon-launcher-browser.png"
+                source: Qt.resolvedUrl("../icons/icon-launcher-pacific.svg")
                 sourceSize.width: Theme.iconSizeLauncher
                 sourceSize.height: Theme.iconSizeLauncher
                 width: Theme.iconSizeLauncher

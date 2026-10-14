@@ -13,6 +13,7 @@
 #include <QFile>
 #include <QXmlStreamReader>
 #include "opensearchconfigs.h"
+#include "browserpaths.h"
 
 OpenSearchConfigs *OpenSearchConfigs::openSearchConfigs = 0;
 static QString s_shippedPath;
@@ -139,5 +140,5 @@ const QString OpenSearchConfigs::getShortName(const QString &configFile)
 
 const QString OpenSearchConfigs::getOpenSearchConfigPath()
 {
-    return QDir::homePath() + USER_OPENSEARCH_PATH;
+    return BrowserPaths::dataLocation() + QStringLiteral("/searchEngines/");
 }

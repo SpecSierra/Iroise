@@ -34,10 +34,10 @@ Page {
         id: webEngineSettings
         property alias colorScheme: colorSchemeConf.value
     }
-    ConfigurationValue { id: adBlockConf; key: "/apps/pacific-browser/settings/adblock_enabled"; defaultValue: true }
-    ConfigurationValue { id: cookieBannerConf; key: "/apps/pacific-browser/settings/cookie_banner_blocking"; defaultValue: true }
+    ConfigurationValue { id: adBlockConf; key: "/apps/harbour-pacific/settings/adblock_enabled"; defaultValue: true }
+    ConfigurationValue { id: cookieBannerConf; key: "/apps/harbour-pacific/settings/cookie_banner_blocking"; defaultValue: true }
     // 0 = light, 1 = dark, 2 = follow ambience (applied by SettingManager)
-    ConfigurationValue { id: colorSchemeConf; key: "/apps/pacific-browser/settings/color_scheme"; defaultValue: page._followsAmbience }
+    ConfigurationValue { id: colorSchemeConf; key: "/apps/harbour-pacific/settings/color_scheme"; defaultValue: page._followsAmbience }
 
     readonly property int _textSwitchIconCenter: Math.round((Theme.iconSizeMedium - Theme.itemSizeExtraSmall) / 2.0)
 
@@ -409,49 +409,49 @@ Page {
     ConfigurationValue {
         id: closeAllTabsConfig
 
-        key: "/apps/pacific-browser/settings/close_all_tabs"
+        key: "/apps/harbour-pacific/settings/close_all_tabs"
         defaultValue: false
     }
 
     ConfigurationValue {
         id: searchEngineConfig
 
-        key: "/apps/pacific-browser/settings/search_engine"
+        key: "/apps/harbour-pacific/settings/search_engine"
         defaultValue: "Google"
     }
 
     ConfigurationValue {
         id: homePageConfig
 
-        key: "/apps/pacific-browser/settings/home_page"
+        key: "/apps/harbour-pacific/settings/home_page"
         defaultValue: "http://jolla.com/"
     }
 
     ConfigurationValue {
         id: fixedToolbarConfig
 
-        key: "/apps/pacific-browser/settings/fixed_toolbar"
+        key: "/apps/harbour-pacific/settings/fixed_toolbar"
         defaultValue: false
     }
 
     ConfigurationValue {
         id: viewportInsetConfig
 
-        key: "/apps/pacific-browser/settings/viewport_inset_toolbar"
+        key: "/apps/harbour-pacific/settings/viewport_inset_toolbar"
         defaultValue: false
     }
 
     ConfigurationValue {
         id: cropNotchConfig
 
-        key: "/apps/pacific-browser/settings/crop_notch"
+        key: "/apps/harbour-pacific/settings/crop_notch"
         defaultValue: true
     }
 
     ConfigurationValue {
         id: autoStartPrivateBrowser
 
-        key: "/apps/pacific-browser/settings/browser_privatebrowsing_autostart"
+        key: "/apps/harbour-pacific/settings/browser_privatebrowsing_autostart"
         defaultValue: false
     }
 

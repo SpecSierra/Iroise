@@ -67,7 +67,7 @@ WebContainer {
 
 
     property QtObject fixedToolbarConfig: ConfigurationValue {
-        key: "/apps/pacific-browser/settings/fixed_toolbar"
+        key: "/apps/harbour-pacific/settings/fixed_toolbar"
         defaultValue: false
 
         onValueChanged: {

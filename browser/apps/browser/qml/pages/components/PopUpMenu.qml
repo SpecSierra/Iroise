@@ -75,8 +75,6 @@ SilicaControl {
 
     // Blurred ambience wallpaper, in the menu's own coordinate space, for the
     // FrostedBox glass to sample by region (FBO-immune, unlike gl_FragCoord).
-    property string _wpUrl: Theme.backgroundImage
-
     // The raw wallpaper must be captured but never drawn (hideSource is unreliable
     // here), so keep it inside a zero-size clipped container; the capture SES below
     // has no layout size so it doesn't draw either — only its textureSize matters.
@@ -84,14 +82,10 @@ SilicaControl {
         width: 0
         height: 0
         clip: true
-        Image {
+        Shared.Wallpaper {
             id: menuWp
             width: popUpMenu.width
             height: popUpMenu.wallpaperHeight
-            source: popUpMenu._wpUrl
-            fillMode: Image.PreserveAspectCrop
-            asynchronous: false
-            cache: true
             layer.enabled: true
             layer.textureSize: Qt.size(Math.max(1, popUpMenu.width), Math.max(1, popUpMenu.wallpaperHeight))
         }
@@ -213,6 +207,7 @@ SilicaControl {
                         id: background
 
                         blurSource: menuBlur
+                        panel: menuWp.status !== Image.Ready
                         alignParent: popUpMenu
                         sampleDY: popUpMenu.blurOffsetY
                         track: menuFlickable.y
@@ -247,6 +242,7 @@ SilicaControl {
                     },
                     Components.FrostedBox {
                         blurSource: menuBlur
+                        panel: menuWp.status !== Image.Ready
                         alignParent: popUpMenu
                         sampleDY: popUpMenu.blurOffsetY
                         track: menuFlickable.y
@@ -290,6 +286,7 @@ SilicaControl {
                             // so test the property value instead.
                             if (item.blurSource !== undefined) {
                                 item.blurSource = menuBlur
+                                item.panel = Qt.binding(function() { return menuWp.status !== Image.Ready })
                                 item.alignParent = popUpMenu
                                 item.sampleDY = Qt.binding(function() { return popUpMenu.blurOffsetY })
                                 item.track = Qt.binding(function() { return menuFlickable.y })

@@ -90,7 +90,7 @@ Page {
 
     ConfigurationValue {
         id: siteUaOverridesConf
-        key: "/apps/pacific-browser/settings/site_ua_overrides"
+        key: "/apps/harbour-pacific/settings/site_ua_overrides"
         defaultValue: "{}"
     }
 

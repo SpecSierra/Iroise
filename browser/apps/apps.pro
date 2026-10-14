@@ -1,4 +1,2 @@
 TEMPLATE = subdirs
-SUBDIRS += lib browser launcher
-
-browser.depends = lib
+SUBDIRS += lib launcher

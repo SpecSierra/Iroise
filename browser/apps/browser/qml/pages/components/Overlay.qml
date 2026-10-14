@@ -21,6 +21,8 @@ import "UrlUtils.js" as UrlUtils
 Shared.Background {
     id: overlay
 
+    panel: true
+
     // While the popup menu is open nothing of the overlay (url bar, its glass
     // band) may render under the menu's translucent dimmer.
     opacity: overlayAnimator.secondaryTools ? 0.0 : 1.0
@@ -799,7 +801,7 @@ Shared.Background {
 
     ConfigurationValue {
         id: searchEngineConf
-        key: "/apps/pacific-browser/settings/search_engine"
+        key: "/apps/harbour-pacific/settings/search_engine"
         defaultValue: "Google"
     }
 }

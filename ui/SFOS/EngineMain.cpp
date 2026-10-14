@@ -46,13 +46,13 @@ void set_return_code_for_errors(int code) { s_return_code_for_errors = code; }
 }
 
 // The helpers are started as `<executable> --engine-role <name> ...` (LADYBIRD_HELPER_LAUNCHER), and find the
-// engine's resources from LADYBIRD_APPLICATION_DIRECTORY: the libexec directory beside this library's lib/, as the
-// engine's executables would be laid out. Both pass on to every helper.
+// engine's resources from LADYBIRD_APPLICATION_DIRECTORY: share/harbour-pacific/libexec for this library in
+// share/harbour-pacific/lib/engine, as the engine's executables would be laid out. Both pass on to every helper.
 static void describe_installation()
 {
     Dl_info info {};
     if (dladdr(reinterpret_cast<void*>(&describe_installation), &info) && info.dli_fname) {
-        auto prefix = LexicalPath(info.dli_fname).parent().parent();
+        auto prefix = LexicalPath(info.dli_fname).parent().parent().parent();
         setenv("LADYBIRD_APPLICATION_DIRECTORY", prefix.append("libexec"sv).string().characters(), 0);
     }
     if (auto executable = Core::System::current_executable_path(); !executable.is_error())

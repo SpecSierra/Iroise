@@ -75,18 +75,6 @@ QString BrowserPaths::databasePath()
     return dir.absoluteFilePath(dbFileName);
 }
 
-// Atlantic carried an existing user's data over from the stock browser's profile on first run. Pacific starts
-// with a profile of its own and must never move or delete another browser's files, so there is nothing to do.
-
-QString BrowserPaths::legacyDataLocation()
-{
-    return QString();
-}
-
-void BrowserPaths::migrateSharedProfile()
-{
-}
-
 bool BrowserPaths::createDirectory(const QString &dirStr)
 {
     QDir dir(dirStr);

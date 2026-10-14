@@ -1,7 +1,8 @@
 /*
  * Pacific: the app's one executable (the Jolla Store allows an app no other). Started as
  * `harbour-pacific --engine-role <name> ...` it is one of the engine's processes; otherwise it is the interface.
- * Either way it loads the library that does the work, from ../share/harbour-pacific/lib beside it. It is plain C
+ * Either way it loads the library that does the work, from ../share/harbour-pacific/lib beside it (the engine from
+ * its own engine/ directory there, with the libraries only it uses). It is plain C
  * so that an engine process, and there is one per site, loads nothing of the interface (Qt) on the way.
  *
  * SPDX-License-Identifier: BSD-2-Clause
@@ -30,7 +31,7 @@ int main(int argc, char** argv)
     int is_engine = argc >= 3 && strcmp(argv[1], "--engine-role") == 0;
     char library[PATH_MAX];
     snprintf(library, sizeof(library), "%s/../share/harbour-pacific/lib/%s", dirname(executable),
-        is_engine ? "libpacificengine.so" : "libpacificui.so");
+        is_engine ? "engine/libpacificengine.so" : "libpacificbrowser.so.1");
 
     void* handle = dlopen(library, RTLD_NOW | RTLD_LOCAL);
     if (!handle) {

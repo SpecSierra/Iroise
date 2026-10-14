@@ -10,49 +10,35 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
+
 #ifndef BROWSERSERVICE_H
 #define BROWSERSERVICE_H
 
 #include <QObject>
 #include <QStringList>
 
+// Pacific: the app's D-Bus service. Sailjail lets an app own only the bus name made of its OrganizationName and
+// ApplicationName, and a Jolla Store app cannot be started by D-Bus activation. So the name is there for a second
+// launch (another app opening a link in Pacific starts the app again) to hand its URL to the running browser, see
+// pacific_ui_main().
+#define PACIFIC_SERVICE_NAME "org.pacific.harbour-pacific"
+#define PACIFIC_SERVICE_PATH "/"
+#define PACIFIC_SERVICE_INTERFACE "org.pacific.Browser"
+
 class BrowserService : public QObject
 {
     Q_OBJECT
+    Q_CLASSINFO("D-Bus Interface", PACIFIC_SERVICE_INTERFACE)
+
 public:
-    BrowserService(QObject * parent);
-    bool registered() const;
-    QString serviceName() const;
+    explicit BrowserService(QObject *parent);
+    bool registered() const { return m_registered; }
 
 public slots:
-    // these two calls are kept in this service for compatibility
-    // but any calls that require the UI to be shown should be added to
-    // the BrowserUIService service instead
-    void openUrl(const QStringList &args);
-    void activateNewTabView();
-
-
-signals:
-    void openUrlRequested(const QString &url);
-    void activateNewTabViewRequested();
-
-private:
-
-    bool m_registered;
-};
-
-class BrowserUIService : public QObject
-{
-    Q_OBJECT
-public:
-    BrowserUIService(QObject * parent);
-    bool registered() const;
-    QString serviceName() const;
-
-public slots:
-    void openUrl(const QStringList &args);
-    void openSettings();
-    void activateNewTabView();
+    // The URL is the first argument; none opens the browser as it is.
+    Q_SCRIPTABLE void openUrl(const QStringList &args);
+    Q_SCRIPTABLE void openSettings();
+    Q_SCRIPTABLE void activateNewTabView();
 
 signals:
     void openUrlRequested(const QString &url);
@@ -60,7 +46,7 @@ signals:
     void activateNewTabViewRequested();
 
 private:
-    bool m_registered = true;
+    bool m_registered = false;
 };
 
 #endif // BROWSERSERVICE_H
