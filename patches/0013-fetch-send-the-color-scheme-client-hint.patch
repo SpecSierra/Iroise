@@ -1,0 +1,20 @@
+diff --git a/Libraries/LibWeb/Fetch/Fetching/Fetching.cpp b/Libraries/LibWeb/Fetch/Fetching/Fetching.cpp
+index e25a0fd3..ce286667 100644
+--- a/Libraries/LibWeb/Fetch/Fetching/Fetching.cpp
++++ b/Libraries/LibWeb/Fetch/Fetching/Fetching.cpp
+@@ -1946,6 +1946,15 @@ GC::Ref<PendingResponse> http_network_or_cache_fetch(JS::Realm& realm, Infrastru
+ 
+         append_user_agent_client_hints_for_request(*http_request);
+ 
++        // https://wicg.github.io/user-preference-media-features-headers/#sec-ch-prefers-color-scheme
++        // NB: Some sites (Google's) pick their colours on the server, from this hint alone. Chromium only sends it to
++        //     sites that asked for it with Accept-CH; we always send it, which spares the retry they would need.
++        if (SecureContexts::is_url_potentially_trustworthy(http_request->current_url()) == SecureContexts::Trustworthiness::PotentiallyTrustworthy
++            && !http_request->header_list()->contains("Sec-CH-Prefers-Color-Scheme"sv)) {
++            auto dark = Bindings::principal_host_defined_page(realm).preferred_color_scheme() == CSS::PreferredColorScheme::Dark;
++            http_request->header_list()->append({ "Sec-CH-Prefers-Color-Scheme"sv, dark ? "dark"sv : "light"sv });
++        }
++
+         // 21. If includeCredentials is true, then:
+         if (include_credentials == HTTP::Cookie::IncludeCredentials::Yes) {
+             // 1. If the user agent is not configured to block cookies for httpRequest (see section 7 of [COOKIES]),
