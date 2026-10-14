@@ -59,7 +59,7 @@ SilicaControl {
         Item {
             id: header
 
-            // Below the band BrowserWindow blacks out for the camera notch, at the top in portrait.
+            // Below the band NotchBand blacks out for the camera notch, at the top in portrait.
             y: Screen.hasCutouts && pageStack.currentOrientation === Orientation.Portrait ? Screen.topCutout.height : 0
             width: parent.width
             height: Theme.itemSizeMedium

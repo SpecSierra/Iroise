@@ -37,22 +37,6 @@ ApplicationWindow {
 
     cover: null
 
-    // The band of the screen the camera notch is in, black on every page so the notch disappears into it. The
-    // notch is at the top of the physical portrait screen, on a different edge of the rotated content per
-    // orientation; BrowserPage keeps the web content out of the band.
-    Rectangle {
-        readonly property int orientation: window.pageStack.currentOrientation
-        readonly property bool landscape: orientation === Orientation.Landscape || orientation === Orientation.LandscapeInverted
-        readonly property real band: Screen.hasCutouts ? Screen.topCutout.height : 0
-
-        z: 1000
-        visible: band > 0
-        color: "black"
-        x: orientation === Orientation.LandscapeInverted ? parent.width - band : 0
-        y: orientation === Orientation.PortraitInverted ? parent.height - band : 0
-        width: landscape ? band : parent.width
-        height: landscape ? parent.height : band
-    }
 
 
 

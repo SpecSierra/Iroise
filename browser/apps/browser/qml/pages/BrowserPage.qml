@@ -304,13 +304,15 @@ Page {
     }
 
     // Keep the web content out of the band of the screen the camera notch is
-    // in, which BrowserWindow blacks out. The notch sits at the top of the
+    // in, which NotchBand blacks out. The notch sits at the top of the
     // physical portrait screen, so after Silica rotates the page it is on a
     // different page edge per orientation.
     // WebContainer sizes itself and its pages from its parent item, so
     // insetting this frame is all it takes. The chrome (Overlay) stays at the
     // page edges, so fullscreenHeight is still the page height.
     readonly property real _notchInset: Screen.hasCutouts ? Screen.topCutout.height : 0
+
+    Shared.NotchBand {}
 
     // Around the page's content, in its colour. Only above the toolbar and only with a page, so that the
     // compositor's wallpaper shows behind the start page and the toolbar.
