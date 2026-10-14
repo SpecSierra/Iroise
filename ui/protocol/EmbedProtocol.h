@@ -43,6 +43,9 @@ enum lb_embed_message_type {
     LB_EMBED_DOWNLOAD_CANCEL = 26,            /* a = the download's id */
     LB_EMBED_SET_BLOCKER_FILTERS = 27,        /* text = filter rules of the app's own, in the syntax of the
                                                  lists, applied on top of them */
+    LB_EMBED_SET_SITE_OPTIONS = 30,           /* text = JSON {"userAgents": {host: name of one of the engine's
+                                                 user agent presets}, "noScript": [hosts]}; a host also covers
+                                                 its subdomains */
     LB_EMBED_GEOLOCATION_POSITION = 29,       /* a = the request's id (LB_EMBED_GEOLOCATION_START); b = 0, or why
                                                  there is no position (1 denied, 2 unavailable, 3 timed out);
                                                  text = JSON {"latitude", "longitude", "accuracy" (metres), and
@@ -60,6 +63,8 @@ enum lb_embed_message_type {
     LB_EMBED_FILE_PICKER_CLOSED = 22, /* text = the chosen files' paths, one per line; empty for none */
     LB_EMBED_COLOR_PICKED = 23,       /* a = 1 if a colour was chosen; text = it, as #rrggbb */
     LB_EMBED_PERMISSION_DECIDED = 28, /* a = the question's id (LB_EMBED_PERMISSION); b = 1 to grant */
+    LB_EMBED_SET_DESKTOP_MODE = 31,   /* a = 1 for the view to present itself as a desktop browser, where no site
+                                         option says otherwise */
 
     /* engine -> Silica app */
     LB_EMBED_FRAME = 101,   /* a, b = painted size; c, d = buffer size; e = row pitch in bytes; fd = dma-buf (BGRA) */

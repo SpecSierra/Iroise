@@ -32,6 +32,7 @@
 #include <LibWebView/Menu.h>
 #include <LibWebView/Settings.h>
 #include <LibWebView/URL.h>
+#include <LibWebView/UserAgent.h>
 #include <LibWebView/Utilities.h>
 #include <LibWebView/WebContentPage.h>
 #include <UI/SFOS/EmbeddedHost.h>
@@ -121,6 +122,10 @@ public:
         send_mouse_event(Web::MouseEvent::Type::MouseUp, position);
     }
 
+    // Every page that comes to host the tab, also after a cross-site navigation moved it to another process.
+    Function<void(WebView::WebContentPage&)> on_prepare_page;
+    bool desktop_mode { false };
+
     void handle_pinch(Gfx::IntPoint position, double scale)
     {
         if (scale <= 0)
@@ -141,6 +146,13 @@ private:
         m_device_pixel_ratio = device_pixel_ratio;
         m_frame_timer.start();
         on_ready_to_paint = [this] { present(); };
+    }
+
+    virtual void prepare_page_for_tab(WebView::WebContentPage& page) override
+    {
+        WebView::HeadlessWebView::prepare_page_for_tab(page);
+        if (on_prepare_page)
+            on_prepare_page(page);
     }
 
     void present()
@@ -499,6 +511,14 @@ private:
         gate_geolocation(view->on_request_geolocation_position);
         gate_geolocation(view->on_start_geolocation_position_watch);
 
+        // NB: As early as we learn where the tab is going. A link to another site has asked for its document
+        //     by then, so that one request goes out with the previous site's options.
+        view->on_prepare_page = [this, raw_view](WebView::WebContentPage& page) { apply_site_options(*raw_view, page, raw_view->url()); };
+        view->add_navigation_listener({
+            .on_load_start = [this, raw_view](URL::URL const& url) { apply_site_options(*raw_view, raw_view->page(), url); },
+            .on_load_finish = {},
+        });
+
         view->set_preferred_color_scheme(m_dark_mode ? Web::CSS::PreferredColorScheme::Dark : Web::CSS::PreferredColorScheme::Light);
 
         for (auto* action : { &view->navigate_back_action(), &view->navigate_forward_action() }) {
@@ -528,6 +548,66 @@ private:
         text.set("origin"sv, origin.serialize());
         auto serialized = text.serialized();
         m_host.send_text(view, LB_EMBED_PERMISSION, serialized.bytes_as_string_view(), question);
+    }
+
+    static bool host_matches(StringView host, StringView entry)
+    {
+        return host == entry || (host.ends_with(entry) && host.length() > entry.length() && host[host.length() - entry.length() - 1] == '.');
+    }
+
+    // The user agent and scripting the site the view is going to gets. Everything else uses the engine's defaults.
+    void apply_site_options(PresentedWebView& view, WebView::WebContentPage& page, URL::URL const& url)
+    {
+        auto host = url.serialized_host().to_byte_string();
+        // The most specific entry wins: m.example.com over example.com.
+        Optional<StringView> preset;
+        size_t matched_length = 0;
+        for (auto const& [site, name] : m_site_user_agents) {
+            if (host_matches(host, site) && site.length() > matched_length) {
+                preset = name;
+                matched_length = site.length();
+            }
+        }
+        if (!preset.has_value() && view.desktop_mode)
+            preset = "Chrome Linux Desktop"sv;
+
+        auto user_agent = Web::default_user_agent;
+        auto compatibility_mode = "chrome"sv;
+        if (preset.has_value()) {
+            if (auto found = WebView::user_agents.get(*preset); found.has_value()) {
+                user_agent = *found;
+                compatibility_mode = preset->starts_with("Firefox"sv) ? "gecko"sv : preset->starts_with("Safari"sv) ? "webkit"sv : "chrome"sv;
+            }
+        }
+        page.async_debug_request("spoof-user-agent"sv, user_agent);
+        page.async_debug_request("navigator-compatibility-mode"sv, compatibility_mode);
+
+        bool scripting = !any_of(m_no_script_sites, [&](auto const& site) { return host_matches(host, site); });
+        page.async_debug_request("scripting"sv, scripting ? "on"sv : "off"sv);
+    }
+
+    void set_site_options(StringView text)
+    {
+        m_site_user_agents.clear();
+        m_no_script_sites.clear();
+        auto json = JsonValue::from_string(text);
+        if (json.is_error() || !json.value().is_object())
+            return;
+        auto const& options = json.value().as_object();
+        if (auto user_agents = options.get_object("userAgents"sv); user_agents.has_value()) {
+            user_agents->for_each_member([&](String const& host, JsonValue const& name) {
+                if (name.is_string())
+                    m_site_user_agents.set(host.to_byte_string(), name.as_string().to_byte_string());
+            });
+        }
+        if (auto hosts = options.get_array("noScript"sv); hosts.has_value()) {
+            hosts->for_each([&](JsonValue const& host) {
+                if (host.is_string())
+                    m_no_script_sites.append(host.as_string().to_byte_string());
+            });
+        }
+        for (auto& [id, view] : m_views)
+            apply_site_options(*view, view->page(), view->url());
     }
 
     void send_key(PresentedWebView& view, Web::UIEvents::KeyCode key, u32 code_point)
@@ -626,6 +706,10 @@ private:
             (void)WebView::Application::the().clear_browsing_data(options);
             return;
         }
+        if (header.type == LB_EMBED_SET_SITE_OPTIONS) {
+            set_site_options(text);
+            return;
+        }
         if (header.type == LB_EMBED_PERMISSION_DECIDED) {
             if (auto on_decided = m_permission_answers.take(header.a); on_decided.has_value())
                 (*on_decided)(header.b != 0);
@@ -650,8 +734,10 @@ private:
             m_views.remove(header.view);
             break;
         case LB_EMBED_LOAD:
-            if (auto url = WebView::sanitize_url(text); url.has_value())
+            if (auto url = WebView::sanitize_url(text); url.has_value()) {
+                apply_site_options(view, view.page(), *url);
                 view.load(*url);
+            }
             break;
         case LB_EMBED_TOUCH: {
             auto phase = PresentedWebView::TouchPhase::Up;
@@ -667,6 +753,10 @@ private:
         case LB_EMBED_RESIZE:
             if (header.a > 0 && header.b > 0)
                 view.resize({ header.a, header.b }, max(header.scale, 1.0));
+            break;
+        case LB_EMBED_SET_DESKTOP_MODE:
+            view.desktop_mode = header.a != 0;
+            apply_site_options(view, view.page(), view.url());
             break;
         case LB_EMBED_GO_BACK:
             view.traverse_the_history_by_delta(-1);
@@ -795,6 +885,9 @@ private:
     RefPtr<Core::Timer> m_resume_list_updates_timer;
     // What to do with the user's answer to each question still open.
     HashMap<i32, Function<void(bool)>> m_permission_answers;
+    // Sites the user gave a user agent of their own (host to preset name), and sites without scripts.
+    HashMap<ByteString, ByteString> m_site_user_agents;
+    Vector<ByteString> m_no_script_sites;
     i32 m_next_permission_question { 1 };
 };
 

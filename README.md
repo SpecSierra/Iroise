@@ -163,6 +163,11 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   before the view's own handling runs; an answer holds for that site and kind until the browser closes. Positions
   come from the interface's Qt Positioning source (`LadybirdGeolocation`) through a `Core::GeolocationProvider` of
   the front end's own.
+- Per-site user agents, the per-site JavaScript switch and desktop mode: the engine gets the site map once
+  (`LB_EMBED_SET_SITE_OPTIONS`; user agents are the engine's own presets) and applies it whenever it learns where a
+  tab is going: a load the interface asks for, the start of any load, and every page that comes to host the tab.
+  A link to another site has already asked for its document by the time the engine hears of it, so that one
+  request goes out with the previous site's options. JavaScript off also stops the interface's page agent there.
 - Ad blocking is the engine's own: Ladybird ships Brave's `adblock` crate with
   request blocking, cosmetic filtering and built-in list subscriptions, all off by
   default. The interface's "Adblock" switch turns on EasyList, EasyPrivacy, the

@@ -27,7 +27,7 @@ Page {
         { id: "safari-iphone", label: qsTrId("pacific-me-ua_safari_iphone") },
         //% "Firefox on Android"
         { id: "firefox-android", label: qsTrId("pacific-me-ua_firefox_android") },
-        //% "Chrome on Windows"
+        //% "Chrome on Linux"
         { id: "chrome-desktop", label: qsTrId("pacific-me-ua_chrome_desktop") },
         //% "Safari on Mac"
         { id: "safari-mac", label: qsTrId("pacific-me-ua_safari_mac") },

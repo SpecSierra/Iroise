@@ -419,6 +419,7 @@ void WPEWebPage::setDesktopMode(bool desktop)
     if (m_desktopMode == desktop)
         return;
     m_desktopMode = desktop;
+    sendToEngine(LB_EMBED_SET_DESKTOP_MODE, desktop ? 1 : 0);
     emit desktopModeChanged();
 }
 
@@ -688,19 +689,45 @@ void WPEWebPage::applyCookieBannerBlockingGlobally(bool enabled)
         emit page->cookieBannerBlockingEnabledChanged();
 }
 
+// The site options the engine applies itself, as it learns where a tab is going (LB_EMBED_SET_SITE_OPTIONS).
+static QJsonObject s_siteUserAgents;
+static QJsonArray s_noScriptSites;
+
+static void sendSiteOptions()
+{
+    QJsonObject options;
+    options.insert(QStringLiteral("userAgents"), s_siteUserAgents);
+    options.insert(QStringLiteral("noScript"), s_noScriptSites);
+    LadybirdEngine::instance()->send(0, LB_EMBED_SET_SITE_OPTIONS, 0, 0, 0, 0, 0, QJsonDocument(options).toJson(QJsonDocument::Compact));
+}
+
 void WPEWebPage::applySiteUaOverridesGlobally(const QString &json)
 {
-    Q_UNUSED(json);
+    // The interface's profile ids, as the names of the engine's user agent presets.
+    static const QHash<QString, QString> presets {
+        { QStringLiteral("chrome-android"), QStringLiteral("Chrome Android Mobile") },
+        { QStringLiteral("safari-iphone"), QStringLiteral("Safari iOS Mobile") },
+        { QStringLiteral("firefox-android"), QStringLiteral("Firefox Android Mobile") },
+        { QStringLiteral("chrome-desktop"), QStringLiteral("Chrome Linux Desktop") },
+        { QStringLiteral("safari-mac"), QStringLiteral("Safari macOS Desktop") },
+        { QStringLiteral("firefox-desktop"), QStringLiteral("Firefox Linux Desktop") },
+    };
+    s_siteUserAgents = QJsonObject();
+    QJsonObject overrides = QJsonDocument::fromJson(json.toUtf8()).object();
+    for (auto it = overrides.begin(); it != overrides.end(); ++it) {
+        QString preset = presets.value(it.value().toString());
+        if (!preset.isEmpty())
+            s_siteUserAgents.insert(it.key().trimmed().toLower(), preset);
+    }
+    sendSiteOptions();
 }
 
 void WPEWebPage::applyJavaScriptBlocklistGlobally(const QString &json)
 {
-    Q_UNUSED(json);
-}
-
-void WPEWebPage::applyJavaScriptEnabledForUrl(const QUrl &url)
-{
-    Q_UNUSED(url);
+    s_noScriptSites = QJsonArray();
+    for (const QJsonValue &host : QJsonDocument::fromJson(json.toUtf8()).array())
+        s_noScriptSites.append(host.toString().trimmed().toLower());
+    sendSiteOptions();
 }
 
 bool WPEWebPage::throttlePainting() const
