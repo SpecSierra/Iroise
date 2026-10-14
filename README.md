@@ -78,7 +78,8 @@ system's GLES (patch 0009, `USE_GLES_HYBRIS`; Vulkan is not built).
 - Each backing store is a gralloc buffer allocated through libhybris' `EGL_HYBRIS_native_buffer2`, bound as an
   `EGLImage` texture behind a framebuffer that Skia renders into. Its pixel dma-buf goes to the interface, which
   wraps it the same way to show it. The software read/write usage bits keep the Mali gralloc from choosing AFBC.
-- The Compositor's seccomp filter allows the Mali kernel driver's ioctls (type 0x80, patch 0007).
+- The Compositor's seccomp filter allows the Mali kernel driver's ioctls (type 0x80) and MediaTek's
+  `gralloc_extra` (type 'g'), which gralloc uses for every buffer (patch 0007).
 
 ## Browser interface
 

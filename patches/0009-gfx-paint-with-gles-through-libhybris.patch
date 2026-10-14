@@ -28,10 +28,10 @@ index 1373f954..4a92e6b6 100644
      target_link_libraries(LibGfx PUBLIC Vulkan::Headers)
 diff --git a/Libraries/LibGfx/GLESContext.cpp b/Libraries/LibGfx/GLESContext.cpp
 new file mode 100644
-index 00000000..ec75604b
+index 00000000..88171ad4
 --- /dev/null
 +++ b/Libraries/LibGfx/GLESContext.cpp
-@@ -0,0 +1,330 @@
+@@ -0,0 +1,348 @@
 +/*
 + * Pacific: the Sailfish OS front end for the Ladybird engine.
 + *
@@ -114,7 +114,7 @@ index 00000000..ec75604b
 +    void* gles_library { nullptr };
 +};
 +
-+Functions const* load_functions()
++Functions* load_functions()
 +{
 +    static Functions functions;
 +    static bool loaded = [] {
@@ -134,7 +134,25 @@ index 00000000..ec75604b
 +#undef LOAD_GL
 +#undef LOAD_EGL
 +#undef LOAD
-+        auto extension = [](char const* name) { return functions.eglGetProcAddress ? functions.eglGetProcAddress(name) : nullptr; };
++#define CHECK(name)                                    \
++    if (!functions.name) {                             \
++        dbgln("GLES: the system has no {}", #name);    \
++        return false;                                  \
++    }
++        ENUMERATE_EGL_FUNCTIONS(CHECK)
++        ENUMERATE_GL_FUNCTIONS(CHECK)
++#undef CHECK
++        return true;
++    }();
++    return loaded ? &functions : nullptr;
++}
++
++// NB: libhybris only hands out its extensions once a display is initialized.
++bool resolve_extensions()
++{
++    static bool resolved = [] {
++        auto& functions = *load_functions();
++        auto extension = [&](char const* name) { return functions.eglGetProcAddress(name); };
 +        functions.create_native_buffer = reinterpret_cast<Functions::CreateNativeBuffer>(extension("eglHybrisCreateNativeBuffer"));
 +        functions.get_native_buffer_info = reinterpret_cast<Functions::GetNativeBufferInfo>(extension("eglHybrisGetNativeBufferInfo"));
 +        functions.serialize_native_buffer = reinterpret_cast<Functions::SerializeNativeBuffer>(extension("eglHybrisSerializeNativeBuffer"));
@@ -147,8 +165,6 @@ index 00000000..ec75604b
 +        dbgln("GLES: the system has no {}", #name);    \
 +        return false;                                  \
 +    }
-+        ENUMERATE_EGL_FUNCTIONS(CHECK)
-+        ENUMERATE_GL_FUNCTIONS(CHECK)
 +        CHECK(create_native_buffer)
 +        CHECK(get_native_buffer_info)
 +        CHECK(serialize_native_buffer)
@@ -159,7 +175,7 @@ index 00000000..ec75604b
 +#undef CHECK
 +        return true;
 +    }();
-+    return loaded ? &functions : nullptr;
++    return resolved;
 +}
 +
 +Functions const& gl()
@@ -198,6 +214,8 @@ index 00000000..ec75604b
 +    if (display == EGL_NO_DISPLAY || !f.eglInitialize(display, nullptr, nullptr))
 +        return Error::from_string_literal("eglInitialize failed");
 +    context->m_display = display;
++    if (!resolve_extensions())
++        return Error::from_string_literal("The system's EGL cannot share gralloc buffers");
 +
 +    if (!f.eglBindAPI(EGL_OPENGL_ES_API))
 +        return Error::from_string_literal("eglBindAPI failed");

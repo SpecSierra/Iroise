@@ -1,13 +1,15 @@
 diff --git a/Libraries/LibSandbox/Seccomp.cpp b/Libraries/LibSandbox/Seccomp.cpp
-index 9cad1ca7..3708327a 100644
+index 9cad1ca7..1a45f367 100644
 --- a/Libraries/LibSandbox/Seccomp.cpp
 +++ b/Libraries/LibSandbox/Seccomp.cpp
-@@ -1849,13 +1849,15 @@ void SeccompPolicy::allow_gpu_device_operations()
+@@ -1849,13 +1849,17 @@ void SeccompPolicy::allow_gpu_device_operations()
          // NVIDIA Tegra's nvmap and nvhost interfaces.
          'N',
          'H',
 +        // Arm Mali's kernel driver (kbase), which Android drivers reached through libhybris talk to directly.
 +        static_cast<char>(0x80),
++        // MediaTek's gralloc_extra device, which gralloc uses for every buffer it allocates.
++        'g',
  #endif
      };
      append(BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_ioctl, 0, 2 * types.size() + 3));

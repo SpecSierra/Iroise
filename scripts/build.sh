@@ -8,9 +8,16 @@ UP="$ROOT/upstream"
 JOBS="${JOBS:-12}"
 
 # Apply our patches once; the front end itself lives in this repo and is linked in.
+# A patch that is neither applied nor cleanly applicable means upstream/ was edited by hand: regenerate that patch
+# from the tree (git -C upstream diff -- <its files>) rather than letting patch half-apply it.
 for p in "$ROOT"/patches/[0-9]*.patch; do
-    if ! patch -d "$UP" -p1 -R --dry-run -s -f < "$p" >/dev/null 2>&1; then
-        patch -d "$UP" -p1 < "$p"
+    if patch -d "$UP" -p1 -R --dry-run -s -f < "$p" >/dev/null 2>&1; then
+        continue
+    elif patch -d "$UP" -p1 --dry-run -s -f < "$p" >/dev/null 2>&1; then
+        patch -d "$UP" -p1 -s -f < "$p"
+    else
+        echo "$(basename "$p") does not match upstream/" >&2
+        exit 1
     fi
 done
 ln -sfn "$ROOT/ui/SFOS" "$UP/UI/SFOS"
