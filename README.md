@@ -115,7 +115,7 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
 - `WPEQtView`, `WPEWebPage` and `WPEWebContainer` keep the names and the surface the
   interface was written against. `WPEWebPage` keeps every property and method the
   QML uses; what the engine protocol cannot do yet is a property that never changes
-  or a method that does nothing. Not wired yet: saved-login autofill, extensions.
+  or a method that does nothing. Not wired yet: extensions (waiting for upstream support).
 - The camera notch: the page is kept out of the band of the screen the notch is in
   (the `crop_notch` setting, on by default), and that band is painted in the page's
   `theme-color`, or failing that in the colour the page paints behind its content,
@@ -174,6 +174,12 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   cookies and storage, nothing kept), and the windows they open are too.
 - Video: the engine's FFmpeg has no H.264 decoder (a patent-encumbered codec, left out upstream), so pages get
   `""` from `canPlayType` for it; VP9, AV1 and the other free codecs play.
+- Saved logins: the page agent posts the password field and the text field before it when a form is sent or a
+  button pressed (`login` message). The interface offers to save it once the page goes on (or after four seconds)
+  into the SQLCipher vault, opening the vault first if need be, and skips a login it already has. A saved login
+  is filled into a login form the user has just touched (a page focusing a field itself gets nothing), on the
+  https origin the tab is at, which the fill script checks again in the page. Ladybird has no isolated script
+  world, so this runs in the page's own; the site always comes from the tab's URL, never from the page.
 - Ad blocking is the engine's own: Ladybird ships Brave's `adblock` crate with
   request blocking, cosmetic filtering and built-in list subscriptions, all off by
   default. The interface's "Adblock" switch turns on EasyList, EasyPrivacy, the

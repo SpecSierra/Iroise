@@ -8,10 +8,12 @@
 
 #include "WPEWebPage.h"
 
+#include "credentialstore.h"
 #include "downloadmanager.h"
 
 #include <QClipboard>
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QGuiApplication>
 #include <QImage>
@@ -61,7 +63,34 @@ const char kPageAgentScript[] =
     "if(had)soon('selection',sendSelection);"
     "},{passive:true,capture:true});"
     "document.addEventListener('selectionchange',function(){soon('selection',sendSelection);});"
+    // A login: the password field and the text field before it, when a form is sent or a button pressed.
+    "var lastLogin='';"
+    "function login(scope){"
+    "var p=(scope||document).querySelector('input[type=password]');if(!p||!p.value)return;"
+    "var all=Array.prototype.slice.call((p.form||document).querySelectorAll('input')),u=null;"
+    "for(var i=all.indexOf(p)-1;i>=0;i--){var t=all[i].type;if((t==='text'||t==='email'||t==='tel')&&all[i].value){u=all[i];break;}}"
+    "var l={u:u?u.value:'',p:p.value,uf:u?(u.name||u.id):'',pf:p.name||p.id},k=JSON.stringify(l);"
+    "if(k!==lastLogin){lastLogin=k;post('login',l);}}"
+    "document.addEventListener('submit',function(e){login(e.target);},true);"
+    "document.addEventListener('click',function(e){var b=e.target.closest&&e.target.closest('button,input[type=submit],[role=button]');if(b)login(b.closest('form'));},true);"
+    "document.addEventListener('keydown',function(e){if(e.key==='Enter'&&e.target.type==='password')login(e.target.form);},true);"
     "return 0;})()";
+
+// Fills a saved login into the login form the user just focused, if the page is still at the origin it was saved
+// for. %1 = JSON {o: origin, u: username, p: password}. Values go through the input's own setter, with input and
+// change events, so that pages built on frameworks see them.
+const char kFillLoginScript[] =
+    "(function(l){"
+    "if(location.origin!==l.o)return 0;"
+    "var f=document.activeElement;if(!f||f.tagName!=='INPUT')return 0;"
+    "var scope=f.form||document,p=scope.querySelector('input[type=password]');if(!p)return 0;"
+    "var all=Array.prototype.slice.call(scope.querySelectorAll('input')),u=null;"
+    "for(var i=all.indexOf(p)-1;i>=0;i--){var t=all[i].type;if(t==='text'||t==='email'||t==='tel'){u=all[i];break;}}"
+    "if(f!==p&&f!==u)return 0;"
+    "var set=Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set;"
+    "function fill(e,v){set.call(e,v);e.dispatchEvent(new Event('input',{bubbles:true}));e.dispatchEvent(new Event('change',{bubbles:true}));}"
+    "if(u&&l.u)fill(u,l.u);fill(p,l.p);return 1;"
+    "})(%1)";
 
 // The kinds of <input> the interface has a picker of its own for. A tap on one hands it over.
 const char kInputPickerScript[] =
@@ -143,6 +172,16 @@ WPEWebPage::WPEWebPage(QQuickItem *parent)
     // A tab's thumbnail is a scaled copy of what is on screen, refreshed while the tab is the one showing.
     m_thumbnailTimer.setInterval(kThumbnailIntervalMs);
     connect(&m_thumbnailTimer, &QTimer::timeout, this, &WPEWebPage::captureThumbnail);
+
+    // A login sent on a page that stays where it is (a script-driven sign-in) is offered after a moment.
+    m_offerLoginTimer.setSingleShot(true);
+    m_offerLoginTimer.setInterval(4000);
+    connect(&m_offerLoginTimer, &QTimer::timeout, this, &WPEWebPage::offerCapturedLogin);
+    connect(this, &WPEQtView::urlChanged, this, &WPEWebPage::offerCapturedLogin);
+    connect(CredentialStore::instance(), &CredentialStore::lockedChanged, this, [this] {
+        if (m_saveLoginWaitsForVault && CredentialStore::instance()->isUnlocked())
+            storePendingLogin();
+    });
 
     m_chromeGestureDebounceTimer.setSingleShot(true);
     m_chromeGestureDebounceTimer.setInterval(150);
@@ -289,7 +328,9 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
         m_lastCommittedUrl = url();
         evaluate(QString::fromLatin1(kPageAgentScript));
     } else {
-        // What the old page had selected, was searching for or was asking is gone with it.
+        // What the old page had selected, was searching for or was asking is gone with it. A login it sent is
+        // offered for saving now that it has gone on.
+        offerCapturedLogin();
         handleJsSelectionClear();
         if (!m_permissionQuestions.isEmpty())
             answerPermissions(QString(), false);
@@ -460,6 +501,9 @@ void WPEWebPage::onPageWantsTextInputChanged()
 {
     const bool wantsInput = pageWantsTextInput();
     setFlag(ItemAcceptsInputMethod, wantsInput);
+    // NB: Only a field the user touched: a page focusing one itself (an invisible form, say) gets no login.
+    if (wantsInput && QDateTime::currentMSecsSinceEpoch() - m_lastTouchMs < 1500)
+        fillLoginForFocusedForm();
     if (wantsInput) {
         forceActiveFocus();
         QGuiApplication::inputMethod()->update(Qt::ImEnabled | Qt::ImHints);
@@ -543,6 +587,7 @@ void WPEWebPage::keyPressEvent(QKeyEvent *event)
 void WPEWebPage::touchEvent(QTouchEvent *event)
 {
     if (event->type() == QEvent::TouchBegin) {
+        m_lastTouchMs = QDateTime::currentMSecsSinceEpoch();
         emit touched();
         // A page still loading has not had the agent yet.
         evaluate(QString::fromLatin1(kPageAgentScript));
@@ -1033,8 +1078,27 @@ void WPEWebPage::setFindInPageHasResult(bool has)
     emit findInPageHasResultChanged();
 }
 
+QString WPEWebPage::origin(const QUrl &url)
+{
+    return url.adjusted(QUrl::RemoveUserInfo | QUrl::RemovePath | QUrl::RemoveQuery | QUrl::RemoveFragment).toString();
+}
+
 void WPEWebPage::fillLoginForFocusedForm()
 {
+    CredentialStore *store = CredentialStore::instance();
+    if (url().scheme() != QLatin1String("https") || !store->isUnlocked())
+        return;
+    const QString site = origin(url());
+    for (const auto &entry : store->all()) {
+        if (entry.second.value(QStringLiteral("hostname")).toString() != site)
+            continue;
+        QJsonObject login;
+        login.insert(QStringLiteral("o"), site);
+        login.insert(QStringLiteral("u"), entry.second.value(QStringLiteral("username")).toString());
+        login.insert(QStringLiteral("p"), entry.second.value(QStringLiteral("password")).toString());
+        evaluate(QString::fromLatin1(kFillLoginScript).arg(QString::fromUtf8(QJsonDocument(login).toJson(QJsonDocument::Compact))));
+        return;
+    }
 }
 
 void WPEWebPage::acceptTlsCertificate()
@@ -1096,15 +1160,75 @@ void WPEWebPage::resolvePermission(bool allow)
     answerPermissions(key, allow);
 }
 
-void WPEWebPage::offerSaveLogin(const QString &username, const QString &password)
+void WPEWebPage::offerCapturedLogin()
 {
-    Q_UNUSED(username);
-    Q_UNUSED(password);
+    m_offerLoginTimer.stop();
+    if (m_capturedLogin.isEmpty())
+        return;
+    QVariantMap login = m_capturedLogin;
+    m_capturedLogin.clear();
+    const QString username = login.value(QStringLiteral("u")).toString();
+    const QString password = login.value(QStringLiteral("p")).toString();
+
+    // What the vault has for this site and name already: nothing to ask if it is the same password.
+    m_saveLoginExistingUid = -1;
+    CredentialStore *store = CredentialStore::instance();
+    if (store->isUnlocked()) {
+        for (const auto &entry : store->all()) {
+            if (entry.second.value(QStringLiteral("hostname")).toString() != m_capturedLoginOrigin
+                || entry.second.value(QStringLiteral("username")).toString() != username)
+                continue;
+            if (entry.second.value(QStringLiteral("password")).toString() == password)
+                return;
+            m_saveLoginExistingUid = entry.first;
+        }
+    }
+    m_saveLoginOrigin = m_capturedLoginOrigin;
+    m_saveLoginHost = QUrl(m_capturedLoginOrigin).host();
+    m_saveLoginUsername = username;
+    m_saveLoginPassword = password;
+    m_saveLoginFields = login;
+    m_saveLoginPending = true;
+    emit saveLoginChanged();
 }
 
 void WPEWebPage::resolveSaveLogin(bool save)
 {
-    Q_UNUSED(save);
+    if (!m_saveLoginPending)
+        return;
+    m_saveLoginPending = false;
+    emit saveLoginChanged();
+    if (!save) {
+        m_saveLoginPassword.clear();
+        return;
+    }
+    if (CredentialStore::instance()->isUnlocked()) {
+        storePendingLogin();
+        return;
+    }
+    // The login is stored as soon as the vault is opened (or created) on the page this asks for.
+    m_saveLoginWaitsForVault = true;
+    emit saveLoginNeedsUnlock();
+}
+
+void WPEWebPage::storePendingLogin()
+{
+    m_saveLoginWaitsForVault = false;
+    QVariantMap fields;
+    fields.insert(QStringLiteral("hostname"), m_saveLoginOrigin);
+    fields.insert(QStringLiteral("formSubmitURL"), m_saveLoginOrigin);
+    fields.insert(QStringLiteral("httpRealm"), QString());
+    fields.insert(QStringLiteral("username"), m_saveLoginUsername);
+    fields.insert(QStringLiteral("password"), m_saveLoginPassword);
+    fields.insert(QStringLiteral("usernameField"), m_saveLoginFields.value(QStringLiteral("uf")));
+    fields.insert(QStringLiteral("passwordField"), m_saveLoginFields.value(QStringLiteral("pf")));
+    CredentialStore *store = CredentialStore::instance();
+    if (m_saveLoginExistingUid >= 0)
+        store->update(m_saveLoginExistingUid, fields);
+    else
+        store->insert(fields);
+    m_saveLoginPassword.clear();
+    emit loginSaved();
 }
 
 void WPEWebPage::selectMenuOption(int index)
@@ -1277,6 +1401,13 @@ void WPEWebPage::pageMessage(const QString &kind, const QJsonValue &data)
         QJsonArray position = data.toArray();
         if (position.size() == 3)
             emit scrollPositionChanged(position.at(0).toDouble(), position.at(1).toDouble(), position.at(2).toDouble());
+    } else if (kind == QLatin1String("login")) {
+        // NB: The site is the one the tab is at, never anything the page says.
+        if (url().scheme() != QLatin1String("https") || privateBrowsing())
+            return;
+        m_capturedLogin = data.toObject().toVariantMap();
+        m_capturedLoginOrigin = origin(url());
+        m_offerLoginTimer.start();
     } else if (kind == QLatin1String("selection")) {
         // NB: The interface places the handles in its own pixels, which are the device's; the page answers in
         //     CSS pixels.

@@ -16,6 +16,13 @@ Rectangle {
     property var webView
     readonly property var page: webView ? webView.contentItem : null
 
+    // Saving needs the vault open: the logins page asks for the master password (or to create the vault), and
+    // the page stores the login once it is open.
+    Connections {
+        target: saveLoginBanner.page
+        onSaveLoginNeedsUnlock: pageStack.push(Qt.resolvedUrl("../LoginsPage.qml"))
+    }
+
     readonly property string promptText: {
         if (!page)
             return ""

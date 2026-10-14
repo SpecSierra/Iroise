@@ -92,11 +92,6 @@ class WPEWebPage : public WPEQtView
     Q_OBJECT
 
 public:
-    // Script world the password-autofill bridge lives in. Everything that
-    // touches credentials — the kLoginBridge user script, its message handler
-    // and the fill evaluation — must use this world and not the page's own,
-    // or the page can forge bridge messages and intercept filled values.
-    static constexpr const char* kLoginScriptWorld = "pacific-login";
 
 private:
     Q_PROPERTY(int tabId READ tabId WRITE setTabId NOTIFY tabIdChanged)
@@ -371,14 +366,9 @@ public:
     bool findInPageHasResult() const { return m_findInPageHasResult; }
     void setFindInPageHasResult(bool has);
 
-    // Password autofill (read path). Called by the loginBridge user script when
-    // the user focuses a login field; looks up the credential store and, if a
-    // match exists for the CURRENTLY LOADED https origin, injects the values
-    // into the page. Never auto-submits. See kLoginBridge in WPEUserScripts.h.
-    //
-    // Takes no origin argument by design: the origin is read here from the
-    // committed document URL. A page-supplied origin would let any site ask
-    // for another site's credentials (see onLoginBridgeMessage).
+    // Fills the saved login for the site the tab is at into the login form the user just touched (the vault
+    // has to be open). The site is taken from the tab's URL, never from the page, and the fill script checks
+    // the page is still at it. Never submits.
     void fillLoginForFocusedForm();
 
     // Security
@@ -413,16 +403,12 @@ public:
     // For the whole engine: forget cached files and/or cookies and what sites stored.
     static void clearEngineDataGlobally(bool cache, bool siteData);
 
-    // Save-password prompt (Phase 3). offerSaveLogin() is called by the
-    // loginBridge capture message; resolveSaveLogin() persists on accept.
-    // Like fillLoginForFocusedForm(), the origin is taken from the committed
-    // document URL, never from the message — otherwise a page could have a
-    // credential of its choosing saved under someone else's host.
+    // Offering to save a login the page sent (the page agent's "login" message): the banner shows while
+    // saveLoginPending, and resolveSaveLogin() stores it, opening the vault first if need be.
     bool saveLoginPending() const { return m_saveLoginPending; }
     QString saveLoginHost() const { return m_saveLoginHost; }
     QString saveLoginUsername() const { return m_saveLoginUsername; }
     bool saveLoginIsUpdate() const { return m_saveLoginExistingUid >= 0; }
-    void offerSaveLogin(const QString &username, const QString &password);
     Q_INVOKABLE void resolveSaveLogin(bool save);
 
     // Save page as PDF
@@ -525,6 +511,9 @@ signals:
     void jsDialogChanged();
     void surroundColorChanged();
     void saveLoginChanged();
+    // The user wants a login saved and the vault is locked or not created yet: show the page that opens it.
+    void saveLoginNeedsUnlock();
+    void loginSaved();
     void findInPageHasResultChanged();
 
     void recvAsyncMessage(const QString &message, const QVariant &data);
@@ -723,5 +712,16 @@ private:
     QString m_saveLoginUsername;
     QString m_saveLoginPassword;
     int m_saveLoginExistingUid = -1;
+    QString m_saveLoginOrigin;
+    QVariantMap m_saveLoginFields;
+    bool m_saveLoginWaitsForVault = false;
+    // A login the page sent, waiting to be offered (when the page goes on, or after m_offerLoginTimer).
+    QVariantMap m_capturedLogin;
+    QString m_capturedLoginOrigin;
+    QTimer m_offerLoginTimer;
+    qint64 m_lastTouchMs = 0;
+    static QString origin(const QUrl &url);
+    void offerCapturedLogin();
+    void storePendingLogin();
     bool m_autoRecovered = false;
 };
