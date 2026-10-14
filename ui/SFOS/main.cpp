@@ -87,6 +87,7 @@ public:
     {
         m_device_pixel_ratio = device_pixel_ratio;
         reset_viewport_size(size.to_type<Web::DevicePixels>());
+        traversable().for_each_hosting_page([&](WebView::WebContentPage& page) { send_screen_rect(page); });
     }
 
     void handle_touch(TouchPhase phase, int id, Gfx::IntPoint position)
@@ -160,8 +161,19 @@ private:
     virtual void prepare_page_for_tab(WebView::WebContentPage& page) override
     {
         WebView::HeadlessWebView::prepare_page_for_tab(page);
+        send_screen_rect(page);
         if (on_prepare_page)
             on_prepare_page(page);
+    }
+
+    // The browser fills the phone's screen, so the view is the screen, turned as the view is. Without this pages see
+    // the engine's default (1920x1080 device pixels, 768x432 here), and players that size their fullscreen video by
+    // screen.width/height (YouTube) show a part of it, magnified.
+    void send_screen_rect(WebView::WebContentPage& page)
+    {
+        Vector<Web::DevicePixelRect> screen_rects;
+        screen_rects.append(Web::DevicePixelRect({}, viewport_size()));
+        page.async_update_screen_rects(screen_rects, 0);
     }
 
     void present()
