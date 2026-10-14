@@ -851,9 +851,9 @@ void WebContainer::connectPage(WebPage *page)
     connect(page, &WebPage::paintedChanged, this, &WebContainer::onPagePaintedChanged);
     connect(page, &WebPage::chromeChanged, this, &WebContainer::needChromeChanged);
     connect(page, &WebPage::fullscreenChanged, this, &WebContainer::needChromeChanged);
-    connect(page, &WebPage::fileGrabWritten, this, [this, page](const QString &filePath) {
+    connect(page, &WebPage::thumbnailCaptured, this, [this, page](const QString &source) {
         if (m_tabModel)
-            m_tabModel->updateThumbnailPath(page->tabId(), filePath);
+            m_tabModel->updateThumbnailPath(page->tabId(), source);
     });
     connect(page, &WebPage::touched, this, [this, page]() {
         if (page == m_contentItem)

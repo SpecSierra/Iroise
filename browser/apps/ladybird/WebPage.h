@@ -288,7 +288,6 @@ public:
     // Warm the connection for a navigation the UI expects (link under the
     // finger, URL-bar completion). Fetches nothing; rate-limited per origin;
     // inert unless PACIFIC_PRECONNECT is set.
-    Q_INVOKABLE void grabToFile(const QSize &size);
     Q_INVOKABLE void grabThumbnail(const QSize &size);
 
     // History preview ("instant Back"). During a back/forward navigation the
@@ -480,7 +479,8 @@ signals:
     void findInPageHasResultChanged();
 
     void recvAsyncMessage(const QString &message, const QVariant &data);
-    void fileGrabWritten(const QString &fileName);
+    // A new thumbnail of the page: a file, or for a private tab a data URL kept in memory only.
+    void thumbnailCaptured(const QString &source);
     // Emitted at the start of a history navigation when the destination entry
     // has a stored preview. The UI shows it until the live page takes over.
     void historyPreviewReady(const QString &imagePath);

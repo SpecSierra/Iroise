@@ -136,11 +136,7 @@ WebContainer {
         }
 
         if (webView.contentItem && webView.activeTabRendered) {
-            if (webView.privateMode) {
-                webView.contentItem.grabThumbnail(thumbnailCaptureSize())
-            } else {
-                webView.contentItem.grabToFile(thumbnailCaptureSize())
-            }
+            webView.contentItem.grabThumbnail(thumbnailCaptureSize())
         }
     }
 

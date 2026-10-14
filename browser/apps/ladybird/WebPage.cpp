@@ -11,6 +11,7 @@
 #include "credentialstore.h"
 #include "DownloadModel.h"
 
+#include <QBuffer>
 #include <QClipboard>
 #include <QCryptographicHash>
 #include <QDateTime>
@@ -360,23 +361,16 @@ void WebPage::onFrameArrived()
 
 // --- Thumbnails -------------------------------------------------------------
 
-void WebPage::grabToFile(const QSize &size)
+void WebPage::grabThumbnail(const QSize &size)
 {
     if (size.width() > 0 && size.height() > 0)
         m_thumbnailSize = size;
     captureThumbnail();
 }
 
-void WebPage::grabThumbnail(const QSize &size)
-{
-    Q_UNUSED(size);
-    // FIXME: Atlantic answered this with a PNG data: URI from a WebKit snapshot (used as a favourite's icon when
-    //        the page has no usable favicon). Nothing asks the engine for a snapshot yet.
-}
-
 void WebPage::captureThumbnail()
 {
-    if (privateBrowsing() || m_tabId <= 0 || !m_painted || m_thumbnailGrab)
+    if (m_tabId <= 0 || !m_painted || m_thumbnailGrab)
         return;
     const quint32 serial = frameSerial();
     if (m_thumbnailCaptured && serial == m_thumbnailSerial)
@@ -399,9 +393,22 @@ void WebPage::captureThumbnail()
     connect(m_thumbnailGrab.data(), &QQuickItemGrabResult::ready, this, [this, serial, targetWidth, targetHeight] {
         QImage image = m_thumbnailGrab->image().copy(0, 0, targetWidth, targetHeight);
         m_thumbnailGrab.clear();
+        if (image.isNull())
+            return;
+        // A private tab's thumbnail is kept in memory only, so that nothing of it is left behind.
+        if (privateBrowsing()) {
+            QByteArray jpeg;
+            QBuffer buffer(&jpeg);
+            if (!buffer.open(QIODevice::WriteOnly) || !image.save(&buffer, "JPG", 80))
+                return;
+            m_thumbnailSerial = serial;
+            m_thumbnailCaptured = true;
+            emit thumbnailCaptured(QStringLiteral("data:image/jpeg;base64,") + QString::fromLatin1(jpeg.toBase64()));
+            return;
+        }
         const QString directory = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
                                   + QStringLiteral("/thumbnails");
-        if (image.isNull() || !QDir().mkpath(directory))
+        if (!QDir().mkpath(directory))
             return;
         // A new name for every capture: the tab switcher's Image caches by URL.
         const QString prefix = QStringLiteral("tab-%1-").arg(m_tabId);
@@ -412,7 +419,7 @@ void WebPage::captureThumbnail()
             return;
         m_thumbnailSerial = serial;
         m_thumbnailCaptured = true;
-        emit fileGrabWritten(path);
+        emit thumbnailCaptured(path);
     });
 }
 // --- Chrome -----------------------------------------------------------------

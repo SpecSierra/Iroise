@@ -163,7 +163,8 @@ SilicaControl {
                 TabGridView {
                     id: grid
 
-                    anchors.fill: parent
+                    // NB: Only the height: the grid places itself across, inside its margins.
+                    height: parent.height
                     horizontalMargin: tabView.horizontalMargin
                     portrait: tabView.portrait
                     model: TabFilterModel {

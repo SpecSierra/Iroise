@@ -144,33 +144,13 @@ Shared.IconGrid {
             property url url
             property string title
             property var webPage
-            readonly property bool sameWebPage: webPage && title === webPage.title && url === webPage.url
-
-            function handleGrabbedThumbnail(data) {
-                // If on the same web page, update thumbnail data.
-                if (sameWebPage) {
-                    bookmarkModel.updateFavoriteIcon(url, data, false)
-                }
-                webPage.onThumbnailResult.disconnect(handleGrabbedThumbnail)
-                fetcher.destroy()
-            }
 
             minimumIconSize: Theme.iconSizeSmallPlus
 
             onDataChanged: {
-                var canDestroy = true
-                if (hasAcceptedTouchIcon) {
+                if (hasAcceptedTouchIcon)
                     bookmarkModel.updateFavoriteIcon(url, data, hasAcceptedTouchIcon)
-                } else if (sameWebPage) {
-                    // We are still at same web page but no accepted touch icon. Let's grab thumbnail.
-                    canDestroy = false
-                    webPage.onThumbnailResult.connect(handleGrabbedThumbnail)
-                    webPage.grabThumbnail(Qt.size(favoriteGrid.cellHeight, favoriteGrid.cellWidth))
-                }
-
-                if (canDestroy) {
-                    fetcher.destroy()
-                }
+                fetcher.destroy()
             }
 
             Component.onCompleted: {
