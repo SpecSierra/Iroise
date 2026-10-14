@@ -8,7 +8,6 @@
 
 #include "LadybirdEngine.h"
 #include "WPEWebPage.h"
-#include "WPERuntimePaths.h"
 #include "declarativehistorymodel.h"
 #include "declarativetabmodel.h"
 #include "persistenttabmodel.h"
@@ -29,11 +28,16 @@
 #include <QQuickWindow>
 #include <QWindow>
 
-#pragma push_macro("signals")
-#undef signals
-#pragma pop_macro("signals")
-
 #include <unistd.h>
+
+// Where the page's device pixel ratio comes from: a 360 CSS pixel wide viewport on the Xperia 10 II, whose Silica
+// pixel ratio is 1.75, gives 3.0; other devices scale from it (see initialPageDeviceScaleFactor). The screen size is
+// a fallback for when Qt does not know it yet.
+static constexpr qreal kReferenceViewportWidth = 360.0;
+static constexpr qreal kReferenceUiPixelRatio = 1.75;
+static constexpr qreal kReferenceDeviceScale = 3.0;
+static constexpr qreal kFallbackScreenWidth = 1080.0;
+static constexpr qreal kFallbackScreenHeight = 2520.0;
 
 namespace {
 
@@ -42,10 +46,11 @@ QSizeF screenSizeOrFallback(QScreen *screen)
     if (screen) {
         return screen->size();
     }
-    return QSizeF(WPERuntimePaths::kFallbackScreenWidth, WPERuntimePaths::kFallbackScreenHeight);
+    return QSizeF(kFallbackScreenWidth, kFallbackScreenHeight);
 }
 
 } // namespace
+
 
 WPEWebContainer::WPEWebContainer(QQuickItem *parent)
     : QQuickItem(parent)
@@ -53,7 +58,7 @@ WPEWebContainer::WPEWebContainer(QQuickItem *parent)
     // A page that opens a window (a link with a target, window.open) gets a new tab, showing the engine's view.
     connect(LadybirdEngine::instance(), &LadybirdEngine::viewOffered, this, [this](quint32 view) {
         m_viewForNextPage = view;
-        if (!m_tabModel || !m_tabModel->newTab(QString(), false))
+        if (!m_tabModel || !m_tabModel->newTab(QString(), tabId(), false, false))
             LadybirdEngine::instance()->removeView(view);
         m_viewForNextPage = 0;
     });
@@ -128,12 +133,6 @@ WPEWebContainer::~WPEWebContainer()
 {
     qDeleteAll(m_pages);
 }
-
-void WPEWebContainer::configureSandboxPaths()
-{
-    // The Ladybird engine process sets up its own helpers' sandboxes; there is nothing to configure from here.
-}
-
 void WPEWebContainer::trackParentSize()
 {
     QQuickItem *p = parentItem();
@@ -177,9 +176,6 @@ QSizeF WPEWebContainer::preferredPageSize(const QSizeF &screenSize) const
 
 qreal WPEWebContainer::initialPageDeviceScaleFactor(const QSizeF &screenSize) const
 {
-    // The carried-forward Qt bridge still maps device scale to page zoom here.
-    // Keep that known-good behavior explicit until a true device-scale path exists.
-    //
     // Scale from the Silica UI pixel ratio, so web content matches the size of
     // the system UI (and follows the user's display-scale setting). The screen
     // width alone oversized it on the Jolla Phone 2: 1032px / 360 = 2.87 at
@@ -187,11 +183,11 @@ qreal WPEWebContainer::initialPageDeviceScaleFactor(const QSizeF &screenSize) co
     // Jolla gets 2.57, rounded to 2.5. Quarter steps keep the scale off odd
     // fractions, whose tile-edge rounding shows as seams.
     if (m_uiPixelRatio > 0.0) {
-        const qreal scale = WPERuntimePaths::kReferenceDeviceScale
-                            * m_uiPixelRatio / WPERuntimePaths::kReferenceUiPixelRatio;
+        const qreal scale = kReferenceDeviceScale
+                            * m_uiPixelRatio / kReferenceUiPixelRatio;
         return qMax(qreal(1.0), qRound(scale * 4.0) / 4.0);
     }
-    return screenSize.width() / WPERuntimePaths::kReferenceViewportWidth;
+    return screenSize.width() / kReferenceViewportWidth;
 }
 
 qreal WPEWebContainer::insetPageHeight(qreal baseHeight) const
@@ -251,10 +247,10 @@ void WPEWebContainer::setContentBottomInset(qreal inset)
 
 void WPEWebContainer::initializeTabModels(int nextTabId)
 {
-    m_persistentTabModel = new PersistentTabModel(nextTabId, nullptr);
+    m_persistentTabModel = new PersistentTabModel(nextTabId);
     // Private ids live in their own range: both models share m_pages keyed by
     // tab id, and "+100" collided once 100 persistent tabs had been opened.
-    m_privateTabModel = new PrivateTabModel(nextTabId + 1000000, nullptr);
+    m_privateTabModel = new PrivateTabModel(nextTabId + 1000000);
 
     m_tabModel = m_persistentTabModel;
     connect(m_tabModel, SIGNAL(activeTabChanged(int)), this, SLOT(onActiveTabChanged(int)));
@@ -426,15 +422,6 @@ void WPEWebContainer::setPrivateMode(bool p)
         emit privateModeChanged();
     }
 }
-
-void WPEWebContainer::setWebPageComponent(QQmlComponent *c)
-{
-    if (m_webPageComponent != c) {
-        m_webPageComponent = c;
-        emit webPageComponentChanged(c);
-    }
-}
-
 void WPEWebContainer::setChromeWindow(QObject *w)
 {
     if (m_chromeWindow != w) {
@@ -468,11 +455,9 @@ void WPEWebContainer::componentComplete()
 {
     // Configure WebKit process sandbox paths before any web view is created.
     // bubblewrap requires explicit allowlisting of paths needed by the subprocesses.
-    configureSandboxPaths();
 
     // Previews of pages from an earlier run can never be shown again (the
     // back/forward list does not survive a restart) and are page screenshots.
-    WPEWebPage::clearHistoryPreviews();
 
     // Qt Quick routes input events based on item bounding-box.  If the
     // container has size 0×0 (no QML anchor/size binding from the page),
@@ -569,12 +554,6 @@ void WPEWebContainer::closeTab(int tabId)
     bool isActive = (tabId == this->tabId());
     m_tabModel->removeTabById(tabId, isActive);
 }
-
-void WPEWebContainer::releaseActiveTabOwnership()
-{
-    // stub - ownership tracking for D-Bus not needed in WPE
-}
-
 void WPEWebContainer::updateContentOrientation(Qt::ScreenOrientation orientation)
 {
     emit webContentOrientationChanged(orientation);
@@ -627,7 +606,6 @@ void WPEWebContainer::onTabAdded(int tabId)
 void WPEWebContainer::onTabClosed(int tabId)
 {
     m_mruTabs.removeAll(tabId);
-    WPEWebPage::removeHistoryPreviewsForTab(tabId);
     WPEWebPage *page = m_pages.take(tabId);
     const bool wasPrivate = page && page->privateBrowsing();
     if (page) {
@@ -826,10 +804,8 @@ WPEWebPage *WPEWebContainer::getOrCreatePage(int tabId)
     const QSizeF screenSize = screenSizeOrFallback(QGuiApplication::primaryScreen());
     configurePageGeometry(page, screenSize);
 
-    // Keep the current zoom-backed device-scale bootstrap explicit here.
-    if (screen) {
-        page->applyInitialDeviceScale(initialPageDeviceScaleFactor(screenSize));
-    }
+    if (screen)
+        page->setDeviceScaleFactor(initialPageDeviceScaleFactor(screenSize));
 
     connectPage(page);
     m_pages[tabId] = page;

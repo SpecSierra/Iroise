@@ -33,14 +33,11 @@ public:
     qreal cssPixelRatio() const;
 
     Q_INVOKABLE QString displayableUrl(const QString &fullUrl) const;
-    Q_INVOKABLE QString pageName(const QString &fullUrl) const;
-    // Pushed from BrowserPage.qml's home_page ConfigurationValue — C++ can't
-    // read dconf itself (MDConfItem is a no-op stub in this build).
+    // Pushed from BrowserPage.qml's home_page ConfigurationValue.
     Q_INVOKABLE void setHomePage(const QString &homePage);
 
 public slots:
     QString homePage() const;
-    void handleDumpMemoryInfoRequest(const QString &fileName);
     void openUrl(const QString &url);
     void openSettings();
 
@@ -49,22 +46,13 @@ signals:
     void openUrlRequested(const QString &url);
     void openSettingsRequested();
     void activateNewTabViewRequested();
-    void showChrome();
 
     void firstUseDoneChanged();
-    void dumpMemoryInfo(const QString &fileName);
     void cssPixelRatioChanged();
-    void touchTopRadiusChanged();
-    void touchBottomRadiusChanged();
-
-private slots:
-    void updateWebEngineSettings();
-    void handleObserve(const QString &message, const QVariant &data);
 
 private:
     explicit DeclarativeWebUtils();
     ~DeclarativeWebUtils();
-    void setRenderingPreferences();
 
     QString m_homePage;
     bool m_firstUseDone;

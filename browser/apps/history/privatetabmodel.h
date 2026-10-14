@@ -14,7 +14,6 @@
 
 #include "declarativetabmodel.h"
 
-class DeclarativeWebContainer;
 
 class PrivateTabModel : public DeclarativeTabModel
 {
@@ -29,7 +28,7 @@ protected:
     void updateThumbPath(int tabId, const QString &path) override;
 
 public:
-    PrivateTabModel(int nextTabId, DeclarativeWebContainer *webContainer = nullptr);
+    explicit PrivateTabModel(int nextTabId);
     ~PrivateTabModel();
 };
 

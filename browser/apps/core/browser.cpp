@@ -45,20 +45,7 @@ Browser::Browser(QQuickView *view, const QString &dataPath, QObject *parent)
     d->view->rootContext()->setContextProperty("Settings", SettingManager::instance());
     d->view->rootContext()->setContextProperty("DownloadManager", downloadManager);
 
-    // Direct-composite: the UI scene (browser.qml) is hosted in the offscreen chrome
-    // overlay window, not in this on-screen view (which is the transparent shell). The
-    // runtime loads it into the overlay after this ctor; skip setSource here so we don't
-    // also run a second ApplicationWindow in the shell view.
-    const QByteArray dc = qgetenv("PACIFIC_DIRECT_COMPOSITE");
-    if (!dc.isEmpty() && dc != "0")
-        return;
-
-    QString mainQml;
-    if (!qEnvironmentVariableIsEmpty("PACIFIC_MINIMAL_UI")) {
-        mainQml = QStringLiteral("browser-minimal.qml");
-    } else {
-        mainQml = QStringLiteral("browser.qml");
-    }
+    const QString mainQml = QStringLiteral("browser.qml");
 
 #ifdef USE_RESOURCES
     d->view->setSource(QUrl(QString("qrc:///") + mainQml));
@@ -106,11 +93,6 @@ void Browser::openNewTabView()
     emit DeclarativeWebUtils::instance()->activateNewTabViewRequested();
 }
 
-void Browser::showChrome()
-{
-    emit DeclarativeWebUtils::instance()->showChrome();
-}
-
 void Browser::cancelDownload(int transferId)
 {
     DownloadManager::instance()->cancelTransfer(transferId);
@@ -119,9 +101,4 @@ void Browser::cancelDownload(int transferId)
 void Browser::restartDownload(int transferid)
 {
     DownloadManager::instance()->restartTransfer(transferid);
-}
-
-void Browser::dumpMemoryInfo(const QString &fileName)
-{
-    DeclarativeWebUtils::instance()->handleDumpMemoryInfoRequest(fileName);
 }

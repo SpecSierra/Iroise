@@ -9,12 +9,11 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
-#include "declarativewebcontainer.h"
 #include "privatetabmodel.h"
 #include "dbmanager.h"
 
-PrivateTabModel::PrivateTabModel(int nextTabId, DeclarativeWebContainer *webContainer)
-    : DeclarativeTabModel(nextTabId, webContainer)
+PrivateTabModel::PrivateTabModel(int nextTabId)
+    : DeclarativeTabModel(nextTabId)
 {
     // Startup should be synced to this.
     if (!m_loaded) {

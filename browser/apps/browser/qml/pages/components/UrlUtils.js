@@ -2,8 +2,7 @@
 
 /*
  * Shared address-bar input helpers: decide whether typed text is a URL or a
- * search query, and turn it into a loadable URL. Used by Overlay.qml and
- * browser-minimal.qml so the two stay in sync.
+ * search query, and turn it into a loadable URL.
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,

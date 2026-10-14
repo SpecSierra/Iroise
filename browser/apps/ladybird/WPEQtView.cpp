@@ -125,12 +125,6 @@ void WPEQtView::goBack() { sendToEngine(LB_EMBED_GO_BACK); }
 void WPEQtView::goForward() { sendToEngine(LB_EMBED_GO_FORWARD); }
 void WPEQtView::reload() { sendToEngine(LB_EMBED_RELOAD); }
 void WPEQtView::stop() { sendToEngine(LB_EMBED_STOP); }
-
-void WPEQtView::loadHtml(const QString&, const QUrl&)
-{
-    // FIXME: The engine protocol has no way to load a string yet.
-}
-
 void WPEQtView::evaluate(const QString& expression, std::function<void(const QJsonValue&)> callback)
 {
     if (!m_view)

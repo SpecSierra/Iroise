@@ -39,12 +39,7 @@ Item {
         return /^https?:\/\//i.test(url) ? url : ""
     }
 
-    // Re-queried whenever the long press reports a new context, or an extension
-    // adds or removes an item.
-    property var extensionItems: []
-
-    readonly property bool active:
-        pendingImageUrl.length > 0 || pendingLinkUrl.length > 0 || extensionItems.length > 0
+    readonly property bool active: pendingImageUrl.length > 0 || pendingLinkUrl.length > 0
 
     // What the press landed on, for the sheet's heading. The scheme goes: it is
     // never the interesting part and it costs the width the host needs.
@@ -55,24 +50,11 @@ Item {
         return url.replace(/^[a-z]+:\/\//i, "")
     }
 
-    function refreshExtensionItems() {
-        extensionItems = (context && context.pageUrl)
-                ? WebExtensionManager.contextMenuItems(context)
-                : []
-    }
-
     function dismiss() {
         if (webView && webView.contentItem) {
             webView.contentItem.clearImageLongPress()
             webView.contentItem.clearContextInfo()
         }
-    }
-
-    onContextChanged: refreshExtensionItems()
-
-    Connections {
-        target: WebExtensionManager
-        onContextMenuItemsChanged: root.refreshExtensionItems()
     }
 
     // webView sits inside BrowserPage's webViewFrame (notch crop), so it is not a
@@ -198,34 +180,6 @@ Item {
                     if (root.webView.contentItem && root.pendingImageUrl.length > 0)
                         root.webView.contentItem.downloadUrl(root.pendingImageUrl)
                     root.dismiss()
-                }
-            }
-
-            Repeater {
-                model: root.extensionItems
-
-                BackgroundItem {
-                    width: sheet.width
-                    height: Theme.itemSizeSmall
-                    enabled: modelData.enabled
-
-                    Label {
-                        anchors.centerIn: parent
-                        width: parent.width - 2 * Theme.horizontalPageMargin
-                        horizontalAlignment: Text.AlignHCenter
-                        truncationMode: TruncationMode.Fade
-                        opacity: modelData.enabled ? 1.0 : Theme.opacityLow
-                        color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
-                        text: modelData.type === "checkbox" && modelData.checked
-                              ? "✓ " + modelData.title
-                              : modelData.title
-                    }
-
-                    onClicked: {
-                        WebExtensionManager.activateContextMenuItem(
-                                    modelData.extensionId, modelData.itemId, root.context)
-                        root.dismiss()
-                    }
                 }
             }
         }

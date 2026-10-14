@@ -7,5 +7,4 @@ SOURCES += \
 # C++ headers
 HEADERS += \
     $$PWD/browserservice.h \
-    $$PWD/browserservice_p.h \
     $$PWD/dbusadaptor.h

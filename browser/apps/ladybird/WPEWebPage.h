@@ -109,20 +109,17 @@ private:
     Q_PROPERTY(qreal fullscreenHeight READ fullscreenHeight WRITE setFullscreenHeight NOTIFY fullscreenHeightChanged)
     Q_PROPERTY(qreal toolbarHeight READ toolbarHeight WRITE setToolbarHeight NOTIFY toolbarHeightChanged)
     Q_PROPERTY(bool active READ active WRITE setActive NOTIFY activeChanged)
-    Q_PROPERTY(bool throttlePainting READ throttlePainting WRITE setThrottlePainting NOTIFY throttlePaintingChanged)
     Q_PROPERTY(bool chromeGestureEnabled READ chromeGestureEnabled WRITE setChromeGestureEnabled NOTIFY chromeGestureEnabledChanged)
     Q_PROPERTY(qreal chromeGestureThreshold READ chromeGestureThreshold WRITE setChromeGestureThreshold NOTIFY chromeGestureThresholdChanged)
     Q_PROPERTY(bool fixedToolbar READ fixedToolbar WRITE setFixedToolbar NOTIFY fixedToolbarChanged)
     Q_PROPERTY(bool loaded READ loaded NOTIFY loadedChanged)
     Q_PROPERTY(bool moving READ moving NOTIFY movingChanged)
-    Q_PROPERTY(QVariant resurrectedContentRect READ resurrectedContentRect WRITE setResurrectedContentRect NOTIFY resurrectedContentRectChanged)
     Q_PROPERTY(bool desktopMode READ desktopMode WRITE setDesktopMode NOTIFY desktopModeChanged)
     Q_PROPERTY(bool textSelectionActive READ textSelectionActive NOTIFY textSelectionActiveChanged FINAL)
     Q_PROPERTY(QObject* textSelectionController READ textSelectionController CONSTANT FINAL)
     Q_PROPERTY(bool selectionVisible READ textSelectionActive NOTIFY textSelectionActiveChanged FINAL)
     Q_PROPERTY(QString text READ selectedText NOTIFY selectionTextChanged FINAL)
     Q_PROPERTY(bool isPhoneNumber READ isPhoneNumber NOTIFY selectionTextChanged FINAL)
-    Q_PROPERTY(QString searchUri READ searchUri NOTIFY selectionTextChanged FINAL)
     Q_PROPERTY(qreal selectionStartX READ selectionStartX NOTIFY selectionHandlesUpdated FINAL)
     Q_PROPERTY(qreal selectionStartY READ selectionStartY NOTIFY selectionHandlesUpdated FINAL)
     Q_PROPERTY(qreal selectionEndX READ selectionEndX NOTIFY selectionHandlesUpdated FINAL)
@@ -233,7 +230,6 @@ public:
     QStringList faviconCandidates() const;
     void setFaviconCandidates(const QStringList &candidates);
     // A page advertised an OpenSearch description; offer it in settings.
-    void offerSearchEngine(const QString &title, const QString &url);
 
     qreal fullscreenHeight() const;
     void setFullscreenHeight(qreal height);
@@ -266,8 +262,6 @@ public:
     static void applySiteUaOverridesGlobally(const QString &json);
     static void applyJavaScriptBlocklistGlobally(const QString &json);
 
-    bool throttlePainting() const;
-    void setThrottlePainting(bool throttle);
 
     bool chromeGestureEnabled() const;
     void setChromeGestureEnabled(bool enabled);
@@ -281,32 +275,20 @@ public:
     bool loaded() const;
     bool moving() const;
 
-    QVariant resurrectedContentRect() const;
-    void setResurrectedContentRect(const QVariant &rect);
 
     bool dragging() const;
     bool desktopMode() const;
     void setDesktopMode(bool desktop);
     // Pick and apply the UA for a destination URL (handles per-site quirks
     // such as Google Maps); called from the navigation policy handler.
-    void applyUserAgentForUrl(const QUrl &url);
     // True when the URL gets a per-site UA quirk (Maps, Cloudflare hosts).
-    bool urlHasUaQuirk(const QUrl &url) const;
 
     // Popunder guard: after a popup is routed into this view, same-tab
     // scripted redirects to an unrelated site are blocked for a short window
     // (the reverse-popunder puts the real content in the popup and JS-redirects
     // the original tab to the ad).
-    void notePopupRouted(const QString &url);
-    bool popupGuardShouldBlock(const QString &url, int navigationType);
-    void applyInitialDeviceScale(qreal scale);
     // Leaves the fullscreen the page asked for, from the interface's close button.
     Q_INVOKABLE void exitFullscreen();
-    void notifyPagePinchConsumed();
-    void notifyPagePinchDeclined();
-    void updateObservedMediaState(bool audioActive, bool videoActive, bool fullscreenActive,
-                                  qreal volume, bool muted, bool volumeChangedByPage);
-    Q_INVOKABLE void setMediaMuted(bool muted);
 
     Q_INVOKABLE void loadTab(const QString &url, bool force = false);
     // Re-request the URL already showing (setUrl() dedupes such an assignment away).
@@ -314,7 +296,6 @@ public:
     // Warm the connection for a navigation the UI expects (link under the
     // finger, URL-bar completion). Fetches nothing; rate-limited per origin;
     // inert unless PACIFIC_PRECONNECT is set.
-    Q_INVOKABLE void preconnect(const QString &url);
     Q_INVOKABLE void grabToFile(const QSize &size);
     Q_INVOKABLE void grabThumbnail(const QSize &size);
 
@@ -332,11 +313,8 @@ public:
     Q_INVOKABLE void goBack();
     Q_INVOKABLE void goForward();
     // Cached preview file for a history entry, or empty when none was stored.
-    Q_INVOKABLE QString historyPreviewFor(const QUrl &url) const;
 
     // Screenshot cache for "instant Back": nothing else deletes these files.
-    static void removeHistoryPreviewsForTab(int tabId);
-    static void clearHistoryPreviews();
     Q_INVOKABLE void forceChrome(bool forced);
     Q_INVOKABLE void suspendView();
     Q_INVOKABLE void resumeView();
@@ -344,8 +322,6 @@ public:
     // shrank under it (virtual keyboard opening). No-op when nothing editable
     // is focused. See WPEWebContainer::setContentBottomInset().
     Q_INVOKABLE void revealFocusedEditable();
-    Q_INVOKABLE void sendAsyncMessage(const QString &name, const QVariant &data);
-    Q_INVOKABLE void addMessageListener(const QString &name);
     Q_INVOKABLE void clearSelection();
     Q_INVOKABLE void selectAll();
     Q_INVOKABLE void moveSelectionStart(qreal cssX, qreal cssY);
@@ -355,10 +331,6 @@ public:
     Q_INVOKABLE void handleJsSelectionUpdate(const QString &text, qreal startX, qreal startY, qreal endX, qreal endY);
 
     // Editable focus reported from cross-origin subframes (editableFocus bridge)
-    void handleSubframeEditableFocus(bool focused);
-    bool subframeEditableFocused() const { return m_subframeEditableFocus; }
-    void handleEditableFocusMoved(const QString& token);
-    void sendNativeTextViaKeys(const QString& text, int replaceBefore);
 
     // Find-in-page
     Q_INVOKABLE void findText(const QString &text, bool backwards = false);
@@ -385,6 +357,8 @@ public:
     QString permissionHost() const { return m_permissionHost; }
     QString permissionType() const { return m_permissionType; }
     Q_INVOKABLE void resolvePermission(bool allow);
+    // Forgets the answers given so far (Settings, "clear site permissions").
+    static void clearPermissionDecisions();
 
     QColor surroundColor() const { return m_themeColor.isValid() ? m_themeColor : m_backgroundColor; }
 
@@ -466,7 +440,6 @@ public:
     QObject* textSelectionController();
     QString selectedText() const;
     bool isPhoneNumber() const;
-    QString searchUri() const;
     qreal selectionStartX() const { return m_selectionStartX; }
     qreal selectionStartY() const { return m_selectionStartY; }
     qreal selectionEndX() const { return m_selectionEndX; }
@@ -487,13 +460,11 @@ signals:
     void fullscreenHeightChanged();
     void toolbarHeightChanged();
     void activeChanged();
-    void throttlePaintingChanged();
     void chromeGestureEnabledChanged();
     void chromeGestureThresholdChanged();
     void fixedToolbarChanged();
     void loadedChanged();
     void movingChanged();
-    void resurrectedContentRectChanged();
     void draggingChanged();
     void desktopModeChanged();
     // Fired on every new touch sequence (TouchBegin); forwarded by
@@ -576,7 +547,6 @@ private:
     int m_tabId = 0;
     bool m_painted = false;
     bool m_domContentLoaded = false;
-    bool m_subframeEditableFocus = false;
     bool m_chrome = true;
     bool m_forcedChrome = false;
     bool m_fullscreen = false;
@@ -588,7 +558,6 @@ private:
     bool m_mediaAudioActive = false;
     bool m_mediaVideoActive = false;
     qreal m_mediaVolume = 1.0;
-    bool m_mediaMuted = false;
     bool m_atYBeginning = true;
     bool m_atYEnd = false;
     QString m_favicon;
@@ -597,7 +566,6 @@ private:
     qreal m_toolbarHeight = 0.0;
     bool m_active = false;
     bool m_appForeground = true;
-    bool m_throttlePainting = false;
     bool m_chromeGestureEnabled = true;
     qreal m_chromeGestureThreshold = 10.0;
     bool m_fixedToolbar = false;
@@ -606,7 +574,6 @@ private:
     qint64 m_popupRoutedAtMs = 0;
     QString m_popupRoutedUrl;
     qreal m_lastScrollY = 0.0;
-    QVariant m_resurrectedContentRect;
     bool m_textSelectionActive = false;
     QString m_selectedText;
     qreal m_selectionStartX = 0.0;
@@ -708,7 +675,6 @@ private:
     void permissionRequested(int question, const QString &name, const QString &origin) override;
     void answerPermissions(const QString &key, bool allow);
     void showNextPermissionQuestion();
-    QHash<QString, qint64> m_preconnectSeen;
     bool m_saveLoginPending = false;
     QString m_saveLoginHost;
     QString m_saveLoginUsername;

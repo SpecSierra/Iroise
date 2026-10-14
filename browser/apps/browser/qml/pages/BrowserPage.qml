@@ -25,9 +25,6 @@ import "../shared" as Shared
 Page {
     id: browserPage
 
-    // Lets deeper settings pages pop straight back here (see ExtensionsPage).
-    objectName: "pacificBrowserPage"
-
     readonly property bool active: status == PageStatus.Active
     property bool tabPageActive
     // Capture at portrait aspect ratio to match the 2-column SFOS-style tab cards.
@@ -35,7 +32,6 @@ Page {
     readonly property size thumbnailSize: Qt.size(
         _thumbCaptureWidth,
         _thumbCaptureWidth * 1.5 - (Theme.iconSizeSmall + Theme.paddingMedium * 2))
-    property Item debug
     property Component tabPageComponent
     property string pendingOpenUrl: ""
     // overlay.active drops and returns every time a page is pushed over the
@@ -60,11 +56,7 @@ Page {
         id: homePageConf
         key: "/apps/pacific-browser/settings/home_page"
         defaultValue: "http://jolla.com"
-        // WebUtils.homePage used to read this key via MDConfItem, a no-op
-        // stub in this build — so a custom home page never took effect and
-        // the browser always opened jolla.com. This binding is the single
-        // dconf source: Component.onCompleted restores it on startup,
-        // onValueChanged covers the settings-page edit.
+        // Settings live in dconf and only QML reads them (ConfigurationValue); each one is pushed into C++.
         onValueChanged: WebUtils.setHomePage(value)
         Component.onCompleted: WebUtils.setHomePage(value)
     }
@@ -73,10 +65,7 @@ Page {
         id: privateBrowsingAutostart
         key: "/apps/pacific-browser/settings/browser_privatebrowsing_autostart"
         defaultValue: false
-        // "Start browser in private browsing mode". The settings page only ever
-        // wrote this key — nothing read it, so the switch did nothing. C++ can't
-        // read dconf here (MDConfItem is a no-op stub), so QML applies it.
-        // Startup only, deliberately no onValueChanged: flipping the switch
+        // "Start browser in private browsing mode". Startup only, deliberately no onValueChanged: flipping the switch
         // mid-session must not yank the current session into private mode.
         Component.onCompleted: if (value) webView.privateMode = true
     }
@@ -85,10 +74,7 @@ Page {
         id: closeAllTabsOnExit
         key: "/apps/pacific-browser/settings/close_all_tabs"
         defaultValue: false
-        // Same story as the two above: CloseEventFilter read this key with
-        // MDConfItem (a no-op stub) and was never instantiated in the first
-        // place, so tabs were never cleared. SettingManager now does the work
-        // on QCoreApplication::aboutToQuit; QML is the only source of the value.
+        // Acted on when the app quits (SettingManager).
         onValueChanged: Settings.setCloseAllTabsOnExit(value)
         Component.onCompleted: Settings.setCloseAllTabsOnExit(value)
     }
@@ -101,8 +87,6 @@ Page {
         // the init state handed to future WebProcesses. The old binding wrote
         // webView.contentItem.adBlockEnabled, which missed background tabs and
         // silently did nothing when settings was opened with no tab open.
-        // C++ cannot read dconf itself (MDConfItem is a no-op stub in this
-        // build), so this binding is the single source of the persisted state:
         // Component.onCompleted restores it on startup, onValueChanged covers
         // the settings-page switch.
         onValueChanged: webView.setAdBlockEnabled(value)
@@ -202,8 +186,7 @@ Page {
         // The live value is applied by webView._desiredContentBottomInset's
         // change handler (fires whenever this flag, the chrome state, or the
         // toolbar height changes). This restores the inset on startup, when no
-        // change handler has fired yet. C++ (MDConfItem stub) can't read dconf,
-        // so this binding is the single source of the persisted state.
+        // change handler has fired yet.
         Component.onCompleted: webView.setContentBottomInset(webView._desiredContentBottomInset)
     }
 
@@ -880,7 +863,6 @@ Page {
 
             webView.grabActivePage()
             if (webView.tabModel.activateTab(url)) {
-                webView.releaseActiveTabOwnership()
             } else if (!webView.tabModel.loaded) {
                 pendingOpenUrl = url
                 overlay.dismiss(true, !Qt.application.active /* immediate */)
@@ -893,12 +875,6 @@ Page {
             window.activate()
         }
         onActivateNewTabViewRequested: activateNewTabView()
-        onShowChrome: {
-            pageStack.pop(browserPage, PageStackAction.Immediate)
-            overlay.dismiss(true, !Qt.application.active /* immediate */)
-            bringToForeground(webView.chromeWindow)
-            window.activate()
-        }
         onOpenSettingsRequested: {
             pageStack.pop(browserPage, PageStackAction.Immediate)
             pageStack.push(Qt.resolvedUrl("SettingsPage.qml"), {}, PageStackAction.Immediate)
@@ -919,7 +895,6 @@ Page {
             pendingOpenUrl = ""
 
             if (webView.tabModel.activateTab(url)) {
-                webView.releaseActiveTabOwnership()
             } else {
                 webView.clearSelection()
                 webView.tabModel.newTab(url, true)
@@ -972,38 +947,9 @@ Page {
 
     Browser.ImageActionPanel { webView: webView }
 
-    // browser.notifications. The manager has no way to raise a system
-    // notification itself, so it asks here; without this, notifications.create
-    // resolved with an id and then showed nothing at all.
-    Nemo.Notification {
-        id: extensionNotification
-
-        appName: "Pacific"
-        isTransient: false
-    }
-
-    Connections {
-        target: WebExtensionManager
-        onNotificationRequested: {
-            extensionNotification.close()
-            extensionNotification.summary = title
-            extensionNotification.body = message
-            extensionNotification.previewSummary = title
-            extensionNotification.previewBody = message
-            extensionNotification.publish()
-        }
-    }
 
     Component.onCompleted: {
         chromeAutoHideTimer.restart()
         window.setBrowserCover(webView.tabModel)
-        if (Qt.application.arguments.indexOf("-debugMode") > 0) {
-            var component = Qt.createComponent(Qt.resolvedUrl("components/DebugOverlay.qml"))
-            if (component.status === Component.Ready) {
-                debug = component.createObject(browserPage)
-            } else {
-                console.warn("Failed to create DebugOverlay " + component.errorString())
-            }
-        }
     }
 }

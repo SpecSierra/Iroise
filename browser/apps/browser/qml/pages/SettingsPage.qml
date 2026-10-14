@@ -243,18 +243,6 @@ Page {
                 onClicked: pageStack.push("LoginsPage.qml")
             }
 
-            SettingsLinkItem {
-                // Ours, not the theme's: sailfish-default has no
-                // icon-m-extension. Silica tints it like any other.
-                iconSource: Qt.resolvedUrl("../icons/icon-m-extension.svg")
-                //: The label for the button for managing installed browser extensions
-                //% "Extensions"
-                text: qsTrId("pacific-la-extensions")
-                //% "Add-ons from addons.mozilla.org"
-                description: qsTrId("pacific-la-extensions_description")
-                onClicked: pageStack.push("ExtensionsPage.qml")
-            }
-
             SectionHeader {
                 //: Section Header for Appearance settings
                 //% "Appearance"

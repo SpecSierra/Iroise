@@ -56,13 +56,6 @@ DeclarativeWebUtils::~DeclarativeWebUtils()
     gSingleton = 0;
 }
 
-void DeclarativeWebUtils::handleDumpMemoryInfoRequest(const QString &fileName)
-{
-    if (qApp->arguments().contains("-debugMode")) {
-        emit dumpMemoryInfo(fileName);
-    }
-}
-
 void DeclarativeWebUtils::openUrl(const QString &url)
 {
 
@@ -90,11 +83,6 @@ void DeclarativeWebUtils::openUrl(const QString &url)
 void DeclarativeWebUtils::openSettings()
 {
     emit openSettingsRequested();
-}
-
-void DeclarativeWebUtils::updateWebEngineSettings()
-{
-    // WPE: browser settings applied via WebKit API
 }
 
 void DeclarativeWebUtils::setFirstUseDone(bool firstUseDone)
@@ -131,10 +119,7 @@ QString DeclarativeWebUtils::homePage() const
 
 void DeclarativeWebUtils::setHomePage(const QString &homePage)
 {
-    // The persisted value lives in dconf, but MDConfItem is a no-op stub in
-    // this build (value() always returns the default — the setting appeared
-    // to stick but the browser kept opening jolla.com). BrowserPage.qml's
-    // ConfigurationValue is the single dconf source and pushes it here.
+    // BrowserPage.qml reads the setting and pushes it here.
     if (m_homePage == homePage)
         return;
     m_homePage = homePage;
@@ -170,33 +155,3 @@ QString DeclarativeWebUtils::displayableUrl(const QString &fullUrl) const
     return !returnUrl.isEmpty() ? returnUrl : fullUrl;
 }
 
-QString DeclarativeWebUtils::pageName(const QString &fullUrl) const
-{
-    QUrl url(fullUrl);
-
-    // Leaving only the path (if present).
-    QString returnPageName = url.toDisplayString(QUrl::RemoveScheme
-                                                 | QUrl::RemoveAuthority
-                                                 | QUrl::RemoveQuery
-                                                 | QUrl::StripTrailingSlash);
-
-    return returnPageName.remove(0, returnPageName.lastIndexOf("/") + 1);
-}
-
-void DeclarativeWebUtils::handleObserve(const QString &message, const QVariant &data)
-{
-    const QVariantMap dataMap = data.toMap();
-    if (message == "clipboard:setdata") {
-        QClipboard *clipboard = QGuiApplication::clipboard();
-
-        // check if we copied password
-        if (!dataMap.value("private").toBool()) {
-            clipboard->setText(dataMap.value("data").toString());
-        }
-    }
-}
-
-void DeclarativeWebUtils::setRenderingPreferences()
-{
-    // WPE: rendering configured via WPEQtView
-}

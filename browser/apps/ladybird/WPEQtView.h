@@ -58,7 +58,6 @@ public:
     bool isLoading() const { return m_loading; }
     bool canGoForward() const { return m_canGoForward; }
 
-    Q_INVOKABLE void setUserAgent(const QString&) { }
     // Called before the item gets a size: show the view the engine opened for a page (LB_EMBED_NEW_VIEW).
     void adoptEngineView(quint32 view) { m_adoptedView = view; }
     Q_INVOKABLE void setDeviceScaleFactor(qreal scale);
@@ -85,12 +84,10 @@ public:
     bool pageWantsTextInput() const { return m_pageWantsTextInput; }
 
 public Q_SLOTS:
-    void setWebContentSurfaceVisible(bool) { }
     void goBack();
     void goForward();
     void reload();
     void stop();
-    void loadHtml(const QString& html, const QUrl& baseUrl = QUrl());
     void runJavaScript(const QString& script, const QJSValue& callback = QJSValue());
 
 Q_SIGNALS:

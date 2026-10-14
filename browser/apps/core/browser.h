@@ -34,13 +34,11 @@ public slots:
     void openSettings();
     void openNewTabView();
 
-    void showChrome();
 
     void cancelDownload(int transferId);
     void restartDownload(int transferid);
 
     // Debug helpers
-    void dumpMemoryInfo(const QString &fileName);
 
 private:
     BrowserPrivate *d_ptr;

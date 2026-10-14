@@ -16,13 +16,12 @@
 #include <QScopedPointer>
 #include <QJSValue>
 
-class MDConfItem;
 
 class SettingManager : public QObject
 {
     Q_OBJECT
-    Q_PROPERTY(int toolbarSmall READ toolbarSmall NOTIFY toolbarSmallChanged FINAL)
-    Q_PROPERTY(int toolbarLarge READ toolbarLarge NOTIFY toolbarLargeChanged FINAL)
+    Q_PROPERTY(int toolbarSmall READ toolbarSmall CONSTANT FINAL)
+    Q_PROPERTY(int toolbarLarge READ toolbarLarge CONSTANT FINAL)
 
 public:
     bool initialize();
@@ -45,40 +44,21 @@ public:
     Q_INVOKABLE void setAdBlockEnabled(bool enabled);
     Q_INVOKABLE bool isAdBlockEnabled() const;
 
-    // "Close all tabs on exit". Pushed from QML because C++ cannot read dconf
-    // in this build (MDConfItem here is a no-op stub that always returns the
-    // default), which is why the old CloseEventFilter check never fired.
+    // Settings live in dconf, which QML reads (ConfigurationValue) and pushes here.
+    // "Close all tabs on exit".
     Q_INVOKABLE void setCloseAllTabsOnExit(bool enabled);
-
-    // Website prefers-color-scheme. The QML root keeps us posted on whether
-    // the current ambience is dark; the color_scheme dconf key selects
-    // light / dark / follow-ambience.
+    // Whether pages should prefer their dark colours: the color_scheme setting, with the ambience when it says
+    // to follow it, as browser.qml works it out.
     Q_INVOKABLE void setAmbienceDark(bool dark);
-
-signals:
-    void toolbarSmallChanged();
-    void toolbarLargeChanged();
 
 private slots:
     void onAboutToQuit();
-    void setSearchEngine();
-    void handleObserve(const QString &message, const QVariant &data);
 
 private:
     explicit SettingManager(QObject *parent = 0);
 
-    void applyColorScheme();
-
-    MDConfItem *m_searchEngineConfItem;
-    MDConfItem *m_toolbarSmall;
-    MDConfItem *m_toolbarLarge;
-    MDConfItem *m_colorScheme;
     bool m_ambienceDark = false;
     bool m_closeAllTabsOnExit = false;
-
-    bool m_searchEnginesInitialized;
-
-    QStringList *m_addedSearchEngines;
 
     QScopedPointer<QJSValue> m_calculateCacheSizeCb;
     QScopedPointer<QJSValue> m_calculateSiteDataSizeCb;

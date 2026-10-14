@@ -14,7 +14,6 @@
 
 #include "declarativetabmodel.h"
 
-class DeclarativeWebContainer;
 
 class PersistentTabModel : public DeclarativeTabModel
 {
@@ -33,7 +32,7 @@ private slots:
     void tabsAvailable(const QList<Tab> &tabs);
 
 public:
-    PersistentTabModel(int nextTabId, DeclarativeWebContainer *webContainer = nullptr);
+    explicit PersistentTabModel(int nextTabId);
     ~PersistentTabModel();
 };
 

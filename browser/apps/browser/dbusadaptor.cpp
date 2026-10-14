@@ -38,11 +38,6 @@ void DBusAdaptor::restartTransfer(int transferId)
     m_BrowserService->restartTransfer(transferId);
 }
 
-void DBusAdaptor::dumpMemoryInfo(const QString &fileName)
-{
-    m_BrowserService->dumpMemoryInfo(fileName);
-}
-
 UIServiceDBusAdaptor::UIServiceDBusAdaptor(BrowserUIService *browserService)
     : QDBusAbstractAdaptor(browserService)
     , m_BrowserService(browserService)
@@ -62,14 +57,4 @@ void UIServiceDBusAdaptor::openSettings()
 void UIServiceDBusAdaptor::activateNewTabView()
 {
     m_BrowserService->activateNewTabView();
-}
-
-void UIServiceDBusAdaptor::requestTab(int tabId, const QString &url)
-{
-    m_BrowserService->requestTab(tabId, url);
-}
-
-void UIServiceDBusAdaptor::closeTab(int tabId)
-{
-    m_BrowserService->closeTab(tabId);
 }

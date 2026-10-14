@@ -20,10 +20,8 @@ BrowserWindow {
     id: window
 
     // Websites' prefers-color-scheme: explicit light/dark from Settings, or
-    // follow the ambience. Combined here in QML because SettingManager's
-    // MDConfItem is a no-op stub (its dconf read/watch never fires), so the
-    // setting must be read via ConfigurationValue and the *effective* dark
-    // flag pushed through Settings.setAmbienceDark.
+    // follow the ambience. Worked out here, where the setting is read, and
+    // pushed through Settings.setAmbienceDark.
     readonly property bool _ambienceDark: Theme.colorScheme === Theme.LightOnDark
     // 0 = light, 1 = dark, 2 = follow ambience (matches SettingsPage.qml)
     readonly property bool _websiteDark: colorSchemeConf.value === 1

@@ -33,7 +33,6 @@ public slots:
 
     void cancelTransfer(int transferId);
     void restartTransfer(int transferId);
-    void dumpMemoryInfo(const QString &fileName);
 private:
     BrowserService *m_BrowserService;
 };
@@ -50,9 +49,6 @@ public slots:
     void openUrl(const QStringList &args);
     void openSettings();
     void activateNewTabView();
-
-    void requestTab(int tabId, const QString &url);
-    void closeTab(int tabId);
 
 private:
     BrowserUIService *m_BrowserService;

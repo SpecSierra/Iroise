@@ -415,22 +415,6 @@ void WPEWebPage::captureThumbnail()
         emit fileGrabWritten(path);
     });
 }
-
-QString WPEWebPage::historyPreviewFor(const QUrl &url) const
-{
-    Q_UNUSED(url);
-    return QString();
-}
-
-void WPEWebPage::removeHistoryPreviewsForTab(int tabId)
-{
-    Q_UNUSED(tabId);
-}
-
-void WPEWebPage::clearHistoryPreviews()
-{
-}
-
 // --- Chrome -----------------------------------------------------------------
 
 void WPEWebPage::setChrome(bool chrome)
@@ -492,12 +476,6 @@ bool WPEWebPage::isPhoneNumber() const
     static const QRegularExpression re(QStringLiteral("^[+\\d][\\d\\s\\-().+]{6,}$"));
     return re.match(m_selectedText.trimmed()).hasMatch();
 }
-
-QString WPEWebPage::searchUri() const
-{
-    return QString();
-}
-
 // --- Text input -------------------------------------------------------------
 //
 // The engine says when an editable element has focus. While one has, this item takes the input method's focus,
@@ -665,13 +643,6 @@ void WPEWebPage::setFaviconCandidates(const QStringList &candidates)
         return;
     m_faviconCandidates = candidates;
 }
-
-void WPEWebPage::offerSearchEngine(const QString &title, const QString &url)
-{
-    Q_UNUSED(title);
-    Q_UNUSED(url);
-}
-
 qreal WPEWebPage::fullscreenHeight() const
 {
     return m_fullscreenHeight;
@@ -780,20 +751,6 @@ void WPEWebPage::applyJavaScriptBlocklistGlobally(const QString &json)
         s_noScriptSites.append(host.toString().trimmed().toLower());
     sendSiteOptions();
 }
-
-bool WPEWebPage::throttlePainting() const
-{
-    return m_throttlePainting;
-}
-
-void WPEWebPage::setThrottlePainting(bool throttle)
-{
-    if (m_throttlePainting == throttle)
-        return;
-    m_throttlePainting = throttle;
-    emit throttlePaintingChanged();
-}
-
 bool WPEWebPage::chromeGestureEnabled() const
 {
     return m_chromeGestureEnabled;
@@ -837,20 +794,6 @@ bool WPEWebPage::moving() const
 {
     return false;
 }
-
-QVariant WPEWebPage::resurrectedContentRect() const
-{
-    return m_resurrectedContentRect;
-}
-
-void WPEWebPage::setResurrectedContentRect(const QVariant &rect)
-{
-    if (m_resurrectedContentRect == rect)
-        return;
-    m_resurrectedContentRect = rect;
-    emit resurrectedContentRectChanged();
-}
-
 bool WPEWebPage::dragging() const
 {
     return false;
@@ -860,35 +803,6 @@ bool WPEWebPage::desktopMode() const
 {
     return m_desktopMode;
 }
-
-void WPEWebPage::applyUserAgentForUrl(const QUrl &url)
-{
-    Q_UNUSED(url);
-}
-
-bool WPEWebPage::urlHasUaQuirk(const QUrl &url) const
-{
-    Q_UNUSED(url);
-    return false;
-}
-
-void WPEWebPage::notePopupRouted(const QString &url)
-{
-    Q_UNUSED(url);
-}
-
-bool WPEWebPage::popupGuardShouldBlock(const QString &url, int navigationType)
-{
-    Q_UNUSED(url);
-    Q_UNUSED(navigationType);
-    return false;
-}
-
-void WPEWebPage::applyInitialDeviceScale(qreal scale)
-{
-    Q_UNUSED(scale);
-}
-
 void WPEWebPage::pageFullscreenChanged(bool fullscreen)
 {
     if (m_fullscreen == fullscreen)
@@ -926,52 +840,10 @@ void WPEWebPage::updateMediaState()
         emit mediaVideoActiveChanged();
     }
 }
-
-void WPEWebPage::notifyPagePinchConsumed()
-{
-}
-
-void WPEWebPage::notifyPagePinchDeclined()
-{
-}
-
-void WPEWebPage::updateObservedMediaState(bool audioActive, bool videoActive, bool fullscreenActive, qreal volume, bool muted, bool volumeChangedByPage)
-{
-    Q_UNUSED(audioActive);
-    Q_UNUSED(videoActive);
-    Q_UNUSED(fullscreenActive);
-    Q_UNUSED(volume);
-    Q_UNUSED(muted);
-    Q_UNUSED(volumeChangedByPage);
-}
-
-void WPEWebPage::setMediaMuted(bool muted)
-{
-    if (m_mediaMuted == muted)
-        return;
-    m_mediaMuted = muted;
-}
-
-void WPEWebPage::preconnect(const QString &url)
-{
-    Q_UNUSED(url);
-}
-
 void WPEWebPage::revealFocusedEditable()
 {
+    evaluate(QStringLiteral("(function(e){if(e&&e!==document.body)e.scrollIntoView({block:'center'});return 0})(document.activeElement)"));
 }
-
-void WPEWebPage::sendAsyncMessage(const QString &name, const QVariant &data)
-{
-    Q_UNUSED(name);
-    Q_UNUSED(data);
-}
-
-void WPEWebPage::addMessageListener(const QString &name)
-{
-    Q_UNUSED(name);
-}
-
 void WPEWebPage::clearSelection()
 {
     handleJsSelectionClear();
@@ -1037,23 +909,6 @@ void WPEWebPage::handleJsSelectionUpdate(const QString &text, qreal startX, qrea
     if (textChanged || handlesChanged || !wasActive)
         emit selectionHandlesUpdated();
 }
-
-void WPEWebPage::handleSubframeEditableFocus(bool focused)
-{
-    Q_UNUSED(focused);
-}
-
-void WPEWebPage::handleEditableFocusMoved(const QString& token)
-{
-    Q_UNUSED(token);
-}
-
-void WPEWebPage::sendNativeTextViaKeys(const QString& text, int replaceBefore)
-{
-    Q_UNUSED(text);
-    Q_UNUSED(replaceBefore);
-}
-
 void WPEWebPage::findText(const QString &text, bool backwards)
 {
     if (text.isEmpty()) {
@@ -1214,6 +1069,11 @@ static QHash<QString, bool> &sessionPermissionDecisions()
 {
     static QHash<QString, bool> decisions;
     return decisions;
+}
+
+void WPEWebPage::clearPermissionDecisions()
+{
+    sessionPermissionDecisions().clear();
 }
 
 void WPEWebPage::permissionRequested(int question, const QString &name, const QString &origin)
@@ -1451,6 +1311,7 @@ void WPEWebPage::setContextInfo(const QVariantMap &info)
 
 void WPEWebPage::clearContextInfo()
 {
+    setContextInfo(QVariantMap());
 }
 
 bool WPEWebPage::adBlockEnabled() const

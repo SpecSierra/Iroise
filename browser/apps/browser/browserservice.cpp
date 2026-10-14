@@ -11,28 +11,20 @@
  * You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 #include "browserservice.h"
-#include "browserservice_p.h"
-#include "declarativewebcontainer.h"
 #include "logging.h"
 
 #include "dbusadaptor.h"
 #include <QDBusConnection>
 #include <QDBusConnectionInterface>
-#include <QFileInfo>
 #include <QCoreApplication>
 
 namespace {
-const auto ProcDir = QStringLiteral("/proc/%1");
-const auto ErrorPidIsNotPrivileged = QStringLiteral("PID %1 is not in privileged group");
 const auto ErrorPidIsNotOwnerService = QStringLiteral("PID %1 is not the owner of '%2'");
-const auto ErrorPidIsNotTabOwner = QStringLiteral("PID %1 is not the owner of the tab");
 const auto SailfishBrowserUiService = QStringLiteral("org.pacific.browser.ui");
 const auto TransferEngine = QStringLiteral("org.nemo.transferengine");
 }
 
 #define GET_PID() connection().interface()->servicePid(message().service())
-
-using DBusContext = std::pair<QDBusMessage, QDBusConnection>;
 
 BrowserService::BrowserService(QObject * parent)
     : QObject(parent)
@@ -89,32 +81,6 @@ void BrowserService::restartTransfer(int transferId)
     emit restartTransferRequested(transferId);
 }
 
-void BrowserService::dumpMemoryInfo(const QString &fileName)
-{
-    // The privileged check will always fail when the browser is sandboxed
-    // It can still be useful for debugging purposes running outside the sandbox
-    if (!isPrivileged()) {
-        return;
-    }
-
-    emit dumpMemoryInfoRequested(fileName);
-}
-
-bool BrowserService::isPrivileged() const
-{
-    bool isPrivileged = !calledFromDBus();
-    if (!isPrivileged) {
-        uint pid = GET_PID();
-        QFileInfo info(ProcDir.arg(pid));
-        isPrivileged = info.group() == "privileged" || info.owner() == "root";
-    }
-    if (!isPrivileged) {
-        sendErrorReply(QDBusError::AccessDenied,
-                ErrorPidIsNotPrivileged.arg(GET_PID()));
-    }
-    return isPrivileged;
-}
-
 bool BrowserService::callerMatchesService(const QString &serviceName) const
 {
     uint callerServicePid = GET_PID().value();
@@ -132,19 +98,9 @@ bool BrowserService::callerMatchesService(const QString &serviceName) const
     return false;
 }
 
-BrowserUIServicePrivate::BrowserUIServicePrivate()
-    : registered(true)
-{
-}
-
 BrowserUIService::BrowserUIService(QObject *parent)
     : QObject(parent)
-    , QDBusContext()
-    , d_ptr(new BrowserUIServicePrivate())
 {
-    Q_D(BrowserUIService);
-
-    fprintf(stderr, "[BROWSER] UIServiceDBusAdaptor start\n"); fflush(stderr);
     new UIServiceDBusAdaptor(this);
     QDBusConnection connection = QDBusConnection::sessionBus();
     // Register only the object here. The caller acquires the bus name AFTER
@@ -153,16 +109,13 @@ BrowserUIService::BrowserUIService(QObject *parent)
     // isServiceRegistered here — either will process pending D-Bus messages
     // during construction, causing reentrancy crashes.
     if (!connection.registerObject("/ui", this)) {
-        d->registered = false;
+        m_registered = false;
     }
-    fprintf(stderr, "[BROWSER] UIService registered=%d\n", (int)d->registered); fflush(stderr);
 }
 
 bool BrowserUIService::registered() const
 {
-    Q_D(const BrowserUIService);
-
-    return d->registered;
+    return m_registered;
 }
 
 QString BrowserUIService::serviceName() const
@@ -187,54 +140,4 @@ void BrowserUIService::openSettings()
 void BrowserUIService::activateNewTabView()
 {
     emit activateNewTabViewRequested();
-}
-
-void BrowserUIService::requestTab(int tabId, const QString &url)
-{
-    DBusContext *context = new DBusContext(message(), connection());
-    setDelayedReply(true);
-    connect(DeclarativeWebContainer::instance(),
-            &DeclarativeWebContainer::requestTabWithOwnerAsyncResult,
-            this, &BrowserUIService::requestTabReturned, Qt::UniqueConnection);
-
-    qCDebug(lcCoreLog) << "Received open tab request";
-    DeclarativeWebContainer::instance()->requestTabWithOwnerAsync(tabId, url, getCallerPid(), static_cast<void*>(context));
-}
-
-void BrowserUIService::requestTabReturned(int tabId, void* context)
-{
-    DBusContext *dbusContext = static_cast<DBusContext*>(context);
-    if (context != nullptr) {
-        qCDebug(lcCoreLog) << "Replying to open tab request";
-        QDBusMessage reply = dbusContext->first.createReply(tabId);
-        dbusContext->second.send(reply);
-        delete dbusContext;
-    }
-    emit showChrome();
-}
-
-void BrowserUIService::closeTab(int tabId)
-{
-    // Let the process that created the tab also destroy it
-    if (!matchesOwner(DeclarativeWebContainer::instance()->tabOwner(tabId))) {
-        sendErrorReply(QDBusError::AccessDenied,
-                ErrorPidIsNotTabOwner.arg(GET_PID()));
-        return;
-    }
-
-    DeclarativeWebContainer::instance()->closeTab(tabId);
-    const QDBusMessage &msg = message();
-    QDBusMessage reply = msg.createReply();
-    connection().send(reply);
-}
-
-uint BrowserUIService::getCallerPid() const
-{
-    return calledFromDBus() ? GET_PID() : 0;
-}
-
-bool BrowserUIService::matchesOwner(uint pid) const
-{
-    uint caller = getCallerPid();
-    return caller != 0 && caller == pid;
 }

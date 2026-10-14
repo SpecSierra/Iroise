@@ -49,7 +49,6 @@ class WPEWebContainer : public QQuickItem
     Q_PROPERTY(QString url READ url NOTIFY urlChanged FINAL)
     Q_PROPERTY(bool privateMode READ privateMode WRITE setPrivateMode NOTIFY privateModeChanged FINAL)
     Q_PROPERTY(bool activeTabRendered READ activeTabRendered NOTIFY activeTabRenderedChanged FINAL)
-    Q_PROPERTY(QQmlComponent *webPageComponent READ webPageComponent WRITE setWebPageComponent NOTIFY webPageComponentChanged FINAL)
     Q_PROPERTY(QObject *chromeWindow READ chromeWindow WRITE setChromeWindow NOTIFY chromeWindowChanged FINAL)
     Q_PROPERTY(bool readyToPaint READ readyToPaint WRITE setReadyToPaint NOTIFY readyToPaintChanged FINAL)
     Q_PROPERTY(Qt::ScreenOrientation pendingWebContentOrientation READ pendingWebContentOrientation NOTIFY pendingWebContentOrientationChanged FINAL)
@@ -81,8 +80,6 @@ public:
     void setPrivateMode(bool p);
     bool activeTabRendered() const { return m_activeTabRendered; }
     bool selectionActive() const;
-    QQmlComponent *webPageComponent() const { return m_webPageComponent; }
-    void setWebPageComponent(QQmlComponent *c);
     QObject *chromeWindow() const { return m_chromeWindow; }
     void setChromeWindow(QObject *w);
     bool readyToPaint() const { return m_readyToPaint; }
@@ -100,12 +97,9 @@ public:
     Q_INVOKABLE void goBack();
     Q_INVOKABLE int activateTab(int tabId, const QString &url = QString());
     Q_INVOKABLE void closeTab(int tabId);
-    Q_INVOKABLE void releaseActiveTabOwnership();
     Q_INVOKABLE void updateContentOrientation(Qt::ScreenOrientation orientation);
     Q_INVOKABLE void applyContentOrientation(Qt::ScreenOrientation orientation);
-    // Ad-block toggle, applied process-wide (every live page + future
-    // WebProcesses). Called from BrowserPage.qml's dconf binding — C++ can't
-    // read dconf itself (MDConfItem is a no-op stub in this build).
+    // Ad-block toggle for the whole engine, pushed from BrowserPage.qml's setting.
     Q_INVOKABLE void setAdBlockEnabled(bool enabled);
     Q_INVOKABLE void setAdBlockAllowlist(const QString &json);
     // Cookie-banner auto-reject (autoconsent) toggle, same dconf-driven shape.
@@ -152,7 +146,6 @@ Q_SIGNALS:
     void thumbnailPathChanged();
     void privateModeChanged();
     void activeTabRenderedChanged();
-    void webPageComponentChanged(QQmlComponent *newComponent);
     void chromeWindowChanged();
     void chromeExposed();
     void readyToPaintChanged();
@@ -183,7 +176,6 @@ private Q_SLOTS:
     void onPagePaintedChanged();
 
 private:
-    void configureSandboxPaths();
     void ensureContainerHasUsableSize();
     void trackParentSize();
     void initializeTabModels(int nextTabId);
@@ -224,7 +216,6 @@ private:
     int m_pressureKeepMin = 2;              // PACIFIC_TAB_DISCARD_KEEP_MIN
     int m_memFreeThresholdMb = 400;         // PACIFIC_TAB_DISCARD_MEMFREE_MB
     bool m_underMemoryPressure = false;
-    QPointer<QQmlComponent> m_webPageComponent;
     QPointer<QObject> m_chromeWindow;
     QPointer<QQuickItem> m_rotationHandler;
     QPointer<QQuickWindow> m_foregroundWindow;

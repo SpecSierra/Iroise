@@ -9,7 +9,6 @@ QT += quick
 SOURCES += \
     $$PWD/browser.cpp \
     $$PWD/datafetcher.cpp \
-    $$PWD/declarativewebcontainer.cpp \
     $$PWD/downloadmanager.cpp \
     $$PWD/declarativewebutils.cpp \
     $$PWD/faviconmanager.cpp \
@@ -23,7 +22,6 @@ HEADERS += \
     $$PWD/browser.h \
     $$PWD/browser_p.h \
     $$PWD/datafetcher.h \
-    $$PWD/declarativewebcontainer.h \
     $$PWD/declarativewebutils.h \
     $$PWD/downloadmanager.h \
     $$PWD/downloadstatus.h \
@@ -31,5 +29,4 @@ HEADERS += \
     $$PWD/inputregion.h \
     $$PWD/logging.h \
     $$PWD/secureaction.h \
-    $$PWD/settingmanager.h \
-    $$PWD/mdconfitem.h
+    $$PWD/settingmanager.h

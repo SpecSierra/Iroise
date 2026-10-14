@@ -18,7 +18,6 @@
 
 #include "tab.h"
 
-class DeclarativeWebContainer;
 
 class DeclarativeTabModel : public QAbstractListModel
 {
@@ -30,7 +29,7 @@ protected:
     Q_PROPERTY(bool loaded READ loaded NOTIFY loadedChanged FINAL)
 
 public:
-    DeclarativeTabModel(int nextTabId, DeclarativeWebContainer *webContainer = 0);
+    explicit DeclarativeTabModel(int nextTabId);
     ~DeclarativeTabModel();
 
     enum TabRoles {
@@ -59,7 +58,8 @@ public:
     bool activateTabById(int tabId);
     void removeTabById(int tabId, bool activeTab);
     // C++ only: parentId and browsingContext better not to leak to QML side.
-    int newTab(const QString &url, int parentId, uintptr_t browsingContext, bool hidden, bool fromExternal);
+    // parentId: the tab whose page opened this one, which it goes back to when closed (0 for none).
+    int newTab(const QString &url, int parentId, bool hidden, bool fromExternal);
 
     // From QAbstractListModel
     int rowCount(const QModelIndex & parent = QModelIndex()) const override;
@@ -110,7 +110,6 @@ protected:
     int shiftNewActiveIndex(int oldIndex, int newIndex);
 
     // Used from the tab model unit tests only.
-    void setWebContainer(DeclarativeWebContainer *webContainer);
 
     bool matches(const QUrl &inputUrl, QString urlStr) const;
 
@@ -122,12 +121,10 @@ protected:
 
     bool m_unittestMode;
 
-    QPointer<DeclarativeWebContainer> m_webContainer;
 
     friend class tst_declarativehistorymodel;
     friend class tst_declarativetabmodel;
     friend class tst_webview;
-    friend class tst_declarativewebcontainer;
     friend class tst_persistenttabmodel;
 };
 #endif // DECLARATIVETABMODEL_H

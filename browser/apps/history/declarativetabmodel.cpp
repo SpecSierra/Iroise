@@ -17,7 +17,6 @@
 #include <QStringList>
 #include <QUrl>
 
-#include "declarativewebcontainer.h"
 #include "WPEWebPage.h"
 #include "declarativetabmodel.h"
 
@@ -35,13 +34,12 @@ namespace  {
     }
 }
 
-DeclarativeTabModel::DeclarativeTabModel(int nextTabId, DeclarativeWebContainer *webContainer)
-    : QAbstractListModel(webContainer)
+DeclarativeTabModel::DeclarativeTabModel(int nextTabId)
+    : QAbstractListModel()
     , m_activeTabId(0)
     , m_loaded(false)
     , m_nextTabId(nextTabId)
     , m_unittestMode(false)
-    , m_webContainer(webContainer)
 {
 }
 
@@ -195,10 +193,10 @@ void DeclarativeTabModel::closeActiveTab()
 
 int DeclarativeTabModel::newTab(const QString &url, bool fromExternal)
 {
-    return newTab(url, 0, 0, false, fromExternal);
+    return newTab(url, 0, false, fromExternal);
 }
 
-int DeclarativeTabModel::newTab(const QString &url, int parentId, uintptr_t browsingContext, bool hidden, bool fromExternal)
+int DeclarativeTabModel::newTab(const QString &url, int parentId, bool hidden, bool fromExternal)
 {
     // When browser opens without tabs
     if ((url.isEmpty() || url == QStringLiteral("about:blank")) && m_tabs.isEmpty())
@@ -214,14 +212,12 @@ int DeclarativeTabModel::newTab(const QString &url, int parentId, uintptr_t brow
     }
 
     Tab tab(nextTabId(), url, QString(), QString(), hidden);
-    tab.setBrowsingContext(browsingContext);
     tab.setParentId(parentId);
 
     int index = 0;
 
     if (parentId > 0) {
-        int parentTabId = m_webContainer->tabId((uint32_t)parentId);
-        index = findTabIndex(parentTabId) + 1;
+        index = findTabIndex(parentId) + 1;
         if (index == 0) {
             index = m_tabs.count();
         }
@@ -431,11 +427,6 @@ void DeclarativeTabModel::updateActiveTab(const Tab &activeTab, bool reload)
     }
 }
 
-void DeclarativeTabModel::setWebContainer(DeclarativeWebContainer *webContainer)
-{
-    m_webContainer = webContainer;
-}
-
 bool DeclarativeTabModel::matches(const QUrl &inputUrl, QString urlStr) const
 {
     if (urlStr.isEmpty()) {
@@ -469,18 +460,9 @@ bool DeclarativeTabModel::matches(const QUrl &inputUrl, QString urlStr) const
 int DeclarativeTabModel::nextActiveTabIndex(int index)
 {
     if (!m_tabs.isEmpty() && index >= 0 && index < m_tabs.count()) {
-        uint32_t parentId = m_tabs.at(index).parentId();
-        int tabId = 0;
-        if (parentId > 0) {
-            tabId = m_webContainer->tabId(parentId);
-            // Parent tab has been closed, active previously used tab instead.
-            if (tabId == 0) {
-                tabId = m_webContainer->previouslyUsedTabId();
-            }
-        } else {
-            tabId = m_webContainer->previouslyUsedTabId();
-        }
-        index = findTabIndex(tabId);
+        // A tab a page opened goes back to that page's tab; any other to the one before it.
+        int opener = findTabIndex(m_tabs.at(index).parentId());
+        index = opener >= 0 ? opener : index - 1;
     } else {
         --index;
     }

@@ -257,8 +257,6 @@ extern "C" Q_DECL_EXPORT bool pacificBrowserRuntimeStart(QQuickView *view,
                          browser, &Browser::openUrl);
         QObject::connect(service, &BrowserService::activateNewTabViewRequested,
                          browser, &Browser::openNewTabView);
-        QObject::connect(service, &BrowserService::dumpMemoryInfoRequested,
-                         browser, &Browser::dumpMemoryInfo);
         QObject::connect(service, &BrowserService::cancelTransferRequested,
                          browser, &Browser::cancelDownload);
         QObject::connect(service, &BrowserService::restartTransferRequested,
@@ -272,8 +270,6 @@ extern "C" Q_DECL_EXPORT bool pacificBrowserRuntimeStart(QQuickView *view,
                          browser, &Browser::openSettings);
         QObject::connect(uiService, &BrowserUIService::activateNewTabViewRequested,
                          browser, &Browser::openNewTabView);
-        QObject::connect(uiService, &BrowserUIService::showChrome,
-                         browser, &Browser::showChrome);
     }
 
     browser->load();

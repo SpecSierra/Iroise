@@ -53,8 +53,7 @@ SearchEngineModel::SearchEngineModel(QObject *parent)
     // Engines discovered on websites but not installed are deliberately not
     // persisted: they cost one <link> scan to rediscover on the next visit,
     // and a stale list of offers from sites the user no longer visits is worse
-    // than no list. (MDConfItem cannot store them here anyway -- it is a no-op
-    // stub in this build; see mdconfitem.h.) Installed engines persist as the
+    // than no list. Installed engines persist as the
     // XML files themselves, under getOpenSearchConfigPath().
 }
 
