@@ -25,7 +25,9 @@
 static const EGLint pixelFormatBgra8888 = 5;
 // NB: The software read and write bits are what make gralloc lay the buffer out as plain rows. Without them the
 //     Mali gralloc picks AFBC, a compressed layout, and the engine's uncompressed pixels would be read as that.
-static const EGLint usageSoftwareReadWriteOften = 0x33;
+//     "Rarely", not "often": for "often" Qualcomm's gralloc hands out CPU-cached memory, and the GPU's frames are
+//     then lost behind stale cache lines. Must match the engine's usage (LibGfx/GLESContext.cpp).
+static const EGLint usageSoftwareReadWriteRarely = 0x22;
 static const EGLint usageGpuTexture = 0x100;
 
 // The engine cycles through two or three buffers per view, and replaces them all when the view is resized.
@@ -135,7 +137,7 @@ bool DirectFrameTextures::import(QQuickWindow* window, const LadybirdFrame& fram
     Hybris& egl = hybris();
     const int width = frame.bufferSize.width();
     const int height = frame.bufferSize.height();
-    const EGLint usage = usageGpuTexture | usageSoftwareReadWriteOften;
+    const EGLint usage = usageGpuTexture | usageSoftwareReadWriteRarely;
 
     // A gralloc buffer of our size tells us how this device lays such a buffer out, and its handle is the one
     // we copy. The buffer itself is given back as soon as we have the copy.
@@ -209,6 +211,15 @@ QSGTexture* DirectFrameTextures::textureFor(QQuickWindow* window, const Ladybird
     auto found = m_textures.find(frame.bufferId);
     if (found != m_textures.end()) {
         found->lastUsed = ++m_useCounter;
+        // NB: A buffer comes back with new pixels. Mali shows them from the texture as it is; Adreno keeps showing
+        //     what it read the first time unless the image is bound to the texture again (as Android does per frame).
+        if (found->serial != frame.serial) {
+            found->serial = frame.serial;
+            QOpenGLFunctions* gl = QOpenGLContext::currentContext()->functions();
+            gl->glBindTexture(GL_TEXTURE_2D, found->textureId);
+            hybris().imageTargetTexture(GL_TEXTURE_2D, found->image);
+            window->resetOpenGLState();
+        }
         return found->texture;
     }
     if (m_refused.contains(frame.bufferId))
@@ -235,6 +246,7 @@ QSGTexture* DirectFrameTextures::textureFor(QQuickWindow* window, const Ladybird
         return nullptr;
     }
     texture.lastUsed = ++m_useCounter;
+    texture.serial = frame.serial;
     m_textures.insert(frame.bufferId, texture);
     ++m_generation;
     return texture.texture;

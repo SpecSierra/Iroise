@@ -237,7 +237,8 @@ void LadybirdEngine::receive()
         if (static_cast<size_t>(length) >= sizeof(lb_embed_header)) {
             const lb_embed_header& header = buffer.header;
             if (header.type == LB_EMBED_FRAME) {
-                handleFrame(header, fd);
+                size_t textLength = qMin(static_cast<size_t>(header.text_length), static_cast<size_t>(length) - sizeof(lb_embed_header));
+                handleFrame(header, fd, QByteArray(buffer.text, static_cast<int>(textLength)).toULongLong());
             } else if (header.type == LB_EMBED_DOWNLOAD) {
                 size_t textLength = qMin(static_cast<size_t>(header.text_length), static_cast<size_t>(length) - sizeof(lb_embed_header));
                 DownloadModel::instance()->report(header.a, header.b, QByteArray(buffer.text, static_cast<int>(textLength)));
@@ -262,15 +263,17 @@ void LadybirdEngine::receive()
     }
 }
 
-const LadybirdEngine::Mapping* LadybirdEngine::mappingFor(int fd, size_t length)
+const LadybirdEngine::Mapping* LadybirdEngine::mappingFor(int fd, size_t length, quint64 identity)
 {
     // Every frame message carries a fresh duplicate of the buffer's file descriptor, so recognize the buffer
-    // behind it by its inode.
+    // behind it by the identity the engine gives it, or else by its inode. NB: Before Linux 5.3 every dma-buf has
+    // the same inode (the Xperia 10 II's 4.14), and the first buffer would be shown for all of them.
     struct stat status;
     if (::fstat(fd, &status) < 0)
         return nullptr;
     for (Mapping& mapping : m_mappings) {
-        if (mapping.device == status.st_dev && mapping.inode == status.st_ino && mapping.length == length) {
+        bool same = identity ? mapping.identity == identity : (mapping.device == status.st_dev && mapping.inode == status.st_ino);
+        if (same && mapping.length == length) {
             mapping.lastUsed = m_frameSerial;
             return &mapping;
         }
@@ -305,6 +308,7 @@ const LadybirdEngine::Mapping* LadybirdEngine::mappingFor(int fd, size_t length)
     mapping.id = m_nextBufferId++;
     mapping.device = status.st_dev;
     mapping.inode = status.st_ino;
+    mapping.identity = identity;
     mapping.pixels = static_cast<uchar*>(pixels);
     mapping.length = length;
     mapping.lastUsed = m_frameSerial;
@@ -312,13 +316,13 @@ const LadybirdEngine::Mapping* LadybirdEngine::mappingFor(int fd, size_t length)
     return &m_mappings.last();
 }
 
-void LadybirdEngine::handleFrame(const lb_embed_header& header, int fd)
+void LadybirdEngine::handleFrame(const lb_embed_header& header, int fd, quint64 identity)
 {
     LadybirdEngineClient* client = m_views.value(header.view);
     if (!client || fd < 0 || header.c < 1 || header.d < 1 || header.e < static_cast<uint32_t>(header.c) * 4)
         return;
     ++m_frameSerial;
-    const Mapping* mapping = mappingFor(fd, static_cast<size_t>(header.e) * static_cast<size_t>(header.d));
+    const Mapping* mapping = mappingFor(fd, static_cast<size_t>(header.e) * static_cast<size_t>(header.d), identity);
     if (!mapping)
         return;
 

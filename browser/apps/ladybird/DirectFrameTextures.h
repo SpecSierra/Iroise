@@ -45,6 +45,7 @@ private:
         uint textureId = 0;
         QSGTexture* texture = nullptr;
         quint64 lastUsed = 0;
+        quint64 serial = 0;
     };
 
     bool import(QQuickWindow*, const LadybirdFrame&, Texture&);

@@ -28,10 +28,10 @@ index 1373f954..4a92e6b6 100644
      target_link_libraries(LibGfx PUBLIC Vulkan::Headers)
 diff --git a/Libraries/LibGfx/GLESContext.cpp b/Libraries/LibGfx/GLESContext.cpp
 new file mode 100644
-index 00000000..2315d860
+index 00000000..5bd33ba6
 --- /dev/null
 +++ b/Libraries/LibGfx/GLESContext.cpp
-@@ -0,0 +1,352 @@
+@@ -0,0 +1,359 @@
 +/*
 + * Pacific: the Sailfish OS front end for the Ladybird engine.
 + *
@@ -51,6 +51,7 @@ index 00000000..2315d860
 +#include <stdlib.h>
 +#include <string.h>
 +#include <unistd.h>
++#include <AK/Atomic.h>
 +
 +namespace Gfx {
 +
@@ -59,7 +60,9 @@ index 00000000..2315d860
 +static constexpr EGLint android_pixel_format_bgra_8888 = 5;
 +// NB: The software read and write bits make the Mali gralloc lay the buffer out as plain rows rather than AFBC, which
 +//     is what lets other processes read it as an ordinary BGRA dma-buf.
-+static constexpr EGLint gralloc_usage = 0x33 /* software read/write often */ | 0x100 /* texture */ | 0x200 /* render target */;
++// NB: Software read/write keeps the buffer in plain rows (no AFBC or UBWC compression). "Rarely": for "often" Qualcomm's
++//     gralloc hands out CPU-cached memory, and frames rendered by the GPU get lost behind stale cache lines.
++static constexpr EGLint gralloc_usage = 0x22 /* software read/write rarely */ | 0x100 /* texture */ | 0x200 /* render target */;
 +
 +namespace {
 +
@@ -285,6 +288,9 @@ index 00000000..2315d860
 +    auto const& f = gl();
 +    auto image = adopt_ref(*new GLESImage(context));
 +    image->size = size;
++    // Unique across the processes that hand buffers on: the process id above a count of this process's buffers.
++    static Atomic<u32> s_buffer_count;
++    image->identity = (static_cast<u64>(getpid()) << 32) | ++s_buffer_count;
 +
 +    EGLint stride = 0;
 +    EGLClientBuffer buffer = nullptr;
@@ -375,6 +381,7 @@ index 00000000..2315d860
 +        .pitch = image.pitch,
 +        .modifier = DRM_FORMAT_MOD_LINEAR,
 +        .file = IPC::File::adopt_fd(fd),
++        .identity = image.identity,
 +    };
 +}
 +
@@ -386,10 +393,10 @@ index 00000000..2315d860
 +}
 diff --git a/Libraries/LibGfx/GLESContext.h b/Libraries/LibGfx/GLESContext.h
 new file mode 100644
-index 00000000..ee39a433
+index 00000000..75621cfd
 --- /dev/null
 +++ b/Libraries/LibGfx/GLESContext.h
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,62 @@
 +/*
 + * Pacific: the Sailfish OS front end for the Ladybird engine.
 + *
@@ -437,6 +444,7 @@ index 00000000..ee39a433
 +    IntSize size;
 +    size_t pitch { 0 };
 +    int dmabuf_fd { -1 };
++    u64 identity { 0 };
 +    void* native_buffer { nullptr };
 +    void* egl_image { nullptr };
 +    u32 texture { 0 };
@@ -532,11 +540,40 @@ index 96fa13b9..a1323012 100644
  #ifdef USE_DIRECTX
      static ErrorOr<NonnullRefPtr<PaintingSurface>> create_from_d3d_texture(NonnullRefPtr<SkiaBackendContext>, NonnullRefPtr<D3DSharedTexture>, Origin = Origin::TopLeft);
  #endif
+diff --git a/Libraries/LibGfx/SharedImage.cpp b/Libraries/LibGfx/SharedImage.cpp
+index ef8ddc7b..1207c1d0 100644
+--- a/Libraries/LibGfx/SharedImage.cpp
++++ b/Libraries/LibGfx/SharedImage.cpp
+@@ -101,6 +101,7 @@ ErrorOr<void> encode(Encoder& encoder, Gfx::LinuxDmaBufHandle const& dmabuf)
+     TRY(encoder.encode(dmabuf.pitch));
+     TRY(encoder.encode(dmabuf.modifier));
+     TRY(encoder.encode(TRY(IPC::File::clone_fd(dmabuf.file.fd()))));
++    TRY(encoder.encode(dmabuf.identity));
+     return {};
+ }
+ 
+@@ -115,6 +116,7 @@ ErrorOr<Gfx::LinuxDmaBufHandle> decode(Decoder& decoder)
+         .pitch = TRY(decoder.decode<size_t>()),
+         .modifier = TRY(decoder.decode<u64>()),
+         .file = TRY(decoder.decode<IPC::File>()),
++        .identity = TRY(decoder.decode<u64>()),
+     };
+ }
+ 
 diff --git a/Libraries/LibGfx/SharedImage.h b/Libraries/LibGfx/SharedImage.h
-index d05e33ae..efd083d5 100644
+index d05e33ae..67fa0430 100644
 --- a/Libraries/LibGfx/SharedImage.h
 +++ b/Libraries/LibGfx/SharedImage.h
-@@ -41,6 +41,11 @@ struct WindowsD3DHandle {
+@@ -32,6 +32,8 @@ struct LinuxDmaBufHandle {
+     size_t pitch;
+     u64 modifier;
+     IPC::File file;
++    // Names the buffer for as long as it lives, unlike the file's inode: before Linux 5.3 every dma-buf has the same one.
++    u64 identity { 0 };
+ };
+ 
+ // NOTE: The texture behind the handle is always DXGI_FORMAT_R8G8B8A8_UNORM with premultiplied alpha.
+@@ -41,6 +43,11 @@ struct WindowsD3DHandle {
  };
  #endif
  

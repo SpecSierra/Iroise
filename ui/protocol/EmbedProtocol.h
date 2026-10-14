@@ -74,7 +74,8 @@ enum lb_embed_message_type {
                                          option says otherwise */
 
     /* engine -> Silica app */
-    LB_EMBED_FRAME = 101,   /* a, b = painted size; c, d = buffer size; e = row pitch in bytes; fd = dma-buf (BGRA) */
+    LB_EMBED_FRAME = 101,   /* a, b = painted size; c, d = buffer size; e = row pitch in bytes; fd = dma-buf (BGRA);
+                               text = the buffer's identity, a decimal number that names it for its lifetime */
     LB_EMBED_URL = 102,     /* text = current URL */
     LB_EMBED_TITLE = 103,   /* text = page title */
     LB_EMBED_LOADING = 104, /* a = 1 when a load starts, 0 when it finishes */

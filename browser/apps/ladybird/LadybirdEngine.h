@@ -74,6 +74,7 @@ private:
     struct Mapping {
         dev_t device;
         ino_t inode;
+        quint64 identity;
         uchar* pixels;
         size_t length;
         int fd;
@@ -90,8 +91,8 @@ private:
 
     void start();
     void write(const lb_embed_header&, const QByteArray& text);
-    void handleFrame(const lb_embed_header&, int fd);
-    const Mapping* mappingFor(int fd, size_t length);
+    void handleFrame(const lb_embed_header&, int fd, quint64 identity);
+    const Mapping* mappingFor(int fd, size_t length, quint64 identity);
 
     QProcess m_process;
     QString m_socketPath;

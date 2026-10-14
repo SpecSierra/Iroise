@@ -83,7 +83,9 @@ void EmbeddedHost::send_frame(u32 view, Gfx::LinuxDmaBufHandle const& dmabuf, Gf
     header.c = dmabuf.size.width();
     header.d = dmabuf.size.height();
     header.e = static_cast<u32>(dmabuf.pitch);
-    send(header, {}, dmabuf.file.fd());
+    auto identity = ByteString::number(dmabuf.identity);
+    header.text_length = static_cast<u32>(identity.length());
+    send(header, identity, dmabuf.file.fd());
 }
 
 void EmbeddedHost::send_numbers(u32 view, lb_embed_message_type type, i32 a, i32 b)
