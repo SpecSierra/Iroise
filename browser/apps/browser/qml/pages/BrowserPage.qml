@@ -171,22 +171,6 @@ Page {
         Component.onCompleted: webView.setSiteUaOverrides(value)
     }
 
-    ConfigurationValue {
-        id: viewportInsetConfig
-        key: "/apps/harbour-pacific/settings/viewport_inset_toolbar"
-        // NB: Off by default. With it on the page changes height whenever the
-        // toolbar hides or shows, and the engine lays the whole page out again
-        // for a new height: about 70 ms on a light page, over 700 ms measured on
-        // a heavy one, during which the strip the toolbar uncovered has nothing
-        // in it. Off, the page always reaches the bottom of the screen and the
-        // toolbar only covers it.
-        defaultValue: false
-        // The live value is applied by webView._desiredContentBottomInset's
-        // change handler (fires whenever this flag, the chrome state, or the
-        // toolbar height changes). This restores the inset on startup, when no
-        // change handler has fired yet.
-        Component.onCompleted: webView.setContentBottomInset(webView._desiredContentBottomInset)
-    }
 
     function load(url, title) {
         overlay.dismiss(true)
@@ -349,6 +333,9 @@ Page {
         y: _top
         width: browserPage.width - _left - _right
         height: browserPage.height - _top - _bottom
+        // With no tab there is still an empty page (WebContainer makes one to be ready), which would show through
+        // the start page's backdrop, the wallpaper lipstick draws behind the window.
+        opacity: startPage.visible ? 0 : 1
 
         Shared.WebView {
             id: webView
@@ -360,15 +347,14 @@ Page {
             toolbarHeight: overlay.animator.opened ? overlay.toolBar.rowHeight : 0
             rotationHandler: browserPage
 
-            // Bottom URL-bar viewport inset (dconf: viewport_inset_toolbar, default
-            // OFF). When enabled, reserve the toolbar strip in the page's layout
-            // viewport while the chrome is settled-visible, so position:fixed bottom
+            // Bottom URL-bar viewport inset: reserve the toolbar strip in the page's
+            // layout viewport while the chrome is settled-visible, so position:fixed bottom
             // content (hover buttons, cookie bars, chat bubbles) lays out above the
             // URL bar instead of behind it. Gated on the *settled* "chromeVisible"
             // state so the viewport relayouts exactly once per show/hide — the drag
             // and fling states are distinct, so scrolling does not reflow per frame.
             // Fullscreen video keeps the full-height viewport. The value is applied
-            // by the handler here plus the config block's Component.onCompleted
+            // by the handler here plus the page's Component.onCompleted
             // (startup); C++ clamps and no-ops unchanged values.
             //
             // The virtual keyboard reserves its own strip on the same path, always
@@ -378,8 +364,7 @@ Page {
             // double-count the overlap and leave a dead band above the keyboard.
             readonly property real _desiredContentBottomInset:
                 Math.max(
-                    (viewportInsetConfig.value
-                     && overlay.animator.state === "chromeVisible"
+                    (overlay.animator.state === "chromeVisible"
                      // The toolbar is about to go: the page gets its strip now and
                      // paints it while the toolbar still covers it.
                      && !overlay.animator.hidePending
@@ -919,5 +904,7 @@ Page {
     Component.onCompleted: {
         chromeAutoHideTimer.restart()
         window.setBrowserCover(webView.tabModel)
+        // The inset's change handler (webView) has nothing to react to yet.
+        webView.setContentBottomInset(webView._desiredContentBottomInset)
     }
 }

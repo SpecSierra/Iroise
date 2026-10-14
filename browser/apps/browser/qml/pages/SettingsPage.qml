@@ -247,19 +247,6 @@ Page {
                 onClicked: fixedToolbarConfig.value = !fixedToolbarConfig.value
             }
 
-            TextSwitch {
-                //: Reserve room for the toolbar so page content is never hidden behind it
-                //% "Keep content clear of the toolbar"
-                text: qsTrId("settings_browser-la-viewport_inset_toolbar")
-                //% "Shrink the page so bottom buttons sit above the address bar instead of behind it. The page is laid out again each time the toolbar hides or shows, which is slow on heavy pages"
-                description: qsTrId("settings_browser-la-viewport_inset_toolbar_description")
-                checked: viewportInsetConfig.value
-                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
-                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
-                automaticCheck: false
-                onClicked: viewportInsetConfig.value = !viewportInsetConfig.value
-            }
-
             SectionHeader {
                 //: Section Header for privacy and security settings
                 //% "Privacy & security"
@@ -327,43 +314,6 @@ Page {
                 onClicked: cookieBannerConf.value = !cookieBannerConf.value
             }
 
-            // "Do not track" switch hidden for now — uncomment to bring it back
-            // TextSwitch {
-            //     checked: webEngineSettings.doNotTrack
-            //
-            //     //: Tell sites that I do not want to be tracked.
-            //     //% "Do not track"
-            //     text: qsTrId("settings_browser-la-tracking")
-            //     //: Tell sites that I do not want to be tracked.
-            //     //% "Tell sites that I do not want to be tracked"
-            //     description: qsTrId("settings_browser-la-tracking_description")
-            //     // Margins adjusted to align with other items on the page
-            //     leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
-            //     _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
-            //     automaticCheck: false
-            //
-            //     onClicked: doNotTrackConf.value = !webEngineSettings.doNotTrack
-            // }
-
-            // "Enable JavaScript" switch hidden for now — uncomment to bring it back
-            // TextSwitch {
-            //     //: Label for text switch that enables JavaScript globally for all tabs
-            //     //% "Enable JavaScript"
-            //     text: qsTrId("settings_browser-la-enable_javascript")
-            //     description: webEngineSettings.javascriptEnabled ?
-            //                      //% "Allowed (recommended)"
-            //                      qsTrId("settings_browser-la-enabled_javascript_description") :
-            //                      //% "Blocked, some sites may not work correctly"
-            //                      qsTrId("settings_browser-la-disable_javascript_description")
-            //     checked: webEngineSettings.javascriptEnabled
-            //     // Margins adjusted to align with other items on the page
-            //     leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
-            //     _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
-            //     automaticCheck: false
-            //
-            //     onClicked: jsEnabledConf.value = !webEngineSettings.javascriptEnabled
-            // }
-
             SectionHeader {
                 //: Section Header for settings most people never need to open
                 //% "Advanced"
@@ -417,13 +367,6 @@ Page {
         id: fixedToolbarConfig
 
         key: "/apps/harbour-pacific/settings/fixed_toolbar"
-        defaultValue: false
-    }
-
-    ConfigurationValue {
-        id: viewportInsetConfig
-
-        key: "/apps/harbour-pacific/settings/viewport_inset_toolbar"
         defaultValue: false
     }
 

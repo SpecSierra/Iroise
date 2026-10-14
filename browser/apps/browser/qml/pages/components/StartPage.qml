@@ -51,6 +51,9 @@ Item {
     // white web view. Defaults to the item height when the host doesn't set it.
     property real contentHeight: height
 
+    // The boxes' tint. Lighter over the compositor's wallpaper (see Wallpaper.qml), which comes already dimmed.
+    readonly property real _boxTint: bgImage.status === Image.Ready ? 0.5 : 0.3
+
     property var now: new Date()
 
     Timer {
@@ -90,19 +93,19 @@ Item {
         visible: false
     }
 
-    // Legibility scrim
+    // Legibility scrim. Not over the compositor's wallpaper, there when ours cannot be read (see Wallpaper.qml):
+    // that one comes already dimmed.
     Rectangle {
         anchors.fill: parent
+        visible: bgImage.status === Image.Ready
         gradient: Gradient {
             id: scrimGradient
             // Scrim brightness follows the ambience scheme: dark under light
             // text, light under black text (light/white ambiences).
             property real level: Theme.colorScheme === Theme.DarkOnLight ? 1 : 0
-            // The compositor's wallpaper, there when ours cannot be read (see Wallpaper.qml), comes already dimmed.
-            property real strength: bgImage.status === Image.Ready ? 1 : 0.35
-            GradientStop { position: 0.0; color: Qt.rgba(scrimGradient.level, scrimGradient.level, scrimGradient.level, 0.6 * scrimGradient.strength) }
-            GradientStop { position: 0.45; color: Qt.rgba(scrimGradient.level, scrimGradient.level, scrimGradient.level, 0.3 * scrimGradient.strength) }
-            GradientStop { position: 1.0; color: Qt.rgba(scrimGradient.level, scrimGradient.level, scrimGradient.level, 0.65 * scrimGradient.strength) }
+            GradientStop { position: 0.0; color: Qt.rgba(scrimGradient.level, scrimGradient.level, scrimGradient.level, 0.6) }
+            GradientStop { position: 0.45; color: Qt.rgba(scrimGradient.level, scrimGradient.level, scrimGradient.level, 0.3) }
+            GradientStop { position: 1.0; color: Qt.rgba(scrimGradient.level, scrimGradient.level, scrimGradient.level, 0.65) }
         }
     }
 
@@ -150,6 +153,7 @@ Item {
 
         // Clock + date in a frosted glass box
         Browser.FrostedBox {
+            tintAlpha: root._boxTint
             id: clockBox
 
             anchors.horizontalCenter: parent.horizontalCenter
@@ -294,6 +298,8 @@ Item {
                     Behavior on scale { NumberAnimation { duration: 120; easing.type: Easing.OutQuad } }
 
                     Browser.FrostedBox {
+
+                        tintAlpha: root._boxTint
                         id: tile
                         anchors.horizontalCenter: parent.horizontalCenter
                         width: grid.tileSize
@@ -411,6 +417,8 @@ Item {
                 visible: grid.dragIndex < 0
 
                 Browser.FrostedBox {
+
+                    tintAlpha: root._boxTint
                     id: addTile
                     anchors.horizontalCenter: parent.horizontalCenter
                     width: grid.tileSize
@@ -452,6 +460,8 @@ Item {
         }
 
         Browser.FrostedBox {
+
+            tintAlpha: root._boxTint
             anchors.horizontalCenter: parent.horizontalCenter
             width: Theme.itemSizeExtraLarge
             height: Theme.itemSizeMedium

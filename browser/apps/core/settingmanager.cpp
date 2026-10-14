@@ -10,6 +10,8 @@
 #include "WebPage.h"
 
 #include <QCoreApplication>
+#include <QDirIterator>
+#include "browserpaths.h"
 #include <QVariant>
 
 
@@ -99,18 +101,28 @@ void SettingManager::onAboutToQuit()
     DBManager::instance()->removeAllTabs();
 }
 
+// What the engine keeps on disk, in the directories LadybirdEngine gives it.
+static int directorySize(const QString &path)
+{
+    qint64 size = 0;
+    QDirIterator it(path, QDir::Files | QDir::Hidden | QDir::NoSymLinks, QDirIterator::Subdirectories);
+    while (it.hasNext()) {
+        it.next();
+        size += it.fileInfo().size();
+    }
+    return static_cast<int>(qMin<qint64>(size, INT_MAX));
+}
+
 void SettingManager::calculateCacheSize(QJSValue callback)
 {
-    if (!callback.isNull() && !callback.isUndefined() && callback.isCallable()) {
-        callback.call(QJSValueList() << 0);
-    }
+    if (callback.isCallable())
+        callback.call(QJSValueList() << directorySize(BrowserPaths::cacheLocation() + QStringLiteral("/engine")));
 }
 
 void SettingManager::calculateSiteDataSize(QJSValue callback)
 {
-    if (!callback.isNull() && !callback.isUndefined() && callback.isCallable()) {
-        callback.call(QJSValueList() << 0);
-    }
+    if (callback.isCallable())
+        callback.call(QJSValueList() << directorySize(BrowserPaths::dataLocation() + QStringLiteral("/engine")));
 }
 bool SettingManager::isAdBlockEnabled() const
 {

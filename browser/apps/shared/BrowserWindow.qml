@@ -30,6 +30,10 @@ ApplicationWindow {
     _resizeContent: !window.rootPage.active
     _mainWindow: webView ? webView.chromeWindow : null
     _opaque: false
+    // Silica would load the wallpaper itself, into a window of its own that lipstick then puts behind this one in
+    // place of the wallpaper it draws. In the Jolla Store's sandbox it cannot be read, and a window left without it
+    // shows black. Lipstick draws the same wallpaper anyway.
+    background.image: ""
 
     cover: null
 
