@@ -1,0 +1,16 @@
+diff --git a/Libraries/LibAudio/ClientConnection.cpp b/Libraries/LibAudio/ClientConnection.cpp
+index 458348a6..7e1127ea 100644
+--- a/Libraries/LibAudio/ClientConnection.cpp
++++ b/Libraries/LibAudio/ClientConnection.cpp
+@@ -13,7 +13,10 @@
+ namespace Audio {
+ 
+ // The ring only has to cover the pump's cadence; the device's own buffer spends the rest of a stream's budget.
+-static constexpr u32 MINIMUM_RING_LATENCY_MS = 30;
++// NB: Not on every device: Sailfish OS routes media to the Android HAL's deep-buffer sink, which takes over 100 ms at a
++//     time whatever latency was asked for. A ring smaller than that leaves the mixer padding each request with
++//     silence, so the sound has holes and the media clock, which counts the frames played, runs at about 0.7x.
++static constexpr u32 MINIMUM_RING_LATENCY_MS = 120;
+ // The server captures in fragments of this length, so the pump need not look more often.
+ static constexpr AK::Duration CAPTURE_PUMP_PERIOD = AK::Duration::from_milliseconds(20);
+ 
