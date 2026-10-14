@@ -260,20 +260,6 @@ Page {
                 onClicked: viewportInsetConfig.value = !viewportInsetConfig.value
             }
 
-            TextSwitch {
-                //: Keep web pages out of the screen area around the camera notch
-                //% "Keep pages clear of the notch"
-                text: qsTrId("settings_browser-la-crop_notch")
-                //% "Fit the page below the camera notch and fill the strip beside it with the page's colour"
-                description: qsTrId("settings_browser-la-crop_notch_description")
-                visible: Screen.hasCutouts
-                checked: cropNotchConfig.value
-                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
-                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
-                automaticCheck: false
-                onClicked: cropNotchConfig.value = !cropNotchConfig.value
-            }
-
             SectionHeader {
                 //: Section Header for privacy and security settings
                 //% "Privacy & security"
@@ -439,13 +425,6 @@ Page {
 
         key: "/apps/harbour-pacific/settings/viewport_inset_toolbar"
         defaultValue: false
-    }
-
-    ConfigurationValue {
-        id: cropNotchConfig
-
-        key: "/apps/harbour-pacific/settings/crop_notch"
-        defaultValue: true
     }
 
     ConfigurationValue {

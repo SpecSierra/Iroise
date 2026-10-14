@@ -188,14 +188,6 @@ Page {
         Component.onCompleted: webView.setContentBottomInset(webView._desiredContentBottomInset)
     }
 
-    ConfigurationValue {
-        id: cropNotchConfig
-        key: "/apps/harbour-pacific/settings/crop_notch"
-        defaultValue: true
-        // Read by _notchInset (webViewFrame). A pure QML binding, so no C++
-        // side to restore on startup.
-    }
-
     function load(url, title) {
         overlay.dismiss(true)
         webView.load(url, title)
@@ -328,17 +320,13 @@ Page {
     }
 
     // Keep the web content out of the band of the screen the camera notch is
-    // in (setting crop_notch, default ON). The notch sits at the top of the
+    // in, which BrowserWindow blacks out. The notch sits at the top of the
     // physical portrait screen, so after Silica rotates the page it is on a
-    // different page edge per orientation. The whole band is reserved (both
-    // sides of the notch) and filled with the page's own colour, so that the
-    // page looks as if it reached the edge of the screen. The same fill is
-    // what shows for a moment wherever the page has not painted yet.
+    // different page edge per orientation.
     // WebContainer sizes itself and its pages from its parent item, so
     // insetting this frame is all it takes. The chrome (Overlay) stays at the
     // page edges, so fullscreenHeight is still the page height.
-    readonly property real _notchInset: cropNotchConfig.value && Screen.hasCutouts
-                                        ? Screen.topCutout.height : 0
+    readonly property real _notchInset: Screen.hasCutouts ? Screen.topCutout.height : 0
 
     // Around the page's content, in its colour. Only above the toolbar and only with a page, so that the
     // compositor's wallpaper shows behind the start page and the toolbar.
