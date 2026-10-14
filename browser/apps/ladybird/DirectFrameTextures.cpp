@@ -151,17 +151,13 @@ bool DirectFrameTextures::import(QQuickWindow* window, const LadybirdFrame& fram
     QVector<int> fds(fdCount);
     egl.serializeNativeBuffer(pattern, ints.data(), fds.data());
 
-    // The handle has to have exactly one pixel buffer, laid out the way the engine laid its own out, and no larger
-    // than the engine's, or the driver would reach past the end of ours.
+    // The pixels are the handle's largest dma-buf (Qualcomm's gralloc keeps its metadata in a small one of its own),
+    // laid out the way the engine laid its own out, and no larger than the engine's, or the driver would reach past
+    // the end of ours.
     int pixelFd = -1;
     for (int i = 0; i < fdCount; ++i) {
-        if (!isDmaBuf(fds[i]))
-            continue;
-        if (pixelFd >= 0) {
-            pixelFd = -1;
-            break;
-        }
-        pixelFd = i;
+        if (isDmaBuf(fds[i]) && (pixelFd < 0 || sizeOf(fds[i]) > sizeOf(fds[pixelFd])))
+            pixelFd = i;
     }
     if (pixelFd < 0 || stride * 4 != frame.pitch || sizeOf(fds[pixelFd]) > sizeOf(frame.bufferFd)) {
         egl.releaseNativeBuffer(pattern);

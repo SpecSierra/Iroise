@@ -28,10 +28,10 @@ index 1373f954..4a92e6b6 100644
      target_link_libraries(LibGfx PUBLIC Vulkan::Headers)
 diff --git a/Libraries/LibGfx/GLESContext.cpp b/Libraries/LibGfx/GLESContext.cpp
 new file mode 100644
-index 00000000..88171ad4
+index 00000000..2315d860
 --- /dev/null
 +++ b/Libraries/LibGfx/GLESContext.cpp
-@@ -0,0 +1,348 @@
+@@ -0,0 +1,352 @@
 +/*
 + * Pacific: the Sailfish OS front end for the Ladybird engine.
 + *
@@ -293,7 +293,8 @@ index 00000000..88171ad4
 +    image->native_buffer = buffer;
 +    image->pitch = static_cast<size_t>(stride) * 4;
 +
-+    // The buffer's handle carries gralloc's own descriptors besides the pixels; the pixels are the one dma-buf.
++    // The buffer's handle carries gralloc's own descriptors besides the pixels. The pixels are a dma-buf, the largest one:
++    // Qualcomm's gralloc keeps its metadata in a small dma-buf of its own.
 +    int int_count = 0;
 +    int fd_count = 0;
 +    f.get_native_buffer_info(buffer, &int_count, &fd_count);
@@ -302,12 +303,15 @@ index 00000000..88171ad4
 +    TRY(ints.try_resize(int_count));
 +    TRY(fds.try_resize(fd_count));
 +    f.serialize_native_buffer(buffer, ints.data(), fds.data());
++    off_t pixels_size = -1;
 +    for (auto fd : fds) {
 +        if (!is_dmabuf(fd))
 +            continue;
-+        if (image->dmabuf_fd >= 0)
-+            return Error::from_string_literal("gralloc buffer has more than one dma-buf");
-+        image->dmabuf_fd = fd;
++        auto fd_size = lseek(fd, 0, SEEK_END);
++        if (fd_size > pixels_size) {
++            pixels_size = fd_size;
++            image->dmabuf_fd = fd;
++        }
 +    }
 +    if (image->dmabuf_fd < 0)
 +        return Error::from_string_literal("gralloc buffer has no dma-buf");
