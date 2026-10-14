@@ -180,6 +180,11 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   is filled into a login form the user has just touched (a page focusing a field itself gets nothing), on the
   https origin the tab is at, which the fill script checks again in the page. Ladybird has no isolated script
   world, so this runs in the page's own; the site always comes from the tab's URL, never from the page.
+- Certificates: a certificate the engine cannot verify ends the load on its error page, which the interface
+  recognises and answers with its banner. Accepting trusts that host for the rest of the run: the hosts go to every
+  RequestServer (`LB_EMBED_SET_CERTIFICATE_EXCEPTIONS`, patch 0010), which then skips verification for exactly
+  them. The security panel's details (issuer, dates, cipher, errors) come from a TLS connection of the interface's
+  own (`QSslSocket`), once per host and run, since the engine does not hand out the certificates it checked.
 - Ad blocking is the engine's own: Ladybird ships Brave's `adblock` crate with
   request blocking, cosmetic filtering and built-in list subscriptions, all off by
   default. The interface's "Adblock" switch turns on EasyList, EasyPrivacy, the

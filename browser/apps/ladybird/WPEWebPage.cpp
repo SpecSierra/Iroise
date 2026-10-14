@@ -26,6 +26,8 @@
 #include <QQuickItemGrabResult>
 #include <QQuickWindow>
 #include <QRegularExpression>
+#include <QSslCipher>
+#include <QSslSocket>
 #include <QStandardPaths>
 #include <QTouchEvent>
 
@@ -327,7 +329,11 @@ void WPEWebPage::onLoadingChanged(WPEQtViewLoadRequest *loadRequest)
     if (finished) {
         m_lastCommittedUrl = url();
         evaluate(QString::fromLatin1(kPageAgentScript));
+        // NB: A certificate the engine could not verify ends the load on its own error page, which says so.
+        evaluate(QStringLiteral("location.href==='about:error'&&document.body.innerText.indexOf('SSL verification failed')>=0"),
+            [this](const QJsonValue &failed) { setTlsError(failed.toBool()); updateSecurity(); });
     } else {
+        setTlsError(false);
         // What the old page had selected, was searching for or was asking is gone with it. A login it sent is
         // offered for saving now that it has gone on.
         offerCapturedLogin();
@@ -1101,8 +1107,106 @@ void WPEWebPage::fillLoginForFocusedForm()
     }
 }
 
+// The hosts whose certificates the user chose to trust although the engine could not verify them, for this run.
+static QSet<QString> &certificateExceptions()
+{
+    static QSet<QString> hosts;
+    return hosts;
+}
+
+void WPEWebPage::setTlsError(bool failed)
+{
+    if (failed == m_tlsErrorPending)
+        return;
+    m_tlsErrorPending = failed;
+    m_tlsErrorFailingUri = failed ? url().toString() : QString();
+    m_tlsErrorHost = failed ? url().host() : QString();
+    m_tlsErrorMessage.clear();
+    emit tlsErrorChanged();
+}
+
 void WPEWebPage::acceptTlsCertificate()
 {
+    if (!m_tlsErrorPending)
+        return;
+    certificateExceptions().insert(m_tlsErrorHost);
+    LadybirdEngine::instance()->send(0, LB_EMBED_SET_CERTIFICATE_EXCEPTIONS, 0, 0, 0, 0, 0, QStringList(certificateExceptions().values()).join(QLatin1Char('\n')).toUtf8());
+    const QByteArray failing = m_tlsErrorFailingUri.toUtf8();
+    setTlsError(false);
+    sendToEngine(LB_EMBED_LOAD, 0, 0, 0, 0, failing);
+}
+
+namespace {
+
+// What the security panel shows about a host's certificate. Fetched once per host and run, over a connection of
+// our own: the engine does not hand out the certificates it checked.
+struct CertificateDetails {
+    QString subject, issuer, cipher, notBefore, notAfter, pem, issuerOrganization, issuerCommonName, subjectOrganization, errors;
+};
+
+QHash<QString, CertificateDetails> &certificateDetails()
+{
+    static QHash<QString, CertificateDetails> details;
+    return details;
+}
+
+}
+
+void WPEWebPage::updateSecurity()
+{
+    const QUrl pageUrl = url();
+    if (pageUrl.scheme() != QLatin1String("https") || m_tlsErrorPending) {
+        m_security->reset();
+        return;
+    }
+    const QString host = pageUrl.host();
+    const int port = pageUrl.port(443);
+    auto show = [this, host](const CertificateDetails &details) {
+        if (url().host() != host)
+            return;
+        const bool accepted = certificateExceptions().contains(host);
+        m_security->update(true, accepted, details.subject, details.issuer, details.cipher, details.notBefore, details.notAfter,
+            details.pem, details.issuerOrganization, details.issuerCommonName, details.subjectOrganization, details.errors);
+    };
+    auto known = certificateDetails().constFind(host);
+    if (known != certificateDetails().constEnd()) {
+        show(known.value());
+        return;
+    }
+    show(CertificateDetails { host, {}, {}, {}, {}, {}, {}, {}, {}, {} });
+
+    QSslSocket *socket = new QSslSocket(this);
+    QTimer::singleShot(10000, socket, &QObject::deleteLater);
+    connect(socket, static_cast<void (QSslSocket::*)(const QList<QSslError> &)>(&QSslSocket::sslErrors), socket, [socket](const QList<QSslError> &errors) {
+        QStringList descriptions;
+        for (const QSslError &error : errors)
+            descriptions.append(error.errorString());
+        socket->setProperty("errors", descriptions.join(QStringLiteral("; ")));
+        // Only to read the certificate: nothing is sent over this connection.
+        socket->ignoreSslErrors();
+    });
+    connect(socket, &QSslSocket::encrypted, socket, [socket, host, show] {
+        const QList<QSslCertificate> chain = socket->peerCertificateChain();
+        CertificateDetails details;
+        if (!chain.isEmpty()) {
+            const QSslCertificate &leaf = chain.first();
+            details.subject = leaf.subjectInfo(QSslCertificate::CommonName).value(0, host);
+            details.subjectOrganization = leaf.subjectInfo(QSslCertificate::Organization).value(0);
+            details.issuerCommonName = leaf.issuerInfo(QSslCertificate::CommonName).value(0);
+            details.issuerOrganization = leaf.issuerInfo(QSslCertificate::Organization).value(0);
+            details.issuer = details.issuerOrganization.isEmpty() ? details.issuerCommonName : details.issuerOrganization;
+            details.notBefore = leaf.effectiveDate().toString(Qt::DefaultLocaleShortDate);
+            details.notAfter = leaf.expiryDate().toString(Qt::DefaultLocaleShortDate);
+            details.pem = QString::fromLatin1(leaf.toPem());
+        }
+        details.cipher = socket->sessionCipher().name();
+        details.errors = socket->property("errors").toString();
+        certificateDetails().insert(host, details);
+        show(details);
+        socket->disconnectFromHost();
+        socket->deleteLater();
+    });
+    socket->connectToHostEncrypted(host, static_cast<quint16>(port));
 }
 
 // Shared by every non-private tab, for as long as the browser runs.

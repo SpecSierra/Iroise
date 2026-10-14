@@ -615,7 +615,7 @@ private:
     qreal m_selectionEndY = 0.0;
     bool m_findInPageHasResult = false;
     bool m_findInitialized = false;
-    QObject * m_security = nullptr;
+    WPESecurityInfo *m_security = nullptr;
     bool m_pinchZoomActive = false;
     qint64 m_pinchPendingSinceMs = 0;
     bool m_pagePinchConsumerHint = false;
@@ -698,6 +698,8 @@ private:
     QString m_tlsErrorFailingUri;
     QString m_tlsErrorHost;
     QString m_tlsErrorMessage;
+    void setTlsError(bool failed);
+    void updateSecurity();
     QString m_permissionHost;
     QString m_permissionType;
     // The engine's questions not answered yet, the one showing first, as (question id, origin|kind).

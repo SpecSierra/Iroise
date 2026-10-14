@@ -30,6 +30,7 @@
 #include <LibWebCommon/WebView/ConsoleOutput.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/FileDownloader.h>
+#include <LibWebView/HelperProcess.h>
 #include <LibWebView/HeadlessWebView.h>
 #include <LibWebView/Menu.h>
 #include <LibWebView/Settings.h>
@@ -742,6 +743,12 @@ private:
             if (header.a & LB_EMBED_CLEAR_SITE_DATA)
                 options.delete_site_data = WebView::Application::ClearBrowsingDataOptions::Delete::Yes;
             (void)WebView::Application::the().clear_browsing_data(options);
+            return;
+        }
+        if (header.type == LB_EMBED_SET_CERTIFICATE_EXCEPTIONS) {
+            Vector<ByteString> hosts;
+            text.for_each_split_view('\n', SplitBehavior::Nothing, [&](StringView host) { hosts.append(host); });
+            WebView::set_certificate_exceptions(move(hosts));
             return;
         }
         if (header.type == LB_EMBED_SET_SITE_OPTIONS) {
