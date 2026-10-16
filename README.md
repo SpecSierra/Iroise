@@ -1,12 +1,16 @@
 # Pacific — a Ladybird-based browser for Sailfish OS
 
 Pacific runs the [Ladybird](https://ladybird.org) engine on Sailfish OS, GPU
-accelerated, inside a Silica interface. It is the successor to
-Atlantic (WPE WebKit); nothing here is shipped yet.
+accelerated, inside a Silica interface. It succeeds Atlantic (WPE WebKit), which
+is kept in maintenance only.
 
 Upstream's only Linux front end needs Qt 6.10+, which Sailfish OS does not have,
 so Pacific carries its own Qt-free front end for the engine and a small set of
-patches. Developed and tested on the Jolla Phone 2 (MT6858, Mali-G610).
+patches. Developed and tested on the Jolla Phone 2 (MT6858, Mali-G610); it also
+runs on the Xperia 10 II (Snapdragon 665), where the GPU path still falls back to
+software painting.
+
+Pacific is not released: see [Status](#status).
 
 ## Layout
 
@@ -246,9 +250,25 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
 
 On the phone: `sh /tmp/ladybird/start-browser.sh [url] [minutes]` after `scripts/deploy.sh`.
 
-## Milestones
+## Status
 
-1. Build with a headless-only front end and render a page to a PNG on the host.
-2. Run the same bundle on the phone from `/tmp` and render a page there.
-3. Put pixels on screen: a Wayland window fed by the engine, with touch input (since replaced by the embedded
-   engine; the standalone window was removed).
+Pacific is in development and has no release. It is meant for the Jolla Store, so every dependency, path and
+permission is held to Harbour's rules. Nothing is published (no store upload, no packages) and "Ladybird" is named
+in nothing users see until the Ladybird project has guidelines for its name and for packaging; CI builds the
+package for testing only (see [CI](#ci)).
+
+## CI
+
+`.github/workflows/build.yml` builds the engine, the interface and the RPM on every push to `main` (and on
+demand), on a self-hosted aarch64 runner: the same build as on the build host, through `scripts/ci-build.sh`. The
+runner keeps the Ladybird checkout, its build directory and a ccache between runs, so a run only rebuilds what the
+pin, the patches or our code changed. The RPM is kept as a build artifact for a few days and is not published.
+
+No workflow runs on pull requests: a self-hosted runner would otherwise run code from anyone's fork.
+
+## Licences
+
+The engine front end (`ui/`), the launcher and our patches to Ladybird are BSD-2-Clause, as Ladybird is. The
+browser interface (`browser/`) comes from Jolla's sailfish-browser by way of Atlantic and is MPL-2.0
+(`browser/LICENSE.txt`), apart from the files whose own header says otherwise. Each source file names its licence
+(SPDX).

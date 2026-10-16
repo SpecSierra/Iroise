@@ -1,6 +1,6 @@
-/upstream/
+/upstream
 /build/
 /dist/
-/.venv/
+/.venv
 /build.log
 /build-browser.log

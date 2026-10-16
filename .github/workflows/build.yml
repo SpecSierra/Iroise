@@ -1,0 +1,45 @@
+name: Build
+
+# Builds the engine, the interface and the RPM on Pacific's self-hosted aarch64 runner (scripts/ci-build.sh).
+# NB: Push and manual runs only, never pull requests: a self-hosted runner would run a fork's code.
+on:
+  push:
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Engine, interface and RPM
+    runs-on:
+      - self-hosted
+      - Linux
+      - ARM64
+      - pacific
+    timeout-minutes: 360
+    env:
+      CI_CACHE: /opt/pacific-ci/cache
+      JOBS: "12"
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Build
+        run: scripts/ci-build.sh "${{ github.run_number }}.ci"
+
+      - name: Keep the RPM
+        uses: actions/upload-artifact@v4
+        with:
+          name: harbour-pacific-${{ github.run_number }}
+          path: dist/rpm/harbour-pacific-*.rpm
+          retention-days: 7
+          if-no-files-found: error
