@@ -16,6 +16,7 @@
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
+#include <QFutureWatcher>
 #include <QGuiApplication>
 #include <QImage>
 #include <QInputMethod>
@@ -31,6 +32,7 @@
 #include <QSslSocket>
 #include <QStandardPaths>
 #include <QTouchEvent>
+#include <QtConcurrent>
 
 namespace {
 
@@ -174,6 +176,30 @@ const char kMoveSelectionScript[] =
     "return 1;"
     "})(%1,%2,%3)";
 
+// Writes a thumbnail, cropped to its size, and says where it is: a file in the directory, or with none (a private tab,
+// of which nothing may be left behind) a data URL. Runs on a worker thread.
+QString saveThumbnail(const QImage &grab, const QSize &size, const QString &directory, int tabId, quint32 serial)
+{
+    QImage image = grab.copy(0, 0, size.width(), size.height());
+    if (image.isNull())
+        return QString();
+    if (directory.isEmpty()) {
+        QByteArray jpeg;
+        QBuffer buffer(&jpeg);
+        if (!buffer.open(QIODevice::WriteOnly) || !image.save(&buffer, "JPG", 80))
+            return QString();
+        return QStringLiteral("data:image/jpeg;base64,") + QString::fromLatin1(jpeg.toBase64());
+    }
+    if (!QDir().mkpath(directory))
+        return QString();
+    // A new name for every capture: the tab switcher's Image caches by URL.
+    const QString prefix = QStringLiteral("tab-%1-").arg(tabId);
+    for (const QString &old : QDir(directory).entryList(QStringList(prefix + QLatin1Char('*')), QDir::Files))
+        QFile::remove(directory + QLatin1Char('/') + old);
+    const QString path = QStringLiteral("%1/%2%3.jpg").arg(directory, prefix).arg(serial);
+    return image.save(path, "JPG", 80) ? path : QString();
+}
+
 } // namespace
 
 WebPage::WebPage(QQuickItem *parent)
@@ -185,6 +211,8 @@ WebPage::WebPage(QQuickItem *parent)
 
     connect(this, &EngineView::loadingChanged, this, &WebPage::onLoadingChanged);
     connect(this, &EngineView::frameArrived, this, &WebPage::onFrameArrived);
+    // As early as the page's document exists, so that a page still loading scrolls the toolbar away too.
+    connect(this, &EngineView::committed, this, &WebPage::installPageAgent);
     connect(this, &EngineView::pageWantsTextInputChanged, this, &WebPage::onPageWantsTextInputChanged);
     connect(this, &EngineView::engineCrashed, this, [this] {
         m_crashed = true;
@@ -348,11 +376,13 @@ void WebPage::onLoadingChanged(EngineViewLoadRequest *loadRequest)
     }
     if (finished) {
         m_lastCommittedUrl = url();
-        evaluate(QString::fromLatin1(kPageAgentScript));
+        // NB: Again, in case the commit's went to the page that was leaving.
+        installPageAgent();
         // NB: A certificate the engine could not verify ends the load on its own error page, which says so.
         evaluate(QStringLiteral("location.href==='about:error'&&document.body.innerText.indexOf('SSL verification failed')>=0"),
             [this](const QJsonValue &failed) { setTlsError(failed.toBool()); updateSecurity(); });
     } else {
+        m_pageAgentInstalled = false;
         setTlsError(false);
         // What the old page had selected, was searching for or was asking is gone with it. A login it sent is
         // offered for saving now that it has gone on.
@@ -371,6 +401,12 @@ void WebPage::onLoadingChanged(EngineViewLoadRequest *loadRequest)
             emit jsDialogChanged();
         }
     }
+}
+
+void WebPage::installPageAgent()
+{
+    // The answer comes from the page the view now shows (answers owed by a page that went away are dropped).
+    evaluate(QString::fromLatin1(kPageAgentScript), [this](const QJsonValue &) { m_pageAgentInstalled = true; });
 }
 
 void WebPage::onFrameArrived()
@@ -425,35 +461,23 @@ void WebPage::captureThumbnail()
     if (!m_thumbnailGrab)
         return;
     connect(m_thumbnailGrab.data(), &QQuickItemGrabResult::ready, this, [this, serial, targetWidth, targetHeight] {
-        QImage image = m_thumbnailGrab->image().copy(0, 0, targetWidth, targetHeight);
-        m_thumbnailGrab.clear();
-        if (image.isNull())
-            return;
-        // A private tab's thumbnail is kept in memory only, so that nothing of it is left behind.
-        if (privateBrowsing()) {
-            QByteArray jpeg;
-            QBuffer buffer(&jpeg);
-            if (!buffer.open(QIODevice::WriteOnly) || !image.save(&buffer, "JPG", 80))
+        QImage image = m_thumbnailGrab->image();
+        // NB: The grab stays held (no capture starts) until the file is written.
+        const QString directory = privateBrowsing() ? QString()
+            : QStandardPaths::writableLocation(QStandardPaths::CacheLocation) + QStringLiteral("/thumbnails");
+        QFutureWatcher<QString> *watcher = new QFutureWatcher<QString>(this);
+        connect(watcher, &QFutureWatcherBase::finished, this, [this, watcher, serial] {
+            const QString source = watcher->result();
+            watcher->deleteLater();
+            m_thumbnailGrab.clear();
+            if (source.isEmpty())
                 return;
             m_thumbnailSerial = serial;
             m_thumbnailCaptured = true;
-            emit thumbnailCaptured(QStringLiteral("data:image/jpeg;base64,") + QString::fromLatin1(jpeg.toBase64()));
-            return;
-        }
-        const QString directory = QStandardPaths::writableLocation(QStandardPaths::CacheLocation)
-                                  + QStringLiteral("/thumbnails");
-        if (!QDir().mkpath(directory))
-            return;
-        // A new name for every capture: the tab switcher's Image caches by URL.
-        const QString prefix = QStringLiteral("tab-%1-").arg(m_tabId);
-        for (const QString &old : QDir(directory).entryList(QStringList(prefix + QLatin1Char('*')), QDir::Files))
-            QFile::remove(directory + QLatin1Char('/') + old);
-        const QString path = QStringLiteral("%1/%2%3.jpg").arg(directory, prefix).arg(serial);
-        if (!image.save(path, "JPG", 80))
-            return;
-        m_thumbnailSerial = serial;
-        m_thumbnailCaptured = true;
-        emit thumbnailCaptured(path);
+            emit thumbnailCaptured(source);
+        });
+        // Encoding and writing the JPEG take a few milliseconds of the GUI thread otherwise.
+        watcher->setFuture(QtConcurrent::run(saveThumbnail, image, QSize(targetWidth, targetHeight), directory, m_tabId, serial));
     });
 }
 // --- Chrome -----------------------------------------------------------------
@@ -614,8 +638,9 @@ void WebPage::touchEvent(QTouchEvent *event)
     if (event->type() == QEvent::TouchBegin) {
         m_lastTouchMs = QDateTime::currentMSecsSinceEpoch();
         emit touched();
-        // A page still loading has not had the agent yet.
-        evaluate(QString::fromLatin1(kPageAgentScript));
+        // NB: Not every touch: the script is parsed again each time it is sent.
+        if (!m_pageAgentInstalled)
+            installPageAgent();
     }
     EngineView::touchEvent(event);
 }

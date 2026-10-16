@@ -106,6 +106,8 @@ Q_SIGNALS:
     void enterFullscreenRequested();
     void leaveFullscreenRequested();
     void frameArrived();
+    // The new page of a load has taken over the view (its document exists; it may still be loading).
+    void committed();
     void pageWantsTextInputChanged();
     void engineCrashed();
 

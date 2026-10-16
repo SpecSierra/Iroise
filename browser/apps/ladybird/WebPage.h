@@ -531,6 +531,7 @@ private slots:
     void onLoadingChanged(EngineViewLoadRequest *loadRequest);
     void onFrameArrived();
     void onPageWantsTextInputChanged();
+    void installPageAgent();
     void checkThumbnail();
     void captureThumbnail();
 
@@ -601,6 +602,8 @@ private:
     quint32 m_thumbnailSerialAtCheck = 0;
     int m_thumbnailBusyChecks = 0;
     bool m_thumbnailCaptured = false;
+    // The page agent answered from the page now showing.
+    bool m_pageAgentInstalled = false;
     QTimer m_mediaInactiveDebounceTimer;
     QTimer m_deferredFullscreenLeaveTimer;
     QTimer m_chromeGestureDebounceTimer;

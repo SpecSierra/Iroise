@@ -277,6 +277,7 @@ void EngineView::engineMessage(const lb_embed_header& header, const QString& tex
     }
     case LB_EMBED_COMMIT:
         m_awaitingCommit = false;
+        emit committed();
         break;
     case LB_EMBED_HISTORY:
         if (m_canGoBack != (header.a != 0) || m_canGoForward != (header.b != 0)) {
