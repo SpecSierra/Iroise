@@ -40,7 +40,11 @@ QList<WebPage *> &livePages()
     return pages;
 }
 
-const int kThumbnailIntervalMs = 4000;
+// The timer looks once a second whether the page has kept still since the last look; a thumbnail is only taken then
+// (the grab reads the GPU back and the JPEG is written on this thread, a hitch while the page moves), or after this
+// many looks of a page that never keeps still (a video).
+const int kThumbnailIntervalMs = 1000;
+const int kThumbnailMaxBusyChecks = 30;
 const int kThumbnailMaxWidth = 540;
 
 // The engine reports neither scrolling nor selections, nor whether a video plays. This script, run in each page, does:
@@ -189,7 +193,7 @@ WebPage::WebPage(QQuickItem *parent)
 
     // A tab's thumbnail is a scaled copy of what is on screen, refreshed while the tab is the one showing.
     m_thumbnailTimer.setInterval(kThumbnailIntervalMs);
-    connect(&m_thumbnailTimer, &QTimer::timeout, this, &WebPage::captureThumbnail);
+    connect(&m_thumbnailTimer, &QTimer::timeout, this, &WebPage::checkThumbnail);
 
     // A login sent on a page that stays where it is (a script-driven sign-in) is offered after a moment.
     m_offerLoginTimer.setSingleShot(true);
@@ -384,6 +388,17 @@ void WebPage::grabThumbnail(const QSize &size)
 {
     if (size.width() > 0 && size.height() > 0)
         m_thumbnailSize = size;
+    captureThumbnail();
+}
+
+void WebPage::checkThumbnail()
+{
+    const quint32 serial = frameSerial();
+    const bool moving = serial != m_thumbnailSerialAtCheck;
+    m_thumbnailSerialAtCheck = serial;
+    if (moving && ++m_thumbnailBusyChecks < kThumbnailMaxBusyChecks)
+        return;
+    m_thumbnailBusyChecks = 0;
     captureThumbnail();
 }
 

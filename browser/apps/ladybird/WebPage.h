@@ -531,6 +531,7 @@ private slots:
     void onLoadingChanged(EngineViewLoadRequest *loadRequest);
     void onFrameArrived();
     void onPageWantsTextInputChanged();
+    void checkThumbnail();
     void captureThumbnail();
 
 private:
@@ -596,7 +597,6 @@ private:
     QTimer m_thumbnailTimer;
     QSize m_thumbnailSize;
     QSharedPointer<QQuickItemGrabResult> m_thumbnailGrab;
-    QElapsedTimer m_thumbnailGrabStarted;
     quint32 m_thumbnailSerial = 0;
     quint32 m_thumbnailSerialAtCheck = 0;
     int m_thumbnailBusyChecks = 0;
