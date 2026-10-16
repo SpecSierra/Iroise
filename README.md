@@ -26,6 +26,7 @@ patches. Developed and tested on the Jolla Phone 2 (MT6858, Mali-G610).
 | `scripts/package-rpm.sh` | the `harbour-pacific` RPM, as the Jolla Store takes it |
 | `browser/apps/browser/qml/icons/icon-launcher-pacific.svg` | the launcher icon; the PNGs are rendered from it |
 | `scripts/embed-harness.py` | talks the embedding protocol to an engine on the build host: load a page, tap, print what comes back |
+| `scripts/phone/startbench.sh`, `scripts/render-timing.py` | launch to first frame on the phone; the interface's frame timings from a `QSG_RENDER_TIMING=1` log |
 
 ## Build
 
@@ -141,6 +142,9 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   Phone 2: the interface process used 377 CPU ticks against 667 with the upload, at
   the same frame rate (the engine sets it).
 - Touches, the size, visibility, navigation, and on-screen keyboard text go the other way.
+- Pages are paced at the screen's refresh rate (90 Hz on the Jolla Phone 2): the interface hands
+  `QScreen::refreshRate` to the engine (`LADYBIRD_SFOS_REFRESH_RATE`), whose views tell WebContent and the
+  Compositor; the engine assumes 60 otherwise.
 - `EngineView` is one engine view as a Qt Quick item (frames, input, size, visibility, navigation); `WebPage`
   builds a tab's page on it (what the QML reads and calls); `WebContainer` keeps the tabs' pages. Not wired yet:
   extensions (waiting for upstream support).

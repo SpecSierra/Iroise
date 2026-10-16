@@ -18,7 +18,8 @@ export PACIFIC_GRAB_DIR=${PACIFIC_GRAB_DIR:-}
 ulimit -c 0
 mkdir -p "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
 url=$1; minutes=${2:-15}
-sh /tmp/ladybird/stop.sh
+# PACIFIC_NO_STOP=1: the caller has stopped it already (stop.sh waits a second, which timings would count).
+[ -n "$PACIFIC_NO_STOP" ] || sh /tmp/ladybird/stop.sh
 ( /tmp/ladybird/bin/harbour-pacific $url > /tmp/ladybird/win.log 2>&1
   echo "harbour-pacific exited with status $?" >> /tmp/ladybird/win.log ) &
 # Only the newest run's timer may stop the browser; an older one would cut this run short.
