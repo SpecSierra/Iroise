@@ -34,6 +34,9 @@ ErrorOr<NonnullOwnPtr<EmbeddedHost>> EmbeddedHost::connect(ByteString const& soc
 
     host->m_notifier = Core::Notifier::construct(host->m_fd, Core::Notifier::Type::Read);
     host->m_notifier->on_activation = [host = host.ptr()] { host->receive(); };
+    host->m_write_notifier = Core::Notifier::construct(host->m_fd, Core::Notifier::Type::Write);
+    host->m_write_notifier->set_enabled(false);
+    host->m_write_notifier->on_activation = [host = host.ptr()] { host->flush_pending(); };
     return host;
 }
 
@@ -41,11 +44,13 @@ EmbeddedHost::~EmbeddedHost()
 {
     if (m_notifier)
         m_notifier->close();
+    if (m_write_notifier)
+        m_write_notifier->close();
     if (m_fd >= 0)
         ::close(m_fd);
 }
 
-void EmbeddedHost::send(lb_embed_header const& header, StringView text, int fd)
+EmbeddedHost::Sent EmbeddedHost::write(lb_embed_header const& header, StringView text, int fd)
 {
     Array<iovec, 2> parts {};
     parts[0].iov_base = const_cast<lb_embed_header*>(&header);
@@ -68,9 +73,39 @@ void EmbeddedHost::send(lb_embed_header const& header, StringView text, int fd)
         memcpy(CMSG_DATA(control_header), &fd, sizeof(int));
     }
 
-    // NB: A frame the app is too busy to take is worth less than a blocked engine, so never wait.
-    if (::sendmsg(m_fd, &message, MSG_NOSIGNAL | MSG_DONTWAIT) < 0 && errno != EAGAIN)
-        warnln("ladybird-sfos: sending to the embedding app failed: {}", strerror(errno));
+    // NB: Never wait: a blocked engine is worse than anything the app could miss.
+    if (::sendmsg(m_fd, &message, MSG_NOSIGNAL | MSG_DONTWAIT) >= 0)
+        return Sent::Yes;
+    if (errno == EAGAIN)
+        return Sent::WouldBlock;
+    warnln("pacific: sending to the embedding app failed: {}", strerror(errno));
+    return Sent::Failed;
+}
+
+void EmbeddedHost::send(lb_embed_header const& header, StringView text, int fd)
+{
+    // A frame the app is too busy to take is left out; the next one replaces it. It also must not overtake a message
+    // still waiting.
+    if (header.type == LB_EMBED_FRAME) {
+        if (m_pending.is_empty())
+            (void)write(header, text, fd);
+        return;
+    }
+    if (m_pending.is_empty() && write(header, text, fd) != Sent::WouldBlock)
+        return;
+    m_pending.append({ header, MUST(ByteBuffer::copy(text.bytes())) });
+    m_write_notifier->set_enabled(true);
+}
+
+void EmbeddedHost::flush_pending()
+{
+    while (!m_pending.is_empty()) {
+        auto const& pending = m_pending.first();
+        if (write(pending.header, StringView { pending.text.bytes() }, -1) == Sent::WouldBlock)
+            return;
+        m_pending.take_first();
+    }
+    m_write_notifier->set_enabled(false);
 }
 
 void EmbeddedHost::send_frame(u32 view, Gfx::LinuxDmaBufHandle const& dmabuf, Gfx::IntSize painted_size)
@@ -105,7 +140,10 @@ void EmbeddedHost::send_text(u32 view, lb_embed_message_type type, StringView te
     header.view = view;
     header.a = a;
     header.b = b;
-    text = text.substring_view(0, min(text.length(), static_cast<size_t>(LB_EMBED_TEXT_MAX)));
+    if (text.length() > LB_EMBED_TEXT_MAX) {
+        warnln("pacific: message {} is {} bytes, more than the app takes; not sent", to_underlying(type), text.length());
+        return;
+    }
     header.text_length = static_cast<u32>(text.length());
     send(header, text);
 }
@@ -128,7 +166,11 @@ void EmbeddedHost::receive()
     } message;
 
     for (;;) {
-        auto length = ::recv(m_fd, &message, sizeof(message), MSG_DONTWAIT);
+        iovec part { &message, sizeof(message) };
+        msghdr header {};
+        header.msg_iov = &part;
+        header.msg_iovlen = 1;
+        auto length = ::recvmsg(m_fd, &header, MSG_DONTWAIT);
         if (length < 0 && errno == EAGAIN)
             return;
         if (length <= 0) {
@@ -139,6 +181,10 @@ void EmbeddedHost::receive()
         }
         if (static_cast<size_t>(length) < sizeof(lb_embed_header))
             continue;
+        if (header.msg_flags & MSG_TRUNC) {
+            warnln("pacific: dropped a message ({}) longer than the protocol allows", message.header.type);
+            continue;
+        }
 
         auto text_length = min(static_cast<size_t>(message.header.text_length), static_cast<size_t>(length) - sizeof(lb_embed_header));
         if (on_message)

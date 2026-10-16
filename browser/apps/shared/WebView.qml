@@ -175,6 +175,7 @@ WebContainer {
     onForwardButtonPressed: webView.goForward()
 
     // Selection drag handles (at container level so contentItem is available)
+    // The selection's handles, in the interface's pixels (the page reports the selection in them already).
     Item {
         id: selHandles
         visible: webView.contentItem && webView.contentItem.textSelectionActive
@@ -182,13 +183,12 @@ WebContainer {
         z: 100
 
         property var ci: webView.contentItem
-        property real dsf: ci ? ci.deviceScaleFactor || 1.0 : 1.0
 
         Item {
             id: selectionCursor
             visible: selHandles.visible && selHandles.ci && selHandles.ci.textSelectionActive
-            x: selHandles.ci ? (selHandles.ci.selectionEndX * selHandles.dsf) : 0
-            y: selHandles.ci ? (selHandles.ci.selectionEndY * selHandles.dsf) - (Theme.iconSizeMedium / 2) : 0
+            x: selHandles.ci ? selHandles.ci.selectionEndX : 0
+            y: selHandles.ci ? selHandles.ci.selectionEndY - (Theme.iconSizeMedium / 2) : 0
             width: Theme.paddingSmall
             height: Theme.iconSizeMedium
             z: 101
@@ -214,8 +214,8 @@ WebContainer {
             sourceSize.height: Theme.iconSizeMedium
             source: "image://theme/icon-m-textselection-start?" + Theme.highlightColor
             visible: selHandles.visible && selHandles.ci && selHandles.ci.selectionStartX >= 0
-            x: selHandles.ci ? selHandles.ci.selectionStartX * selHandles.dsf - width : 0
-            y: selHandles.ci ? selHandles.ci.selectionStartY * selHandles.dsf : 0
+            x: selHandles.ci ? selHandles.ci.selectionStartX - width : 0
+            y: selHandles.ci ? selHandles.ci.selectionStartY : 0
 
             MouseArea {
                 anchors.fill: parent
@@ -223,11 +223,13 @@ WebContainer {
                 drag.target: startHandle
                 drag.axis: Drag.XAndYAxis
                 onPositionChanged: {
-                    if (drag.active && selHandles.ci) {
-                        var cssX = (startHandle.x + startHandle.width) / selHandles.dsf
-                        var cssY = (startHandle.y + startHandle.height / 2) / selHandles.dsf
-                        selHandles.ci.moveSelectionStart(cssX, cssY)
-                    }
+                    if (drag.active && selHandles.ci)
+                        selHandles.ci.moveSelectionStart(startHandle.x + startHandle.width, startHandle.y + startHandle.height / 2)
+                }
+                // NB: Dragging set x and y, which ended their bindings; the handle follows the selection again.
+                onReleased: {
+                    startHandle.x = Qt.binding(function() { return selHandles.ci ? selHandles.ci.selectionStartX - startHandle.width : 0 })
+                    startHandle.y = Qt.binding(function() { return selHandles.ci ? selHandles.ci.selectionStartY : 0 })
                 }
             }
         }
@@ -244,8 +246,8 @@ WebContainer {
             sourceSize.height: Theme.iconSizeMedium
             source: "image://theme/icon-m-textselection-end?" + Theme.highlightColor
             visible: selHandles.visible && selHandles.ci && selHandles.ci.selectionEndX >= 0
-            x: selHandles.ci ? selHandles.ci.selectionEndX * selHandles.dsf : 0
-            y: selHandles.ci ? selHandles.ci.selectionEndY * selHandles.dsf : 0
+            x: selHandles.ci ? selHandles.ci.selectionEndX : 0
+            y: selHandles.ci ? selHandles.ci.selectionEndY : 0
 
             MouseArea {
                 anchors.fill: parent
@@ -253,11 +255,12 @@ WebContainer {
                 drag.target: endHandle
                 drag.axis: Drag.XAndYAxis
                 onPositionChanged: {
-                    if (drag.active && selHandles.ci) {
-                        var cssX = endHandle.x / selHandles.dsf
-                        var cssY = (endHandle.y + endHandle.height / 2) / selHandles.dsf
-                        selHandles.ci.moveSelectionEnd(cssX, cssY)
-                    }
+                    if (drag.active && selHandles.ci)
+                        selHandles.ci.moveSelectionEnd(endHandle.x, endHandle.y + endHandle.height / 2)
+                }
+                onReleased: {
+                    endHandle.x = Qt.binding(function() { return selHandles.ci ? selHandles.ci.selectionEndX : 0 })
+                    endHandle.y = Qt.binding(function() { return selHandles.ci ? selHandles.ci.selectionEndY : 0 })
                 }
             }
         }

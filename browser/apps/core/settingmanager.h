@@ -60,8 +60,7 @@ private:
     bool m_ambienceDark = false;
     bool m_closeAllTabsOnExit = false;
 
-    QScopedPointer<QJSValue> m_calculateCacheSizeCb;
-    QScopedPointer<QJSValue> m_calculateSiteDataSizeCb;
+    void answerDirectorySize(const QString &path, QJSValue callback);
 };
 
 #endif

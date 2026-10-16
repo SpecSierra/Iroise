@@ -46,6 +46,10 @@ QList<WebPage *> &livePages()
 // (the grab reads the GPU back and the JPEG is written on this thread, a hitch while the page moves), or after this
 // many looks of a page that never keeps still (a video).
 const int kThumbnailIntervalMs = 1000;
+// How long after the user's last touch or key a page message that only the user can cause (a login sent, a selection
+// begun) is believed.
+const qint64 kUserInputWindowMs = 3000;
+const int kSameLoginSaved = -2;
 const int kThumbnailMaxBusyChecks = 30;
 const int kThumbnailMaxWidth = 540;
 
@@ -224,6 +228,12 @@ WebPage::WebPage(QQuickItem *parent)
     connect(&m_thumbnailTimer, &QTimer::timeout, this, &WebPage::checkThumbnail);
 
     // A login sent on a page that stays where it is (a script-driven sign-in) is offered after a moment.
+    m_saveLoginExpiryTimer.setSingleShot(true);
+    m_saveLoginExpiryTimer.setInterval(120000);
+    connect(&m_saveLoginExpiryTimer, &QTimer::timeout, this, [this] {
+        m_saveLoginWaitsForVault = false;
+        m_saveLoginPassword.clear();
+    });
     m_offerLoginTimer.setSingleShot(true);
     m_offerLoginTimer.setInterval(4000);
     connect(&m_offerLoginTimer, &QTimer::timeout, this, &WebPage::offerCapturedLogin);
@@ -375,15 +385,20 @@ void WebPage::onLoadingChanged(EngineViewLoadRequest *loadRequest)
         emit loadedChanged();
     }
     if (finished) {
-        m_lastCommittedUrl = url();
         // NB: Again, in case the commit's went to the page that was leaving.
         installPageAgent();
         // NB: A certificate the engine could not verify ends the load on its own error page, which says so.
         evaluate(QStringLiteral("location.href==='about:error'&&document.body.innerText.indexOf('SSL verification failed')>=0"),
-            [this](const QJsonValue &failed) { setTlsError(failed.toBool()); updateSecurity(); });
+            [this](const QJsonValue &failed) { confirmTlsError(failed.toBool()); });
     } else {
         m_pageAgentInstalled = false;
+        // A load after a crash (a reload, its banner's included) starts the page afresh.
+        if (m_crashed) {
+            m_crashed = false;
+            emit crashedChanged();
+        }
         setTlsError(false);
+        recheckCertificateException();
         // What the old page had selected, was searching for or was asking is gone with it. A login it sent is
         // offered for saving now that it has gone on.
         offerCapturedLogin();
@@ -577,6 +592,7 @@ QVariant WebPage::inputMethodQuery(Qt::InputMethodQuery query) const
 
 void WebPage::inputMethodEvent(QInputMethodEvent *event)
 {
+    noteUserInput();
     if (!event->commitString().isEmpty() || event->replacementLength() > 0) {
         // replacementStart is relative to the caret and negative for text before it.
         const int replaced = event->replacementStart() < 0 ? qMin(-event->replacementStart(), event->replacementLength()) : 0;
@@ -589,6 +605,7 @@ void WebPage::inputMethodEvent(QInputMethodEvent *event)
 
 void WebPage::keyPressEvent(QKeyEvent *event)
 {
+    noteUserInput();
     int key = 0;
     switch (event->key()) {
     case Qt::Key_Backspace:
@@ -633,8 +650,19 @@ void WebPage::keyPressEvent(QKeyEvent *event)
     event->accept();
 }
 
+void WebPage::noteUserInput()
+{
+    m_lastUserInputMs = QDateTime::currentMSecsSinceEpoch();
+}
+
+bool WebPage::userActedRecently() const
+{
+    return QDateTime::currentMSecsSinceEpoch() - m_lastUserInputMs < kUserInputWindowMs;
+}
+
 void WebPage::touchEvent(QTouchEvent *event)
 {
+    noteUserInput();
     if (event->type() == QEvent::TouchBegin) {
         m_lastTouchMs = QDateTime::currentMSecsSinceEpoch();
         emit touched();
@@ -1010,9 +1038,7 @@ void WebPage::fillLoginForFocusedForm()
     if (url().scheme() != QLatin1String("https") || !store->isUnlocked())
         return;
     const QString site = origin(url());
-    for (const auto &entry : store->all()) {
-        if (entry.second.value(QStringLiteral("hostname")).toString() != site)
-            continue;
+    for (const auto &entry : store->forHost(site)) {
         QJsonObject login;
         login.insert(QStringLiteral("o"), site);
         login.insert(QStringLiteral("u"), entry.second.value(QStringLiteral("username")).toString());
@@ -1022,39 +1048,29 @@ void WebPage::fillLoginForFocusedForm()
     }
 }
 
-// The hosts whose certificates the user chose to trust although the engine could not verify them, for this run.
-static QSet<QString> &certificateExceptions()
+namespace {
+
+// A certificate the user chose to trust although the engine could not verify it, for this run: the engine trusts its
+// host from then on, whatever certificate the host shows, so the interface checks that it is still this one.
+struct CertificateException {
+    QByteArray fingerprint;
+    bool fromPrivateTab = false;
+};
+
+QHash<QString, CertificateException> &certificateExceptions()
 {
-    static QSet<QString> hosts;
+    static QHash<QString, CertificateException> hosts;
     return hosts;
 }
 
-void WebPage::setTlsError(bool failed)
+void sendCertificateExceptions()
 {
-    if (failed == m_tlsErrorPending)
-        return;
-    m_tlsErrorPending = failed;
-    m_tlsErrorFailingUri = failed ? url().toString() : QString();
-    m_tlsErrorHost = failed ? url().host() : QString();
-    m_tlsErrorMessage.clear();
-    emit tlsErrorChanged();
+    LadybirdEngine::instance()->send(0, LB_EMBED_SET_CERTIFICATE_EXCEPTIONS, 0, 0, 0, 0, 0,
+        QStringList(certificateExceptions().keys()).join(QLatin1Char('\n')).toUtf8());
 }
 
-void WebPage::acceptTlsCertificate()
-{
-    if (!m_tlsErrorPending)
-        return;
-    certificateExceptions().insert(m_tlsErrorHost);
-    LadybirdEngine::instance()->send(0, LB_EMBED_SET_CERTIFICATE_EXCEPTIONS, 0, 0, 0, 0, 0, QStringList(certificateExceptions().values()).join(QLatin1Char('\n')).toUtf8());
-    const QByteArray failing = m_tlsErrorFailingUri.toUtf8();
-    setTlsError(false);
-    sendToEngine(LB_EMBED_LOAD, 0, 0, 0, 0, failing);
-}
-
-namespace {
-
-// What the security panel shows about a host's certificate. Fetched once per host and run, over a connection of
-// our own: the engine does not hand out the certificates it checked.
+// What the security panel shows about a host's certificate. The engine does not hand out the certificates it
+// checked, so these come over a connection of our own.
 struct CertificateDetails {
     QString subject, issuer, cipher, notBefore, notAfter, pem, issuerOrganization, issuerCommonName, subjectOrganization, errors;
 };
@@ -1065,6 +1081,168 @@ QHash<QString, CertificateDetails> &certificateDetails()
     return details;
 }
 
+struct CertificateCheck {
+    // False only when there was no answer (no connection, no handshake): nothing is known then.
+    bool answered = false;
+    bool verified = false;
+    QByteArray fingerprint;
+    CertificateDetails details;
+};
+
+// Connects to the host as the engine would and says what it saw: whether the certificate verifies, and which it
+// is. Nothing is sent over the connection. The answer comes once, within ten seconds.
+void checkCertificate(QObject *context, const QString &host, int port, std::function<void(const CertificateCheck &)> done)
+{
+    QSslSocket *socket = new QSslSocket(context);
+    auto finish = [socket, done](const CertificateCheck &check) {
+        if (socket->property("answered").toBool())
+            return;
+        socket->setProperty("answered", true);
+        done(check);
+        socket->abort();
+        socket->deleteLater();
+    };
+    QTimer::singleShot(10000, socket, [finish] { finish(CertificateCheck()); });
+    QObject::connect(socket, static_cast<void (QSslSocket::*)(QAbstractSocket::SocketError)>(&QSslSocket::error), socket,
+        [finish, socket](QAbstractSocket::SocketError) {
+            if (!socket->isEncrypted())
+                finish(CertificateCheck());
+        });
+    QObject::connect(socket, static_cast<void (QSslSocket::*)(const QList<QSslError> &)>(&QSslSocket::sslErrors), socket, [socket](const QList<QSslError> &errors) {
+        QStringList descriptions;
+        for (const QSslError &error : errors)
+            descriptions.append(error.errorString());
+        socket->setProperty("errors", descriptions.join(QStringLiteral("; ")));
+        // Only to read the certificate: nothing is sent over this connection.
+        socket->ignoreSslErrors();
+    });
+    QObject::connect(socket, &QSslSocket::encrypted, socket, [socket, host, finish] {
+        const QList<QSslCertificate> chain = socket->peerCertificateChain();
+        CertificateCheck check;
+        check.answered = true;
+        check.verified = socket->property("errors").toString().isEmpty();
+        CertificateDetails &details = check.details;
+        if (!chain.isEmpty()) {
+            const QSslCertificate &leaf = chain.first();
+            check.fingerprint = leaf.digest(QCryptographicHash::Sha256);
+            details.subject = leaf.subjectInfo(QSslCertificate::CommonName).value(0, host);
+            details.subjectOrganization = leaf.subjectInfo(QSslCertificate::Organization).value(0);
+            details.issuerCommonName = leaf.issuerInfo(QSslCertificate::CommonName).value(0);
+            details.issuerOrganization = leaf.issuerInfo(QSslCertificate::Organization).value(0);
+            details.issuer = details.issuerOrganization.isEmpty() ? details.issuerCommonName : details.issuerOrganization;
+            details.notBefore = leaf.effectiveDate().toString(Qt::DefaultLocaleShortDate);
+            details.notAfter = leaf.expiryDate().toString(Qt::DefaultLocaleShortDate);
+            details.pem = QString::fromLatin1(leaf.toPem());
+        }
+        details.cipher = socket->sessionCipher().name();
+        details.errors = socket->property("errors").toString();
+        finish(check);
+    });
+    socket->connectToHostEncrypted(host, static_cast<quint16>(port));
+}
+
+}
+
+// NB: The page says whether it is the engine's certificate error page, and a page can say anything (it can replace
+//     JSON.stringify, which carries the answer). So the error stands only if our own look at the host's certificate
+//     finds it does not verify, or finds nothing at all.
+void WebPage::confirmTlsError(bool claimed)
+{
+    if (!claimed || url().scheme() != QLatin1String("https")) {
+        setTlsError(false);
+        updateSecurity();
+        return;
+    }
+    const QUrl pageUrl = url();
+    checkCertificate(this, pageUrl.host(), pageUrl.port(443), [this, pageUrl](const CertificateCheck &check) {
+        if (url() != pageUrl)
+            return;
+        if (check.answered && check.verified) {
+            qWarning("WebPage: the page claims a certificate error that %s does not show; ignored", qPrintable(pageUrl.host()));
+            updateSecurity();
+            return;
+        }
+        m_tlsErrorFingerprint = check.fingerprint;
+        setTlsError(true);
+        updateSecurity();
+    });
+}
+
+void WebPage::setTlsError(bool failed)
+{
+    if (failed == m_tlsErrorPending)
+        return;
+    m_tlsErrorPending = failed;
+    m_tlsErrorFailingUri = failed ? url().toString() : QString();
+    m_tlsErrorHost = failed ? url().host() : QString();
+    if (!failed)
+        m_tlsErrorFingerprint.clear();
+    m_tlsErrorMessage.clear();
+    emit tlsErrorChanged();
+}
+
+void WebPage::acceptTlsCertificate()
+{
+    if (!m_tlsErrorPending)
+        return;
+    CertificateException exception;
+    exception.fingerprint = m_tlsErrorFingerprint;
+    exception.fromPrivateTab = privateBrowsing();
+    certificateExceptions().insert(m_tlsErrorHost, exception);
+    certificateDetails().remove(m_tlsErrorHost);
+    sendCertificateExceptions();
+    const QByteArray failing = m_tlsErrorFailingUri.toUtf8();
+    setTlsError(false);
+    sendToEngine(LB_EMBED_LOAD, 0, 0, 0, 0, failing);
+}
+
+// A host the user trusted shows another certificate than the one trusted: the trust is withdrawn and the user asked
+// again. NB: The engine has already sent what it was loading by the time we know; this only stops it going on.
+void WebPage::recheckCertificateException()
+{
+    const QUrl pageUrl = url();
+    const QString host = pageUrl.host();
+    if (pageUrl.scheme() != QLatin1String("https") || !certificateExceptions().contains(host))
+        return;
+    checkCertificate(this, host, pageUrl.port(443), [this, host, pageUrl](const CertificateCheck &check) {
+        auto exception = certificateExceptions().constFind(host);
+        if (!check.answered || exception == certificateExceptions().constEnd() || check.fingerprint == exception->fingerprint)
+            return;
+        qWarning("WebPage: %s shows another certificate than the one trusted; trust withdrawn", qPrintable(host));
+        certificateExceptions().remove(host);
+        certificateDetails().remove(host);
+        sendCertificateExceptions();
+        if (url().host() != host)
+            return;
+        sendToEngine(LB_EMBED_STOP);
+        m_tlsErrorFingerprint = check.fingerprint;
+        m_tlsErrorPending = false;
+        setTlsError(true);
+        m_tlsErrorFailingUri = pageUrl.toString();
+        updateSecurity();
+    });
+}
+
+void WebPage::clearPrivateBrowsingData()
+{
+    forgetCertificateExceptions(true);
+    EngineView::clearPrivateBrowsingData();
+}
+
+void WebPage::forgetCertificateExceptions(bool privateOnly)
+{
+    bool changed = false;
+    for (auto it = certificateExceptions().begin(); it != certificateExceptions().end();) {
+        if (!privateOnly || it->fromPrivateTab) {
+            certificateDetails().remove(it.key());
+            it = certificateExceptions().erase(it);
+            changed = true;
+        } else {
+            ++it;
+        }
+    }
+    if (changed)
+        sendCertificateExceptions();
 }
 
 void WebPage::updateSecurity()
@@ -1075,7 +1253,6 @@ void WebPage::updateSecurity()
         return;
     }
     const QString host = pageUrl.host();
-    const int port = pageUrl.port(443);
     auto show = [this, host](const CertificateDetails &details) {
         if (url().host() != host)
             return;
@@ -1089,39 +1266,16 @@ void WebPage::updateSecurity()
         return;
     }
     show(CertificateDetails { host, {}, {}, {}, {}, {}, {}, {}, {}, {} });
-
-    QSslSocket *socket = new QSslSocket(this);
-    QTimer::singleShot(10000, socket, &QObject::deleteLater);
-    connect(socket, static_cast<void (QSslSocket::*)(const QList<QSslError> &)>(&QSslSocket::sslErrors), socket, [socket](const QList<QSslError> &errors) {
-        QStringList descriptions;
-        for (const QSslError &error : errors)
-            descriptions.append(error.errorString());
-        socket->setProperty("errors", descriptions.join(QStringLiteral("; ")));
-        // Only to read the certificate: nothing is sent over this connection.
-        socket->ignoreSslErrors();
+    // NB: A private tab makes no connection of ours to the sites it visits: its panel shows the host only.
+    if (privateBrowsing())
+        return;
+    checkCertificate(this, host, pageUrl.port(443), [show, host](const CertificateCheck &check) {
+        if (!check.answered)
+            return;
+        // NB: Bounded: one entry per host visited this run, dropped with the trust in it.
+        certificateDetails().insert(host, check.details);
+        show(check.details);
     });
-    connect(socket, &QSslSocket::encrypted, socket, [socket, host, show] {
-        const QList<QSslCertificate> chain = socket->peerCertificateChain();
-        CertificateDetails details;
-        if (!chain.isEmpty()) {
-            const QSslCertificate &leaf = chain.first();
-            details.subject = leaf.subjectInfo(QSslCertificate::CommonName).value(0, host);
-            details.subjectOrganization = leaf.subjectInfo(QSslCertificate::Organization).value(0);
-            details.issuerCommonName = leaf.issuerInfo(QSslCertificate::CommonName).value(0);
-            details.issuerOrganization = leaf.issuerInfo(QSslCertificate::Organization).value(0);
-            details.issuer = details.issuerOrganization.isEmpty() ? details.issuerCommonName : details.issuerOrganization;
-            details.notBefore = leaf.effectiveDate().toString(Qt::DefaultLocaleShortDate);
-            details.notAfter = leaf.expiryDate().toString(Qt::DefaultLocaleShortDate);
-            details.pem = QString::fromLatin1(leaf.toPem());
-        }
-        details.cipher = socket->sessionCipher().name();
-        details.errors = socket->property("errors").toString();
-        certificateDetails().insert(host, details);
-        show(details);
-        socket->disconnectFromHost();
-        socket->deleteLater();
-    });
-    socket->connectToHostEncrypted(host, static_cast<quint16>(port));
 }
 
 // Shared by every non-private tab, for as long as the browser runs.
@@ -1194,19 +1348,12 @@ void WebPage::offerCapturedLogin()
     const QString username = login.value(QStringLiteral("u")).toString();
     const QString password = login.value(QStringLiteral("p")).toString();
 
-    // What the vault has for this site and name already: nothing to ask if it is the same password.
-    m_saveLoginExistingUid = -1;
-    CredentialStore *store = CredentialStore::instance();
-    if (store->isUnlocked()) {
-        for (const auto &entry : store->all()) {
-            if (entry.second.value(QStringLiteral("hostname")).toString() != m_capturedLoginOrigin
-                || entry.second.value(QStringLiteral("username")).toString() != username)
-                continue;
-            if (entry.second.value(QStringLiteral("password")).toString() == password)
-                return;
-            m_saveLoginExistingUid = entry.first;
-        }
-    }
+    // Nothing to ask if the vault has this site, name and password already. (With the vault locked this is not
+    // known yet; it is looked up again when the login is stored.)
+    const int existing = savedLoginId(m_capturedLoginOrigin, username, password);
+    if (existing == kSameLoginSaved)
+        return;
+    m_saveLoginExistingUid = existing;
     m_saveLoginOrigin = m_capturedLoginOrigin;
     m_saveLoginHost = QUrl(m_capturedLoginOrigin).host();
     m_saveLoginUsername = username;
@@ -1230,14 +1377,37 @@ void WebPage::resolveSaveLogin(bool save)
         storePendingLogin();
         return;
     }
-    // The login is stored as soon as the vault is opened (or created) on the page this asks for.
+    // The login is stored as soon as the vault is opened (or created) on the page this asks for, if that is soon:
+    // the password is not kept in memory for good.
     m_saveLoginWaitsForVault = true;
+    m_saveLoginExpiryTimer.start();
     emit saveLoginNeedsUnlock();
+}
+
+// The saved login for this site and name (its id), kSameLoginSaved if it has this very password too, or -1.
+int WebPage::savedLoginId(const QString &site, const QString &username, const QString &password)
+{
+    int id = -1;
+    for (const auto &entry : CredentialStore::instance()->forHost(site)) {
+        if (entry.second.value(QStringLiteral("username")).toString() != username)
+            continue;
+        if (entry.second.value(QStringLiteral("password")).toString() == password)
+            return kSameLoginSaved;
+        id = entry.first;
+    }
+    return id;
 }
 
 void WebPage::storePendingLogin()
 {
     m_saveLoginWaitsForVault = false;
+    m_saveLoginExpiryTimer.stop();
+    // NB: Looked up now: the vault may have been locked when the user said yes.
+    const int existing = savedLoginId(m_saveLoginOrigin, m_saveLoginUsername, m_saveLoginPassword);
+    if (existing == kSameLoginSaved) {
+        m_saveLoginPassword.clear();
+        return;
+    }
     QVariantMap fields;
     fields.insert(QStringLiteral("hostname"), m_saveLoginOrigin);
     fields.insert(QStringLiteral("formSubmitURL"), m_saveLoginOrigin);
@@ -1247,8 +1417,8 @@ void WebPage::storePendingLogin()
     fields.insert(QStringLiteral("usernameField"), m_saveLoginFields.value(QStringLiteral("uf")));
     fields.insert(QStringLiteral("passwordField"), m_saveLoginFields.value(QStringLiteral("pf")));
     CredentialStore *store = CredentialStore::instance();
-    if (m_saveLoginExistingUid >= 0)
-        store->update(m_saveLoginExistingUid, fields);
+    if (existing >= 0)
+        store->update(existing, fields);
     else
         store->insert(fields);
     m_saveLoginPassword.clear();
@@ -1266,7 +1436,7 @@ void WebPage::selectMenuOption(int index)
 
 void WebPage::downloadUrl(const QString &url)
 {
-    DownloadModel::instance()->start(url);
+    DownloadModel::instance()->start(url, privateBrowsing());
 }
 
 void WebPage::closeSelectMenu()
@@ -1282,7 +1452,8 @@ void WebPage::chooseFiles(const QStringList &filePaths)
     for (const QString &entry : filePaths) {
         QUrl url = QUrl::fromUserInput(entry);
         QString path = url.isValid() && url.isLocalFile() ? url.toLocalFile() : entry;
-        if (!path.isEmpty())
+        // NB: The picker names one file several ways (its path, its URL); it is chosen once.
+        if (!path.isEmpty() && !paths.contains(path))
             paths.append(path);
     }
     sendToEngine(LB_EMBED_FILE_PICKER_CLOSED, 0, 0, 0, 0, paths.join(QLatin1Char('\n')).toUtf8());
@@ -1370,6 +1541,11 @@ void WebPage::clearContextInfo()
     setContextInfo(QVariantMap());
 }
 
+bool WebPage::adBlockEnabledGlobally()
+{
+    return s_adBlockEnabled;
+}
+
 bool WebPage::adBlockEnabled() const
 {
     return s_adBlockEnabled;
@@ -1426,8 +1602,10 @@ void WebPage::pageMessage(const QString &kind, const QJsonValue &data)
         m_playsVideo = data.toBool();
         updateMediaState();
     } else if (kind == QLatin1String("login")) {
-        // NB: The site is the one the tab is at, never anything the page says.
-        if (url().scheme() != QLatin1String("https") || privateBrowsing())
+        // NB: The site is the one the tab is at, never anything the page says. And any frame in the page can post
+        //     this (its console reaches us as the page's does), an advert's included, so a login only counts right
+        //     after the user touched or typed: a frame cannot have us offer to save credentials of its own unasked.
+        if (url().scheme() != QLatin1String("https") || privateBrowsing() || !userActedRecently())
             return;
         m_capturedLogin = data.toObject().toVariantMap();
         m_capturedLoginOrigin = origin(url());
@@ -1436,6 +1614,9 @@ void WebPage::pageMessage(const QString &kind, const QJsonValue &data)
         // NB: The interface places the handles in its own pixels, which are the device's; the page answers in
         //     CSS pixels.
         QJsonObject selection = data.toObject();
+        // NB: As with logins, any frame can post this; a selection only starts from the user's own long press.
+        if (!m_textSelectionActive && !userActedRecently())
+            return;
         const qreal scale = deviceScaleFactor();
         handleJsSelectionUpdate(selection.value(QStringLiteral("t")).toString(),
             selection.value(QStringLiteral("sx")).toDouble() * scale, selection.value(QStringLiteral("sy")).toDouble() * scale,
@@ -1566,6 +1747,9 @@ void WebPage::filePickerRequested(bool multiple)
 
 void WebPage::clearEngineDataGlobally(bool cache, bool siteData)
 {
+    // What the user trusted goes with the rest of what is known of sites.
+    if (siteData)
+        forgetCertificateExceptions(false);
     LadybirdEngine::instance()->send(0, LB_EMBED_CLEAR_DATA, (cache ? LB_EMBED_CLEAR_CACHE : 0) | (siteData ? LB_EMBED_CLEAR_SITE_DATA : 0));
 }
 

@@ -27,6 +27,10 @@
 #include "DownloadModel.h"
 
 #include <QGuiApplication>
+#include "LadybirdEngine.h"
+#include "dbmanager.h"
+#include <fcntl.h>
+#include <QSocketNotifier>
 #include <unistd.h>
 #include <signal.h>
 #include <dlfcn.h>
@@ -120,12 +124,22 @@ static QString installationPath()
     return QDir::cleanPath(QFileInfo(QString::fromLocal8Bit(info.dli_fname)).absolutePath() + QStringLiteral("/.."));
 }
 
+// SIGTERM (the app closed from the task switcher, or the system shutting down) ends the event loop, so that what
+// runs at quit runs (closing all tabs, if the user asked for that). Should the loop not get round to it, the process
+// ends three seconds later all the same.
+static int s_terminationPipe[2] = { -1, -1 };
+
+static void onTermination(int)
+{
+    const char byte = 1;
+    if (::write(s_terminationPipe[1], &byte, 1) < 0) { }
+    alarm(3);
+}
+
 // Pacific: the interface's start. The app's executable (launcher/launcher.c) loads this library and calls this.
 extern "C" Q_DECL_EXPORT int pacific_ui_main(int argc, char *argv[])
 {
     signal(SIGPIPE, SIG_IGN);
-    // So that closing the app from the task switcher really ends it.
-    signal(SIGTERM, SIG_DFL);
 
     QSurfaceFormat format = QSurfaceFormat::defaultFormat();
     format.setRenderableType(QSurfaceFormat::OpenGLES);
@@ -147,6 +161,13 @@ extern "C" Q_DECL_EXPORT int pacific_ui_main(int argc, char *argv[])
         call << QStringList(app.arguments().mid(1));
         bus.call(call);
         return 0;
+    }
+
+    if (::pipe2(s_terminationPipe, O_CLOEXEC) == 0) {
+        QSocketNotifier *termination = new QSocketNotifier(s_terminationPipe[0], QSocketNotifier::Read, &app);
+        QObject::connect(termination, &QSocketNotifier::activated, &app, &QCoreApplication::quit);
+        signal(SIGALRM, SIG_DFL);
+        signal(SIGTERM, onTermination);
     }
 
     app.setQuitOnLastWindowClosed(true);
@@ -205,6 +226,9 @@ extern "C" Q_DECL_EXPORT int pacific_ui_main(int argc, char *argv[])
 
     view.showFullScreen();
     int result = app.exec();
-    // NB: Without this, the process can hang on in threads' cleanup after the window has gone.
+    // NB: _exit, because the process can hang on in threads' cleanup after the window has gone. So what the database
+    //     was still asked to do is waited for first, and the engine is let go of.
+    DBManager::flush();
+    LadybirdEngine::instance()->shutdown();
     _exit(result);
 }

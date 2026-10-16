@@ -389,18 +389,34 @@ bool CredentialStore::wipe()
 
 QList<QPair<int, QVariantMap>> CredentialStore::all()
 {
+    return select(QString());
+}
+
+QList<QPair<int, QVariantMap>> CredentialStore::forHost(const QString &hostname)
+{
+    return select(hostname);
+}
+
+// Every login, or with a hostname those of that site only.
+QList<QPair<int, QVariantMap>> CredentialStore::select(const QString &hostname)
+{
     QList<QPair<int, QVariantMap>> out;
     if (!isUnlocked())
         return out;
 
     sqlite3_stmt *stmt = nullptr;
-    const char *sql =
-        "SELECT id, hostname, formSubmitURL, httpRealm, username, password,"
-        " usernameField, passwordField FROM logins ORDER BY hostname COLLATE NOCASE;";
+    const char *sql = hostname.isNull()
+        ? "SELECT id, hostname, formSubmitURL, httpRealm, username, password,"
+          " usernameField, passwordField FROM logins ORDER BY hostname COLLATE NOCASE;"
+        : "SELECT id, hostname, formSubmitURL, httpRealm, username, password,"
+          " usernameField, passwordField FROM logins WHERE hostname = ?1;";
     if (sqlite3_prepare_v2(m_db, sql, -1, &stmt, nullptr) != SQLITE_OK) {
-        qWarning() << "[CredentialStore] all() prepare failed:" << sqlite3_errmsg(m_db);
+        qWarning() << "[CredentialStore] select prepare failed:" << sqlite3_errmsg(m_db);
         return out;
     }
+    const QByteArray host = hostname.toUtf8();
+    if (!hostname.isNull())
+        sqlite3_bind_text(stmt, 1, host.constData(), host.size(), SQLITE_TRANSIENT);
 
     while (sqlite3_step(stmt) == SQLITE_ROW) {
         const int id = sqlite3_column_int(stmt, 0);

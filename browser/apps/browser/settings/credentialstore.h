@@ -84,6 +84,8 @@ public:
 
     // All data accessors return empty / -1 / false while locked.
     QList<QPair<int, QVariantMap>> all();
+    // The logins saved for one site (its origin, as stored in hostname).
+    QList<QPair<int, QVariantMap>> forHost(const QString &hostname);
     int insert(const QVariantMap &fields);
     bool update(int id, const QVariantMap &fields);
     bool remove(int id);
@@ -100,6 +102,7 @@ private:
     Q_DISABLE_COPY(CredentialStore)
 
     QString databasePath() const;
+    QList<QPair<int, QVariantMap>> select(const QString &hostname);
     // Opens the DB, applies the passphrase, and either creates the schema
     // (creating=true) or verifies it decrypts (creating=false).
     bool openWithPassphrase(const QString &passphrase, bool creating);

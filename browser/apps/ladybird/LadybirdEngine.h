@@ -8,6 +8,7 @@
 
 #include <QByteArray>
 #include <QHash>
+#include <QMap>
 #include <QObject>
 #include <QProcess>
 #include <QSize>
@@ -52,6 +53,10 @@ public:
 
     quint32 addView(LadybirdEngineClient*, const QSize& size, qreal devicePixelRatio, bool isPrivate);
     void removeView(quint32 view);
+    // The app is ending: the engine is asked to go, and the socket removed.
+    void shutdown();
+    // The engine that had this view is gone: the view is made anew under another number (addView).
+    void forgetView(quint32 view);
 
     void send(quint32 view, lb_embed_message_type type, int a = 0, int b = 0, int c = 0, int d = 0,
         double scale = 0, const QByteArray& text = QByteArray());
@@ -65,6 +70,8 @@ public:
 signals:
     void connectedChanged();
     void viewOffered(quint32 view);
+    // A new engine took over from one that went away; the views have to be made again.
+    void restarted();
 
 private slots:
     void acceptEngine();
@@ -75,6 +82,7 @@ private:
         dev_t device;
         ino_t inode;
         quint64 identity;
+        quint32 view;
         uchar* pixels;
         size_t length;
         int fd;
@@ -90,9 +98,12 @@ private:
     ~LadybirdEngine() override;
 
     void start();
+    void launch();
+    void engineGone();
+    static bool isSetting(lb_embed_message_type);
     void write(const lb_embed_header&, const QByteArray& text);
     void handleFrame(const lb_embed_header&, int fd, quint64 identity);
-    const Mapping* mappingFor(int fd, size_t length, quint64 identity);
+    const Mapping* mappingFor(quint32 view, int fd, size_t length, quint64 identity);
 
     QProcess m_process;
     QString m_socketPath;
@@ -101,6 +112,11 @@ private:
     QSocketNotifier* m_listenerNotifier = nullptr;
     QSocketNotifier* m_connectionNotifier = nullptr;
     QVector<Queued> m_queue;
+    // The last of each of the app's settings sent, for an engine started anew.
+    QMap<int, Queued> m_settings;
+    QVector<qint64> m_recentRestarts;
+    bool m_restarting = false;
+    bool m_gaveUp = false;
 
     QHash<quint32, LadybirdEngineClient*> m_views;
     QHash<quint32, QVector<QPair<lb_embed_header, QString>>> m_unclaimedViews;

@@ -11,6 +11,7 @@
 #include "browserpaths.h"
 
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDir>
 #include <QGuiApplication>
 #include <QScreen>
@@ -56,6 +57,22 @@ LadybirdEngine::~LadybirdEngine()
         ::munmap(mapping.pixels, mapping.length);
         ::close(mapping.fd);
     }
+}
+
+void LadybirdEngine::shutdown()
+{
+    m_gaveUp = true;
+    if (m_connectionNotifier)
+        m_connectionNotifier->setEnabled(false);
+    // The engine ends its run when the connection closes.
+    if (m_connection >= 0)
+        ::close(m_connection);
+    m_connection = -1;
+    if (!m_socketPath.isEmpty())
+        ::unlink(m_socketPath.toLocal8Bit().constData());
+    m_socketPath.clear();
+    if (!m_process.waitForFinished(1000))
+        m_process.terminate();
 }
 
 void LadybirdEngine::start()
@@ -118,8 +135,63 @@ void LadybirdEngine::start()
     }
     m_process.setProcessEnvironment(environment);
     m_process.setProcessChannelMode(QProcess::ForwardedChannels);
+    launch();
+}
+
+void LadybirdEngine::launch()
+{
     // The engine is the app's own executable in another role (see launcher/launcher.c).
     m_process.start(QCoreApplication::applicationFilePath(), QStringList { QStringLiteral("--engine-role"), QStringLiteral("Ladybird") });
+}
+
+// The engine went away (it crashed, or was killed). Every tab says so, and a new engine is started for them, which
+// gets the app's settings again; each view then makes itself anew, and reloading a tab loads its page there. An
+// engine that keeps dying at once is not started again.
+void LadybirdEngine::engineGone()
+{
+    qWarning("LadybirdEngine: the engine went away");
+    m_connectionNotifier->setEnabled(false);
+    m_connectionNotifier->deleteLater();
+    m_connectionNotifier = nullptr;
+    ::close(m_connection);
+    m_connection = -1;
+    emit connectedChanged();
+
+    for (const Mapping& mapping : m_mappings) {
+        for (LadybirdEngineClient* client : m_views)
+            client->engineBufferGone(mapping.id);
+        ::munmap(mapping.pixels, mapping.length);
+        ::close(mapping.fd);
+    }
+    m_mappings.clear();
+    m_unclaimedViews.clear();
+    LadybirdGeolocation::instance()->stopAll();
+
+    lb_embed_header crashed;
+    memset(&crashed, 0, sizeof(crashed));
+    crashed.type = LB_EMBED_CRASHED;
+    crashed.a = 1;
+    for (auto it = m_views.constBegin(); it != m_views.constEnd(); ++it) {
+        crashed.view = it.key();
+        it.value()->engineMessage(crashed, QString());
+    }
+
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    m_recentRestarts.append(now);
+    while (!m_recentRestarts.isEmpty() && now - m_recentRestarts.first() > 60000)
+        m_recentRestarts.removeFirst();
+    if (m_recentRestarts.size() > 3) {
+        qWarning("LadybirdEngine: the engine keeps going away; not starting it again");
+        m_gaveUp = true;
+        m_queue.clear();
+        return;
+    }
+    if (!m_process.waitForFinished(2000)) {
+        m_process.kill();
+        m_process.waitForFinished(1000);
+    }
+    m_restarting = true;
+    launch();
 }
 
 void LadybirdEngine::acceptEngine()
@@ -127,7 +199,14 @@ void LadybirdEngine::acceptEngine()
     int connection = ::accept4(m_listener, nullptr, nullptr, SOCK_CLOEXEC);
     if (connection < 0)
         return;
-    if (m_connection >= 0) {
+    // NB: Whoever connects first would be taken for the engine and be sent everything, the saved logins filled into
+    //     pages included. Only the engine process we started may connect (it is the app's executable, not exec'd
+    //     anew, so the process is the one QProcess started).
+    ucred peer;
+    socklen_t peerLength = sizeof(peer);
+    if (m_connection >= 0 || ::getsockopt(connection, SOL_SOCKET, SO_PEERCRED, &peer, &peerLength) < 0
+        || peer.pid != static_cast<pid_t>(m_process.processId())) {
+        qWarning("LadybirdEngine: refused a connection that is not from the engine");
         ::close(connection);
         return;
     }
@@ -135,11 +214,21 @@ void LadybirdEngine::acceptEngine()
     m_connectionNotifier = new QSocketNotifier(m_connection, QSocketNotifier::Read, this);
     connect(m_connectionNotifier, &QSocketNotifier::activated, this, &LadybirdEngine::receive);
 
+    // NB: A new engine knows nothing yet: the app's settings go first, then the views make themselves anew.
+    if (m_restarting) {
+        m_queue.clear();
+        for (const Queued& setting : m_settings)
+            write(setting.header, setting.text);
+    }
     QVector<Queued> queue;
     queue.swap(m_queue);
     for (const Queued& queued : queue)
         write(queued.header, queued.text);
     emit connectedChanged();
+    if (m_restarting) {
+        m_restarting = false;
+        emit restarted();
+    }
 }
 
 quint32 LadybirdEngine::addView(LadybirdEngineClient* client, const QSize& size, qreal devicePixelRatio, bool isPrivate)
@@ -158,11 +247,39 @@ void LadybirdEngine::claimView(quint32 view, LadybirdEngineClient* client)
         client->engineMessage(message.first, message.second);
 }
 
+void LadybirdEngine::forgetView(quint32 view)
+{
+    m_views.remove(view);
+}
+
+bool LadybirdEngine::isSetting(lb_embed_message_type type)
+{
+    switch (type) {
+    case LB_EMBED_SET_AD_BLOCKING:
+    case LB_EMBED_SET_COOKIE_BANNER_BLOCKING:
+    case LB_EMBED_SET_BLOCKER_FILTERS:
+    case LB_EMBED_SET_SITE_OPTIONS:
+    case LB_EMBED_SET_CERTIFICATE_EXCEPTIONS:
+    case LB_EMBED_SET_DARK_MODE:
+        return true;
+    default:
+        return false;
+    }
+}
+
 void LadybirdEngine::removeView(quint32 view)
 {
     bool unclaimed = m_unclaimedViews.remove(view);
     if (m_views.remove(view) || unclaimed)
         send(view, LB_EMBED_DESTROY_VIEW);
+    // Its buffers are its own; the view (whose textures of them go with it) does not need telling.
+    for (int i = m_mappings.size() - 1; i >= 0; --i) {
+        if (m_mappings[i].view != view)
+            continue;
+        ::munmap(m_mappings[i].pixels, m_mappings[i].length);
+        ::close(m_mappings[i].fd);
+        m_mappings.remove(i);
+    }
 }
 
 void LadybirdEngine::send(quint32 view, lb_embed_message_type type, int a, int b, int c, int d, double scale, const QByteArray& text)
@@ -180,9 +297,23 @@ void LadybirdEngine::send(quint32 view, lb_embed_message_type type, int a, int b
     static const bool logMessages = !qgetenv("PACIFIC_LOG_ENGINE").isEmpty();
     if (logMessages && type != LB_EMBED_TOUCH)
         qWarning("LadybirdEngine: view %u message %d a=%d b=%d c=%d d=%d scale=%.3f text=%s", view, int(type), a, b, c, d, scale, text.left(80).constData());
-    QByteArray payload = text.left(LB_EMBED_TEXT_MAX);
+    // NB: Refused, not cut: a cut JSON text would be read as nothing (site options would all be cleared).
+    if (text.size() > LB_EMBED_TEXT_MAX) {
+        qWarning("LadybirdEngine: message %d is %d bytes, more than the engine takes; not sent", int(type), text.size());
+        return;
+    }
+    const QByteArray& payload = text;
     header.text_length = static_cast<uint32_t>(payload.size());
 
+    // The app's settings are kept for an engine started after this one went away.
+    if (view == 0 && isSetting(type)) {
+        Queued setting;
+        setting.header = header;
+        setting.text = payload;
+        m_settings.insert(type, setting);
+    }
+    if (m_gaveUp)
+        return;
     if (m_connection < 0) {
         Queued queued;
         queued.header = header;
@@ -231,11 +362,7 @@ void LadybirdEngine::receive()
         if (length < 0 && errno == EAGAIN)
             return;
         if (length <= 0) {
-            qWarning("LadybirdEngine: the engine went away");
-            m_connectionNotifier->setEnabled(false);
-            ::close(m_connection);
-            m_connection = -1;
-            emit connectedChanged();
+            engineGone();
             return;
         }
 
@@ -244,7 +371,9 @@ void LadybirdEngine::receive()
             if (entry->cmsg_level == SOL_SOCKET && entry->cmsg_type == SCM_RIGHTS)
                 memcpy(&fd, CMSG_DATA(entry), sizeof(int));
         }
-        if (static_cast<size_t>(length) >= sizeof(lb_embed_header)) {
+        if (message.msg_flags & MSG_TRUNC) {
+            qWarning("LadybirdEngine: dropped a message longer than the protocol allows");
+        } else if (static_cast<size_t>(length) >= sizeof(lb_embed_header)) {
             const lb_embed_header& header = buffer.header;
             if (header.type == LB_EMBED_FRAME) {
                 size_t textLength = qMin(static_cast<size_t>(header.text_length), static_cast<size_t>(length) - sizeof(lb_embed_header));
@@ -273,7 +402,7 @@ void LadybirdEngine::receive()
     }
 }
 
-const LadybirdEngine::Mapping* LadybirdEngine::mappingFor(int fd, size_t length, quint64 identity)
+const LadybirdEngine::Mapping* LadybirdEngine::mappingFor(quint32 view, int fd, size_t length, quint64 identity)
 {
     // Every frame message carries a fresh duplicate of the buffer's file descriptor, so recognize the buffer
     // behind it by the identity the engine gives it, or else by its inode. NB: Before Linux 5.3 every dma-buf has
@@ -319,6 +448,7 @@ const LadybirdEngine::Mapping* LadybirdEngine::mappingFor(int fd, size_t length,
     mapping.device = status.st_dev;
     mapping.inode = status.st_ino;
     mapping.identity = identity;
+    mapping.view = view;
     mapping.pixels = static_cast<uchar*>(pixels);
     mapping.length = length;
     mapping.lastUsed = m_frameSerial;
@@ -332,7 +462,7 @@ void LadybirdEngine::handleFrame(const lb_embed_header& header, int fd, quint64 
     if (!client || fd < 0 || header.c < 1 || header.d < 1 || header.e < static_cast<uint32_t>(header.c) * 4)
         return;
     ++m_frameSerial;
-    const Mapping* mapping = mappingFor(fd, static_cast<size_t>(header.e) * static_cast<size_t>(header.d), identity);
+    const Mapping* mapping = mappingFor(header.view, fd, static_cast<size_t>(header.e) * static_cast<size_t>(header.d), identity);
     if (!mapping)
         return;
 

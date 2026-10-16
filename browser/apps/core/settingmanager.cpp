@@ -11,6 +11,8 @@
 
 #include <QCoreApplication>
 #include <QDirIterator>
+#include <QtConcurrent>
+#include <QFutureWatcher>
 #include "browserpaths.h"
 #include <QVariant>
 
@@ -113,21 +115,35 @@ static int directorySize(const QString &path)
     return static_cast<int>(qMin<qint64>(size, INT_MAX));
 }
 
+// The engine's directories are walked on a worker thread (a cache can hold thousands of files); the answer comes
+// back here.
+void SettingManager::answerDirectorySize(const QString &path, QJSValue callback)
+{
+    if (!callback.isCallable())
+        return;
+    QFutureWatcher<int> *watcher = new QFutureWatcher<int>(this);
+    connect(watcher, &QFutureWatcherBase::finished, this, [watcher, callback]() mutable {
+        const int size = watcher->result();
+        watcher->deleteLater();
+        callback.call(QJSValueList() << size);
+    });
+    watcher->setFuture(QtConcurrent::run(directorySize, path));
+}
+
 void SettingManager::calculateCacheSize(QJSValue callback)
 {
-    if (callback.isCallable())
-        callback.call(QJSValueList() << directorySize(BrowserPaths::cacheLocation() + QStringLiteral("/engine")));
+    answerDirectorySize(BrowserPaths::cacheLocation() + QStringLiteral("/engine"), callback);
 }
 
 void SettingManager::calculateSiteDataSize(QJSValue callback)
 {
-    if (callback.isCallable())
-        callback.call(QJSValueList() << directorySize(BrowserPaths::dataLocation() + QStringLiteral("/engine")));
+    answerDirectorySize(BrowserPaths::dataLocation() + QStringLiteral("/engine"), callback);
 }
+
 bool SettingManager::isAdBlockEnabled() const
 {
-    const QList<WebPage *> &pages = WebPage::liveInstances();
-    return !pages.isEmpty() && pages.first()->adBlockEnabled();
+    // NB: The setting is the app's, not a page's: it holds with no tab open too.
+    return WebPage::adBlockEnabledGlobally();
 }
 
 void SettingManager::setAdBlockEnabled(bool enabled)

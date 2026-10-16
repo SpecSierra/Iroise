@@ -8,6 +8,7 @@
 #pragma once
 
 #include <QHash>
+#include <QMap>
 #include <QJSValue>
 #include <QJsonValue>
 #include <QPointF>
@@ -69,7 +70,8 @@ public:
 
     void setPrivateBrowsing(bool p) { m_privateBrowsing = p; }
     bool privateBrowsing() const { return m_privateBrowsing; }
-    static void clearPrivateBrowsingData() { }
+    // The last private tab has closed: the engine lets go of the private session (cookies, storage, downloads).
+    static void clearPrivateBrowsingData();
 
     quint32 frameSerial() const { return static_cast<quint32>(m_frame.serial); }
     // How much of the view the newest frame covers. Less than the view right after it grew.
@@ -146,6 +148,7 @@ protected:
     bool hasEngineView() const { return m_view != 0; }
 
 private:
+    void engineRestarted();
     void ensureEngineView();
     void setLoadProgress(int);
     void setCovered(bool);
@@ -171,7 +174,7 @@ private:
     bool m_awaitingCommit = false;
 
     quint32 m_nextScript = 1;
-    QHash<quint32, std::function<void(const QJsonValue&)>> m_scripts;
+    QMap<quint32, std::function<void(const QJsonValue&)>> m_scripts;
 
     // The one finger we relay to the engine as a touch, and what became of it.
     int m_touchId = -1;
@@ -188,6 +191,8 @@ private:
     // Render thread state. The GUI thread is blocked while updatePaintNode runs, so it may read m_frame and
     // m_buffersGone.
     DirectFrameTextures* m_directTextures = nullptr;
+    // The page crashed, or the engine did: reloading loads the page anew.
+    bool m_crashed = false;
     quint64 m_directGeneration = 0;
     bool m_loggedPath = false;
     bool m_coverNodeShown = false;

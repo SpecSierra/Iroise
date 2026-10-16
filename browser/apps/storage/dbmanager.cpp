@@ -25,6 +25,12 @@ DBManager *DBManager::instance()
     return gDbManager;
 }
 
+void DBManager::flush()
+{
+    if (gDbManager)
+        QMetaObject::invokeMethod(gDbManager->worker, "sync", Qt::BlockingQueuedConnection);
+}
+
 DBManager::DBManager(QObject *parent)
     : QObject(parent)
 {

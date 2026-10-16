@@ -94,6 +94,8 @@ public:
 
 private:
     Q_PROPERTY(int tabId READ tabId WRITE setTabId NOTIFY tabIdChanged)
+    // The tab whose page opened this one, which closing this one goes back to (0 for none).
+    Q_PROPERTY(int parentId READ parentId CONSTANT)
     Q_PROPERTY(bool painted READ painted NOTIFY paintedChanged)
     Q_PROPERTY(bool domContentLoaded READ domContentLoaded NOTIFY domContentLoadedChanged)
     Q_PROPERTY(bool chrome READ chrome WRITE setChrome NOTIFY chromeChanged)
@@ -203,6 +205,8 @@ public:
 
     int tabId() const;
     void setTabId(int tabId);
+    int parentId() const { return m_parentId; }
+    void setParentId(int parentId) { m_parentId = parentId; }
 
     bool painted() const;
     bool domContentLoaded() const;
@@ -247,6 +251,7 @@ public:
     // dconf binding in BrowserPage.qml (via WebContainer::setAdBlockEnabled),
     // so it works with any number of tabs (or none) open.
     static void applyAdBlockEnabledGlobally(bool enabled);
+    static bool adBlockEnabledGlobally();
     static void applyAdBlockAllowlistGlobally(const QString &json);
     static void applyCookieBannerBlockingGlobally(bool enabled);
     // Per-site user agents (JSON object host → profile id, the site_ua_overrides key) and the hosts JavaScript is
@@ -344,6 +349,9 @@ public:
     QString tlsErrorHost() const { return m_tlsErrorHost; }
     QString tlsErrorMessage() const { return m_tlsErrorMessage; }
     Q_INVOKABLE void acceptTlsCertificate();
+    // The last private tab has closed: what was trusted from private tabs is forgotten, and the engine's private
+    // session let go of.
+    static void clearPrivateBrowsingData();
 
     // Permission prompt (geolocation / camera / microphone)
     bool permissionPending() const { return m_permissionPending; }
@@ -508,7 +516,6 @@ signals:
 public:
     // Last committed main-frame URL; source URL for redirect-hop ad blocking
     // (written/read by the load-changed C callbacks).
-    QUrl m_lastCommittedUrl;
 
 
 protected:
@@ -532,6 +539,12 @@ private slots:
     void onFrameArrived();
     void onPageWantsTextInputChanged();
     void installPageAgent();
+    void confirmTlsError(bool claimed);
+    void recheckCertificateException();
+    static void forgetCertificateExceptions(bool privateOnly);
+    void noteUserInput();
+    static int savedLoginId(const QString &site, const QString &username, const QString &password);
+    bool userActedRecently() const;
     void checkThumbnail();
     void captureThumbnail();
 
@@ -554,7 +567,6 @@ private:
     void updateMediaState();
     bool m_mediaAudioActive = false;
     bool m_mediaVideoActive = false;
-    qreal m_mediaVolume = 1.0;
     bool m_atYBeginning = true;
     bool m_atYEnd = false;
     QString m_favicon;
@@ -567,8 +579,6 @@ private:
     bool m_fixedToolbar = false;
     bool m_loaded = false;
     bool m_desktopMode = false;
-    qint64 m_popupRoutedAtMs = 0;
-    QString m_popupRoutedUrl;
     qreal m_lastScrollY = 0.0;
     bool m_textSelectionActive = false;
     QString m_selectedText;
@@ -577,25 +587,12 @@ private:
     qreal m_selectionEndX = 0.0;
     qreal m_selectionEndY = 0.0;
     bool m_findInPageHasResult = false;
-    bool m_findInitialized = false;
     SecurityInfo *m_security = nullptr;
-    bool m_pinchZoomActive = false;
-    qint64 m_pinchPendingSinceMs = 0;
-    bool m_pagePinchConsumerHint = false;
-    bool m_pagePinchDeclined = false;
-    qreal m_pinchStartDistance = 0.0;
-    double m_pinchStartZoomLevel = 1.0;
-    double m_defaultZoomLevel = 1.0;
-    bool m_defaultZoomLevelInitialized = false;
     qreal m_visualScale = 1.0;
-    qreal m_pinchStartVisualScale = 1.0;
-    double m_pinchStartPageScale = 1.0;
-    double m_pendingPageScale = 1.0;
-    QPointF m_pendingPageScaleCenter;
     qreal m_pinchCenterX = 0.0;
     qreal m_pinchCenterY = 0.0;
-    QTimer m_framePump;
     QTimer m_thumbnailTimer;
+    QTimer m_saveLoginExpiryTimer;
     QSize m_thumbnailSize;
     QSharedPointer<QQuickItemGrabResult> m_thumbnailGrab;
     quint32 m_thumbnailSerial = 0;
@@ -604,30 +601,9 @@ private:
     bool m_thumbnailCaptured = false;
     // The page agent answered from the page now showing.
     bool m_pageAgentInstalled = false;
-    QTimer m_mediaInactiveDebounceTimer;
-    QTimer m_deferredFullscreenLeaveTimer;
     QTimer m_chromeGestureDebounceTimer;
     bool m_pendingChrome = true;
     bool m_chromeGestureArmed = false;
-    qreal m_uiGestureLastY = 0.0;
-    qreal m_uiGestureAccumDown = 0.0;
-    bool m_uiGestureTracking = false;
-    bool m_pendingFullscreenEntry = false;
-    QTimer m_pendingFullscreenEntryGuard;
-    QElapsedTimer m_lastNativeFullscreenEnter;
-    QElapsedTimer m_perfFrameLogWindow;
-    int m_perfFramesInWindow = 0;
-    qreal m_lastInteractionX = -1.0;
-    qreal m_lastInteractionY = -1.0;
-    QPointF m_touchStartPos;
-    bool m_touchDragged = false;
-    QHash<int, QTouchEvent::TouchPoint> m_trackedTouchPoints;
-    QString m_lastSoftKeyboardText;
-    QString m_lastPreeditText;
-    QString m_lastEditableFocusToken;
-    qint64 m_lastSoftKeyboardTextTimeMs = 0;
-    qint64 m_lastSoftBackspaceTimeMs = 0;
-    qint64 m_lastSoftEnterTimeMs = 0;
     void pageMessage(const QString &kind, const QJsonValue &data) override;
     void closeInputPicker();
 
@@ -662,6 +638,7 @@ private:
     QString m_tlsErrorFailingUri;
     QString m_tlsErrorHost;
     QString m_tlsErrorMessage;
+    QByteArray m_tlsErrorFingerprint;
     void setTlsError(bool failed);
     void updateSecurity();
     QString m_permissionHost;
@@ -685,8 +662,9 @@ private:
     QString m_capturedLoginOrigin;
     QTimer m_offerLoginTimer;
     qint64 m_lastTouchMs = 0;
+    qint64 m_lastUserInputMs = 0;
+    int m_parentId = 0;
     static QString origin(const QUrl &url);
     void offerCapturedLogin();
     void storePendingLogin();
-    bool m_autoRecovered = false;
 };

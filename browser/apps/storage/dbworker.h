@@ -35,6 +35,8 @@ public:
     DBWorker(QObject *parent = 0);
 
 public slots:
+    // Nothing: returns once everything queued before it has run.
+    void sync() { }
     void init();
     void createTab(const Tab &tab);
     void removeTab(int tabId);

@@ -81,9 +81,10 @@ int DownloadModel::activeCount() const
     return count;
 }
 
-void DownloadModel::start(const QString& url)
+void DownloadModel::start(const QString& url, bool isPrivate)
 {
-    LadybirdEngine::instance()->send(0, LB_EMBED_DOWNLOAD_START, 0, 0, 0, 0, 0, url.toUtf8());
+    // A private tab's download goes out with the private session's cookies, not the user's own.
+    LadybirdEngine::instance()->send(0, LB_EMBED_DOWNLOAD_START, isPrivate ? 1 : 0, 0, 0, 0, 0, url.toUtf8());
 }
 
 void DownloadModel::cancel(int downloadId)

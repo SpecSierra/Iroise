@@ -45,7 +45,7 @@ public:
     int activeCount() const;
 
     // Saves what is at url, as a link would that leads to something other than a page.
-    Q_INVOKABLE void start(const QString& url);
+    Q_INVOKABLE void start(const QString& url, bool isPrivate);
     Q_INVOKABLE void cancel(int downloadId);
     // Forgets the finished ones (the files stay).
     Q_INVOKABLE void clearFinished();

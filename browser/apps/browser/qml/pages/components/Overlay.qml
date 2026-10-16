@@ -58,14 +58,12 @@ Shared.Background {
 
     function loadPage(url, newTab) {
         var openInNewTab = !!newTab || searchField.enteringNewTabUrl
-        console.log("[QML-LOAD] loadPage url=" + url + " newTab=" + openInNewTab)
         if (url == "about:settings") {
             pageStack.animatorPush(Qt.resolvedUrl("../SettingsPage.qml"))
         } else {
             // Search keywords -> search URL on the configured engine,
             // bare host -> https:// (see UrlUtils.js)
             var pageUrl = UrlUtils.normalize(url, SearchEngineModel.searchUrlTemplate(searchEngineConf.value))
-            console.log("[QML-LOAD] resolved pageUrl=" + pageUrl)
             webView.load(pageUrl, "", openInNewTab)
         }
 

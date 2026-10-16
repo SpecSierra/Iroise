@@ -71,6 +71,8 @@ public:
     bool loaded() const;
 
     const QList<Tab>& tabs() const;
+    // The tab whose page opened this one (0 for none).
+    int parentTabId(int tabId) const;
     const Tab& activeTab() const;
     Tab *getTab(int tabId);
 

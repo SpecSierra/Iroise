@@ -54,6 +54,8 @@ QSizeF screenSizeOrFallback(QScreen *screen)
 WebContainer::WebContainer(QQuickItem *parent)
     : QQuickItem(parent)
 {
+    // The tab overview finishes a "close all tabs" still counting down.
+    connect(qApp, &QCoreApplication::aboutToQuit, this, &WebContainer::applicationClosing);
     // A page that opens a window (a link with a target, window.open) gets a new tab, showing the engine's view.
     connect(LadybirdEngine::instance(), &LadybirdEngine::viewOffered, this, [this](quint32 view) {
         m_viewForNextPage = view;
@@ -628,11 +630,10 @@ void WebContainer::onTabClosed(int tabId)
             emit canGoForwardChanged();
         }
     }
-    // Closing the last private tab wipes the shared ephemeral session, so
-    // re-entering private mode later in the same run starts with no cookies or
-    // storage. (Everything was in-memory only; this just drops it eagerly.)
+    // Closing the last private tab ends the private session: private mode entered again later in the same run starts
+    // with no cookies, storage or trusted certificates.
     if (wasPrivate && m_privateTabModel && m_privateTabModel->count() == 0)
-        EngineView::clearPrivateBrowsingData();
+        WebPage::clearPrivateBrowsingData();
 }
 
 void WebContainer::activatePage(int tabId)
@@ -784,6 +785,8 @@ WebPage *WebContainer::getOrCreatePage(int tabId)
     // then reparent via setParentItem() to trigger configureWindow() correctly.
     WebPage *page = new WebPage(nullptr);
     page->setTabId(tabId);
+    if (m_tabModel)
+        page->setParentId(m_tabModel->parentTabId(tabId));
     if (m_viewForNextPage) {
         page->adoptEngineView(m_viewForNextPage);
         m_viewForNextPage = 0;
@@ -851,10 +854,14 @@ void WebContainer::connectPage(WebPage *page)
     connect(page, &WebPage::paintedChanged, this, &WebContainer::onPagePaintedChanged);
     connect(page, &WebPage::chromeChanged, this, &WebContainer::needChromeChanged);
     connect(page, &WebPage::fullscreenChanged, this, &WebContainer::needChromeChanged);
-    connect(page, &WebPage::thumbnailCaptured, this, [this, page](const QString &source) {
-        if (m_tabModel)
-            m_tabModel->updateThumbnailPath(page->tabId(), source);
-    });
+    // NB: The model the page was made for, as for its URL and title: private mode may have switched since.
+    if (pageModel) {
+        QPointer<DeclarativeTabModel> model(pageModel);
+        connect(page, &WebPage::thumbnailCaptured, this, [model, page](const QString &source) {
+            if (model)
+                model->updateThumbnailPath(page->tabId(), source);
+        });
+    }
     connect(page, &WebPage::touched, this, [this, page]() {
         if (page == m_contentItem)
             emit touched();

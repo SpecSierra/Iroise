@@ -7,6 +7,7 @@
 #include <AK/Base64.h>
 #include <AK/Format.h>
 #include <AK/HashMap.h>
+#include <AK/HashTable.h>
 #include <AK/JsonArray.h>
 #include <AK/JsonObject.h>
 #include <AK/JsonValue.h>
@@ -192,7 +193,7 @@ private:
         ++m_frames_presented;
         if (auto elapsed = m_frame_timer.elapsed_milliseconds(); elapsed >= 1000) {
             if (s_log_frame_rate)
-                warnln("ladybird-sfos: {} fps", m_frames_presented * 1000 / elapsed);
+                warnln("pacific: {} fps", m_frames_presented * 1000 / elapsed);
             m_frames_presented = 0;
             m_frame_timer.start();
         }
@@ -292,6 +293,9 @@ public:
             coordinates.heading = position.get_double_with_precision_loss("heading"sv);
             coordinates.speed = position.get_double_with_precision_loss("speed"sv);
             callbacks.on_success(coordinates);
+        } else {
+            // NB: Every request gets an answer, or the page waits on it for good.
+            callbacks.on_error({ Core::GeolocationError::Type::PositionUnavailable, {} });
         }
         if (callbacks.is_watch && !m_delivering_stopped)
             m_requests.set(static_cast<u64>(id), move(callbacks));
@@ -347,8 +351,9 @@ private:
     virtual void download_added(WebView::FileDownloader::Download const& download) override
     {
         // NB: Downloads from earlier runs are restored at start-up, finished ones included. Only what starts now
-        //     is news.
-        if (download.status != WebView::FileDownloader::DownloadStatus::InProgress || download.is_private == WebView::IsPrivate::Yes)
+        //     is news. A private tab's download is shown too: its file is the user's to see and to stop, and the
+        //     app keeps no list of downloads beyond the run.
+        if (download.status != WebView::FileDownloader::DownloadStatus::InProgress)
             return;
         m_reported_downloads.set(download.id, MonotonicTime::now());
         report_download(download);
@@ -393,7 +398,7 @@ private:
         m_host.send_text(0, LB_EMBED_DOWNLOAD, text.bytes_as_string_view(), static_cast<i32>(download.id), status);
     }
 
-    void start_download(StringView url_text)
+    void start_download(StringView url_text, WebView::IsPrivate is_private)
     {
         auto url = WebView::sanitize_url(url_text);
         if (!url.has_value())
@@ -403,10 +408,10 @@ private:
             name = "download"sv;
         auto destination = WebView::Application::the().default_path_for_downloaded_file(name);
         if (destination.is_error()) {
-            warnln("ladybird-sfos: nowhere to save {}: {}", *url, destination.error());
+            warnln("pacific: nowhere to save {}: {}", *url, destination.error());
             return;
         }
-        WebView::Application::the().file_downloader().download_file(WebView::IsPrivate::No, *url, destination.release_value());
+        WebView::Application::the().file_downloader().download_file(is_private, *url, destination.release_value());
     }
 
 private:
@@ -571,21 +576,40 @@ private:
 
         // NB: The engine grants geolocation to any page that asks, and the view then wants a position from the
         //     provider. So the user is asked here, before the view's own handler runs.
-        auto gate_geolocation = [this, id, raw_view](Function<void(WebView::WebContentPage&, u64)>& handler) {
+        //     The question is about the tab's site, so a request from another page, which is a frame of another site
+        //     (they have processes of their own), is refused: it would get what the user granted the tab's site.
+        //     And a request the page took back while the user was being asked stays taken back.
+        auto gate_geolocation = [this, id, raw_view](Function<void(WebView::WebContentPage&, u64)>& handler, Function<void(WebView::WebContentPage&, u64)>& cancel_handler) {
             auto native = adopt_ref(*new SharedGeolocationHandler(move(handler)));
             handler = [this, id, raw_view, native](WebView::WebContentPage& page, u64 request_id) {
-                ask_permission(id, "geolocation"_string, raw_view->url().origin(), [native, page = NonnullRefPtr(page), request_id](bool granted) {
-                    if (!page->is_open())
+                auto deny = [](WebView::WebContentPage& page, u64 request_id) {
+                    page.async_geolocation_position_response(request_id, {}, to_underlying(Web::Geolocation::GeolocationPositionErrorCode::PermissionDenied));
+                };
+                if (&page != &raw_view->page()) {
+                    deny(page, request_id);
+                    return;
+                }
+                auto key = PendingGeolocation { &page, request_id };
+                m_pending_geolocation.set(key);
+                ask_permission(id, "geolocation"_string, raw_view->url().origin(), [this, native, deny, key, page = NonnullRefPtr(page), request_id](bool granted) {
+                    if (!m_pending_geolocation.remove(key) || !page->is_open())
                         return;
                     if (granted)
                         native->call(*page, request_id);
                     else
-                        page->async_geolocation_position_response(request_id, {}, to_underlying(Web::Geolocation::GeolocationPositionErrorCode::PermissionDenied));
+                        deny(*page, request_id);
                 });
             };
+            auto native_cancel = adopt_ref(*new SharedGeolocationHandler(move(cancel_handler)));
+            cancel_handler = [this, native_cancel](WebView::WebContentPage& page, u64 request_id) {
+                if (m_pending_geolocation.remove(PendingGeolocation { &page, request_id }))
+                    return;
+                if (native_cancel->call)
+                    native_cancel->call(page, request_id);
+            };
         };
-        gate_geolocation(view->on_request_geolocation_position);
-        gate_geolocation(view->on_start_geolocation_position_watch);
+        gate_geolocation(view->on_request_geolocation_position, view->on_cancel_geolocation_position_request);
+        gate_geolocation(view->on_start_geolocation_position_watch, view->on_stop_geolocation_position_watch);
 
         // NB: As early as we learn where the tab is going. A link to another site has asked for its document
         //     by then, so that one request goes out with the previous site's options.
@@ -595,7 +619,6 @@ private:
             .on_load_finish = {},
         });
 
-        view->set_preferred_color_scheme(m_dark_mode ? Web::CSS::PreferredColorScheme::Dark : Web::CSS::PreferredColorScheme::Light);
 
         for (auto* action : { &view->navigate_back_action(), &view->navigate_forward_action() }) {
             action->add_observer(make<HistoryObserver>(Function<void()> { [this, id, raw_view] {
@@ -606,6 +629,17 @@ private:
         m_views.set(id, move(view));
         return *raw_view;
     }
+
+    // A geolocation request waiting for the user's answer.
+    struct PendingGeolocation {
+        WebView::WebContentPage* page { nullptr };
+        u64 request_id { 0 };
+        bool operator==(PendingGeolocation const&) const = default;
+    };
+    struct PendingGeolocationTraits : public DefaultTraits<PendingGeolocation> {
+        static unsigned hash(PendingGeolocation const& key) { return pair_int_hash(ptr_hash(key.page), u64_hash(key.request_id)); }
+    };
+    HashTable<PendingGeolocation, PendingGeolocationTraits> m_pending_geolocation;
 
     // The view's own handler for a geolocation request, kept for when the user said yes.
     struct SharedGeolocationHandler final : RefCounted<SharedGeolocationHandler> {
@@ -619,7 +653,7 @@ private:
     void ask_permission(u32 view, String const& name, URL::Origin const& origin, Function<void(bool)> on_decided)
     {
         auto question = m_next_permission_question++;
-        m_permission_answers.set(question, move(on_decided));
+        m_permission_answers.set(question, PermissionQuestion { view, move(on_decided) });
         JsonObject text;
         text.set("name"sv, name);
         text.set("origin"sv, origin.serialize());
@@ -775,7 +809,7 @@ private:
             return;
         }
         if (header.type == LB_EMBED_DOWNLOAD_START) {
-            start_download(text);
+            start_download(text, header.a ? WebView::IsPrivate::Yes : WebView::IsPrivate::No);
             return;
         }
         if (header.type == LB_EMBED_DOWNLOAD_CANCEL) {
@@ -783,6 +817,11 @@ private:
             return;
         }
         if (header.type == LB_EMBED_CLEAR_DATA) {
+            // NB: Private views keep their session alive until they are gone; the next private tab starts afresh.
+            if (header.a & LB_EMBED_CLEAR_PRIVATE_SESSION)
+                WebView::Application::the().reset_private_browsing_session();
+            if (!(header.a & (LB_EMBED_CLEAR_CACHE | LB_EMBED_CLEAR_SITE_DATA)))
+                return;
             WebView::Application::ClearBrowsingDataOptions options;
             if (header.a & LB_EMBED_CLEAR_CACHE)
                 options.delete_cached_files = WebView::Application::ClearBrowsingDataOptions::Delete::Yes;
@@ -802,8 +841,8 @@ private:
             return;
         }
         if (header.type == LB_EMBED_PERMISSION_DECIDED) {
-            if (auto on_decided = m_permission_answers.take(header.a); on_decided.has_value())
-                (*on_decided)(header.b != 0);
+            if (auto question = m_permission_answers.take(header.a); question.has_value())
+                question->on_decided(header.b != 0);
             return;
         }
         if (header.type == LB_EMBED_GEOLOCATION_POSITION) {
@@ -822,6 +861,9 @@ private:
 
         switch (header.type) {
         case LB_EMBED_DESTROY_VIEW:
+            // NB: Questions it still had will not be answered; their pages go with it.
+            m_permission_answers.remove_all_matching([&](auto, auto const& question) { return question.view == header.view; });
+            m_pending_geolocation.remove_all_matching([&](auto const& pending) { return pending.page == &view.page(); });
             m_views.remove(header.view);
             break;
         case LB_EMBED_LOAD:
@@ -831,13 +873,17 @@ private:
             }
             break;
         case LB_EMBED_TOUCH: {
-            auto phase = PresentedWebView::TouchPhase::Up;
+            PresentedWebView::TouchPhase phase;
             if (header.a == LB_EMBED_TOUCH_DOWN)
                 phase = PresentedWebView::TouchPhase::Down;
             else if (header.a == LB_EMBED_TOUCH_MOTION)
                 phase = PresentedWebView::TouchPhase::Motion;
+            else if (header.a == LB_EMBED_TOUCH_UP)
+                phase = PresentedWebView::TouchPhase::Up;
             else if (header.a == LB_EMBED_TOUCH_CANCEL)
                 phase = PresentedWebView::TouchPhase::Cancel;
+            else
+                break;
             view.handle_touch(phase, header.b, { header.c, header.d });
             break;
         }
@@ -909,7 +955,7 @@ private:
                 if (auto file = WebView::create_selected_file(path); !file.is_error())
                     files.append(file.release_value());
                 else
-                    warnln("ladybird-sfos: cannot open the chosen file {}: {}", path, file.error());
+                    warnln("pacific: cannot open the chosen file {}: {}", path, file.error());
             });
             view.file_picker_closed(move(files));
             break;
@@ -977,8 +1023,12 @@ private:
     HashMap<u64, MonotonicTime> m_reported_downloads;
     RefPtr<Core::Timer> m_restart_list_updates_timer;
     RefPtr<Core::Timer> m_resume_list_updates_timer;
-    // What to do with the user's answer to each question still open.
-    HashMap<i32, Function<void(bool)>> m_permission_answers;
+    // What to do with the user's answer to each question still open, and which view asked.
+    struct PermissionQuestion {
+        u32 view { 0 };
+        Function<void(bool)> on_decided;
+    };
+    HashMap<i32, PermissionQuestion> m_permission_answers;
     // Sites the user gave a user agent of their own (host to preset name), and sites without scripts.
     HashMap<ByteString, ByteString> m_site_user_agents;
     Vector<ByteString> m_no_script_sites;
@@ -1005,7 +1055,10 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
         return Error::from_string_literal("Run headless, or embedded by the browser (" LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE ")");
 
     auto host = TRY(Ladybird::EmbeddedHost::connect(ByteString { *socket_path }));
-    host->on_disconnect = [] { Core::EventLoop::current().quit(0); };
+    host->on_disconnect = [] {
+        Ladybird::AppGeolocationProvider::s_host = nullptr;
+        Core::EventLoop::current().quit(0);
+    };
     Ladybird::AppGeolocationProvider::s_host = host.ptr();
     // Pages still ask the user first, each time (see the gate in create_view).
     WebView::Application::settings().set_geolocation_enabled(true);

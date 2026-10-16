@@ -15,6 +15,7 @@
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
 #include <string.h>
+#include <fcntl.h>
 #include <unistd.h>
 
 #ifndef EGL_NATIVE_BUFFER_HYBRIS
@@ -168,14 +169,25 @@ bool DirectFrameTextures::import(QQuickWindow* window, const LadybirdFrame& fram
 
     // NB: Creating the buffer closes the file descriptors it is given, so it gets duplicates. The pattern's
     //     other descriptors (gralloc's bookkeeping) are shared with it and outlive the pattern that way.
-    QVector<int> ours(fdCount);
-    for (int i = 0; i < fdCount; ++i)
-        ours[i] = ::dup(i == pixelFd ? frame.bufferFd : fds[i]);
+    QVector<int> ours(fdCount, -1);
+    bool duplicated = true;
+    for (int i = 0; i < fdCount && duplicated; ++i) {
+        ours[i] = ::fcntl(i == pixelFd ? frame.bufferFd : fds[i], F_DUPFD_CLOEXEC, 0);
+        duplicated = ours[i] >= 0;
+    }
     EGLClientBuffer buffer = nullptr;
-    bool created = egl.createRemoteBuffer(width, height, usage, pixelFormatBgra8888, stride, intCount, ints.data(), fdCount, ours.data(), &buffer) && buffer;
+    bool created = duplicated && egl.createRemoteBuffer(width, height, usage, pixelFormatBgra8888, stride, intCount, ints.data(), fdCount, ours.data(), &buffer) && buffer;
     egl.releaseNativeBuffer(pattern);
-    if (!created)
+    if (!created) {
+        // NB: Only when there was no buffer to make: once asked to make one, libhybris has the descriptors.
+        if (!duplicated) {
+            for (int fd : ours) {
+                if (fd >= 0)
+                    ::close(fd);
+            }
+        }
         return false;
+    }
     texture.buffer = buffer;
 
     texture.image = egl.createImage(egl.display, EGL_NO_CONTEXT, EGL_NATIVE_BUFFER_HYBRIS, buffer, nullptr);

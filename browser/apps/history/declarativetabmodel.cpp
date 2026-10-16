@@ -457,6 +457,12 @@ bool DeclarativeTabModel::matches(const QUrl &inputUrl, QString urlStr) const
     return inputUrl.matches(tabUrl, QUrl::FullyDecoded | QUrl::RemoveScheme | QUrl::StripTrailingSlash);
 }
 
+int DeclarativeTabModel::parentTabId(int tabId) const
+{
+    const int index = findTabIndex(tabId);
+    return index >= 0 ? static_cast<int>(m_tabs.at(index).parentId()) : 0;
+}
+
 int DeclarativeTabModel::nextActiveTabIndex(int index)
 {
     if (!m_tabs.isEmpty() && index >= 0 && index < m_tabs.count()) {

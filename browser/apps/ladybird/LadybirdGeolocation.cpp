@@ -69,6 +69,13 @@ void LadybirdGeolocation::stop(int request)
     stopIfUnwanted();
 }
 
+void LadybirdGeolocation::stopAll()
+{
+    m_once.clear();
+    m_watches.clear();
+    stopIfUnwanted();
+}
+
 void LadybirdGeolocation::positionUpdated(const QGeoPositionInfo& info)
 {
     QGeoCoordinate coordinate = info.coordinate();

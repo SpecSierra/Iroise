@@ -22,6 +22,8 @@ public:
 
     void start(int request, bool watch);
     void stop(int request);
+    // The engine that asked is gone.
+    void stopAll();
 
 private:
     LadybirdGeolocation();

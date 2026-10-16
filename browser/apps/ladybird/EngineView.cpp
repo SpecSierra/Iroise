@@ -28,6 +28,7 @@
 // distance for telling a tap from a scroll).
 static const int longPressMilliseconds = 500;
 static const qreal touchSlop = 24;
+static const int kMaximumPendingScripts = 64;
 
 EngineView::EngineView(QQuickItem* parent)
     : QQuickItem(parent)
@@ -38,6 +39,8 @@ EngineView::EngineView(QQuickItem* parent)
     qreal scale = qgetenv("PACIFIC_DEVICE_PIXEL_RATIO").toDouble(&ok);
     if (ok && scale >= 1)
         m_deviceScaleFactor = scale;
+
+    connect(LadybirdEngine::instance(), &LadybirdEngine::restarted, this, &EngineView::engineRestarted);
 
     m_longPressTimer.setSingleShot(true);
     m_longPressTimer.setInterval(longPressMilliseconds);
@@ -55,6 +58,9 @@ EngineView::~EngineView()
 {
     if (m_view)
         LadybirdEngine::instance()->removeView(m_view);
+    // NB: QQuickItem's destructor calls releaseResources() too, but its own by then, so the textures (and the
+    //     engine buffers behind them) would be kept for good.
+    EngineView::releaseResources();
 }
 
 void EngineView::componentComplete()
@@ -124,15 +130,42 @@ void EngineView::setEngineVisible(bool visible)
 
 void EngineView::goBack() { sendToEngine(LB_EMBED_GO_BACK); }
 void EngineView::goForward() { sendToEngine(LB_EMBED_GO_FORWARD); }
-void EngineView::reload() { sendToEngine(LB_EMBED_RELOAD); }
+void EngineView::reload()
+{
+    // A view whose page crashed, or whose engine did, has nothing to reload: its page is loaded anew.
+    if (m_crashed && m_url.isValid()) {
+        m_crashed = false;
+        sendToEngine(LB_EMBED_LOAD, 0, 0, 0, 0, m_url.toString(QUrl::FullyEncoded).toUtf8());
+        return;
+    }
+    sendToEngine(LB_EMBED_RELOAD);
+}
+
+void EngineView::engineRestarted()
+{
+    if (!m_view)
+        return;
+    LadybirdEngine::instance()->forgetView(m_view);
+    m_scripts.clear();
+    m_frame = LadybirdFrame();
+    m_view = LadybirdEngine::instance()->addView(this, QSize(static_cast<int>(width()), static_cast<int>(height())), m_deviceScaleFactor, m_privateBrowsing);
+    if (!m_engineVisible)
+        sendToEngine(LB_EMBED_SET_VISIBLE, 0);
+    update();
+}
 void EngineView::stop() { sendToEngine(LB_EMBED_STOP); }
 void EngineView::evaluate(const QString& expression, std::function<void(const QJsonValue&)> callback)
 {
     if (!m_view)
         return;
     quint32 id = m_nextScript++;
-    if (callback)
+    if (callback) {
+        // NB: An expression that throws never answers; a page that stays open long (a web app) must not pile them up.
+        //     The oldest question is given up on, as its answer is the least likely still to come.
+        if (m_scripts.size() >= kMaximumPendingScripts)
+            m_scripts.erase(m_scripts.begin());
         m_scripts.insert(id, callback);
+    }
     // NB: The engine only hands back a string, and answers may be lost with a page that goes away. So the value
     //     travels as JSON, together with the number that says which question it answers.
     QString wrapped = QStringLiteral("JSON.stringify({i:%1,v:(%2\n)})").arg(id).arg(expression);
@@ -157,6 +190,11 @@ void EngineView::setLoadProgress(int progress)
         return;
     m_loadProgress = progress;
     emit loadProgressChanged();
+}
+
+void EngineView::clearPrivateBrowsingData()
+{
+    LadybirdEngine::instance()->send(0, LB_EMBED_CLEAR_DATA, LB_EMBED_CLEAR_PRIVATE_SESSION);
 }
 
 static bool s_loadingCoverDark = false;
@@ -262,6 +300,8 @@ void EngineView::engineMessage(const lb_embed_header& header, const QString& tex
     }
     case LB_EMBED_LOADING: {
         m_loading = header.a != 0;
+        if (m_loading)
+            m_crashed = false;
         // The old page stays out of sight until the new one has a frame. A load that ends without a new page (a
         // download, an error, stopped) shows the old one again.
         m_awaitingCommit = m_loading;
@@ -296,6 +336,7 @@ void EngineView::engineMessage(const lb_embed_header& header, const QString& tex
         emit closeRequested();
         break;
     case LB_EMBED_CRASHED:
+        m_crashed = true;
         m_awaitingCommit = false;
         setCovered(false);
         emit engineCrashed();

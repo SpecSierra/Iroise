@@ -237,7 +237,7 @@ Page {
         color: webView.contentItem ? (webView.resourceController.videoActive
                                       && webView.contentItem.fullscreen
                                       ? "black"
-                                      : (webView.contentItem.backgroundColor || "white"))
+                                      : webView.contentItem.surroundColor)
                                    : "white"
 
         onApplyContentOrientation: webView.applyContentOrientation(browserPage.orientation)

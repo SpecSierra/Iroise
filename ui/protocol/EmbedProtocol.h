@@ -15,7 +15,9 @@
 #include <stdint.h>
 
 #define LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE "LADYBIRD_SFOS_EMBED_SOCKET"
-#define LB_EMBED_TEXT_MAX 32768
+/* A datagram has to fit the socket's send buffer, which an unprivileged process cannot raise past the system's
+   default (about 208 KiB). A text longer than this is refused, never cut: half a JSON document is worth less than none. */
+#define LB_EMBED_TEXT_MAX (160 * 1024)
 #define LB_EMBED_PAGE_MESSAGE_MARKER "\001pacific"
 #define LB_EMBED_FIRST_ENGINE_VIEW 0x40000000u
 
@@ -43,7 +45,7 @@ enum lb_embed_message_type {
     LB_EMBED_SET_COOKIE_BANNER_BLOCKING = 15, /* a = 1 to block cookie banners */
     LB_EMBED_SET_DARK_MODE = 16,              /* a = 1 for pages to prefer their dark colours */
     LB_EMBED_CLEAR_DATA = 24,                 /* a = lb_embed_clear bits */
-    LB_EMBED_DOWNLOAD_START = 25,             /* text = URL of a file to save into the downloads folder */
+    LB_EMBED_DOWNLOAD_START = 25,             /* text = URL of a file to save into the downloads folder; a = from a private tab */
     LB_EMBED_DOWNLOAD_CANCEL = 26,            /* a = the download's id */
     LB_EMBED_SET_BLOCKER_FILTERS = 27,        /* text = filter rules of the app's own, in the syntax of the
                                                  lists, applied on top of them */
@@ -135,6 +137,7 @@ enum lb_embed_download_status {
 enum lb_embed_clear {
     LB_EMBED_CLEAR_CACHE = 1,
     LB_EMBED_CLEAR_SITE_DATA = 2, /* cookies and what sites stored */
+    LB_EMBED_CLEAR_PRIVATE_SESSION = 4, /* the private views' cookies, storage and downloads: the last private tab closed */
 };
 
 enum lb_embed_find {

@@ -26,6 +26,8 @@ class DBManager : public QObject
     Q_OBJECT
 public:
     static DBManager *instance();
+    // Waits until what was asked of the database so far is done, if there is a database. For the very end.
+    static void flush();
     virtual ~DBManager();
 
     void createTab(const Tab &tab);

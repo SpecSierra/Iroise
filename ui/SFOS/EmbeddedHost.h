@@ -12,6 +12,8 @@
 #include <AK/NonnullOwnPtr.h>
 #include <AK/RefPtr.h>
 #include <AK/StringView.h>
+#include <AK/ByteBuffer.h>
+#include <AK/Vector.h>
 #include <LibCore/Notifier.h>
 #include <LibGfx/SharedImage.h>
 #include <LibGfx/Size.h>
@@ -39,11 +41,26 @@ public:
 private:
     EmbeddedHost() = default;
 
+    enum class Sent {
+        Yes,
+        WouldBlock,
+        Failed,
+    };
     void send(lb_embed_header const&, StringView text = {}, int fd = -1);
+    Sent write(lb_embed_header const&, StringView text, int fd);
+    void flush_pending();
     void receive();
 
     int m_fd { -1 };
     RefPtr<Core::Notifier> m_notifier;
+    // Messages the app was too busy to take, sent in order once the socket has room again. Never frames: a frame
+    // the app cannot take now is replaced by the next one.
+    struct Pending {
+        lb_embed_header header;
+        ByteBuffer text;
+    };
+    Vector<Pending> m_pending;
+    RefPtr<Core::Notifier> m_write_notifier;
 };
 
 }
