@@ -12,6 +12,8 @@
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QGuiApplication>
+#include <QScreen>
 #include <QProcessEnvironment>
 #include <QSocketNotifier>
 #include <QStandardPaths>
@@ -106,6 +108,14 @@ void LadybirdEngine::start()
     QString downloads = engineHome.isEmpty() ? BrowserPaths::downloadLocation() : engineHome + QStringLiteral("/Downloads");
     QDir().mkpath(downloads);
     environment.insert(QStringLiteral("XDG_DOWNLOAD_DIR"), downloads);
+    // The engine paces its pages at 60 frames a second unless told the screen's rate (the Jolla Phone 2's is 90).
+    if (QScreen* screen = QGuiApplication::primaryScreen()) {
+        if (!qgetenv("PACIFIC_LOG_ENGINE").isEmpty())
+            qWarning("LadybirdEngine: the screen refreshes at %.1f Hz", screen->refreshRate());
+        // NB: One set already wins (to compare rates).
+        if (screen->refreshRate() >= 30 && !environment.contains(QStringLiteral("LADYBIRD_SFOS_REFRESH_RATE")))
+            environment.insert(QStringLiteral("LADYBIRD_SFOS_REFRESH_RATE"), QString::number(screen->refreshRate()));
+    }
     m_process.setProcessEnvironment(environment);
     m_process.setProcessChannelMode(QProcess::ForwardedChannels);
     // The engine is the app's own executable in another role (see launcher/launcher.c).

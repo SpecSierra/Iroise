@@ -154,6 +154,8 @@ private:
         : WebView::HeadlessWebView(move(theme), size.to_type<Web::DevicePixels>(), is_private)
     {
         m_device_pixel_ratio = device_pixel_ratio;
+        // NB: Before the first page is prepared, which hands the rate to WebContent and the Compositor.
+        m_maximum_frames_per_second = s_refresh_rate;
         m_frame_timer.start();
         on_ready_to_paint = [this] { present(); };
     }
@@ -161,6 +163,8 @@ private:
     virtual void prepare_page_for_tab(WebView::WebContentPage& page) override
     {
         WebView::HeadlessWebView::prepare_page_for_tab(page);
+        // The Compositor paces the page by the display's rate, which it only learns from the view (60 otherwise).
+        WebView::Application::the().update_compositor_display_metadata(page.compositor_context_id(), display_id(), m_maximum_frames_per_second);
         send_screen_rect(page);
         if (on_prepare_page)
             on_prepare_page(page);
@@ -216,6 +220,11 @@ private:
     }
 
     static inline bool s_log_frame_rate = Core::Environment::has("LADYBIRD_SFOS_LOG_FPS"sv);
+    // The screen's refresh rate, as the app found it; the engine assumes 60 otherwise.
+    static inline double s_refresh_rate = [] {
+        auto rate = Core::Environment::get("LADYBIRD_SFOS_REFRESH_RATE"sv).value_or({}).to_number<double>();
+        return rate.has_value() && *rate >= 30 && *rate <= 240 ? *rate : 60.0;
+    }();
 
     Optional<int> m_active_touch;
     Gfx::IntPoint m_touch_start;
