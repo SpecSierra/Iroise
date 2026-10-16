@@ -201,8 +201,12 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   (`LB_EMBED_NEW_VIEW`, numbered from `LB_EMBED_FIRST_ENGINE_VIEW`), which the interface adopts as a new tab;
   `window.close` closes it again (`LB_EMBED_CLOSE_VIEW`). Private tabs are private views in the engine (their own
   cookies and storage, nothing kept), and the windows they open are too.
-- Video: the engine's FFmpeg has no H.264 decoder (a patent-encumbered codec, left out upstream), so pages get
-  `""` from `canPlayType` for it; VP9, AV1 and the other free codecs play.
+- Video: the bundled FFmpeg has no H.264 or AAC (patent-encumbered, left out upstream), so those go through
+  Sailfish OS's own FFmpeg 5.1 (`libavcodec.so.59`, on every install), loaded with `dlopen` and never linked
+  (patch 0017; upstream only accepts majors 60-63). Its structs and enums match what the decoders use, except
+  AV1's codec id, so AV1 stays on the bundled dav1d. Without the system library H.264 is simply unsupported.
+  On the Jolla Phone 2, H.264 and AAC play at 1.00x, up to 1080p60 at 53-57 fps (software decoding); VP9, AV1
+  and the other free codecs play through the bundle.
 - Saved logins: the page agent posts the password field and the text field before it when a form is sent or a
   button pressed (`login` message). The interface offers to save it once the page goes on (or after four seconds)
   into the SQLCipher vault, opening the vault first if need be, and skips a login it already has. A saved login
