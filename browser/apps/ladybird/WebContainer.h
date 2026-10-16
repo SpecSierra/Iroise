@@ -26,20 +26,16 @@ class WebContainer : public QQuickItem
     Q_OBJECT
     Q_INTERFACES(QQmlParserStatus)
 
-    Q_PROPERTY(QQuickItem *rotationHandler MEMBER m_rotationHandler NOTIFY rotationHandlerChanged FINAL)
     Q_PROPERTY(WebPage *contentItem READ contentItem NOTIFY contentItemChanged FINAL)
     Q_PROPERTY(DeclarativeTabModel *tabModel READ tabModel NOTIFY tabModelChanged FINAL)
     Q_PROPERTY(DeclarativeTabModel *persistentTabModel READ persistentTabModel CONSTANT)
     Q_PROPERTY(DeclarativeTabModel *privateTabModel READ privateTabModel CONSTANT)
     Q_PROPERTY(bool completed READ completed NOTIFY completedChanged FINAL)
-    Q_PROPERTY(bool enabled MEMBER m_browserEnabled NOTIFY enabledChanged FINAL)
     Q_PROPERTY(bool foreground READ foreground WRITE setForeground NOTIFY foregroundChanged FINAL)
     Q_PROPERTY(int maxLiveTabCount MEMBER m_maxLiveTabCount NOTIFY maxLiveTabCountChanged FINAL)
     // Silica Theme.pixelRatio, set from QML (C++ has no Silica or dconf
     // access). Sets the device scale of pages created afterwards.
     Q_PROPERTY(qreal uiPixelRatio MEMBER m_uiPixelRatio NOTIFY uiPixelRatioChanged FINAL)
-    Q_PROPERTY(bool touchBlocked MEMBER m_touchBlocked NOTIFY touchBlockedChanged FINAL)
-    Q_PROPERTY(bool selectionActive READ selectionActive NOTIFY selectionActiveChanged FINAL)
     Q_PROPERTY(bool loading READ loading NOTIFY loadingChanged FINAL)
     Q_PROPERTY(int loadProgress READ loadProgress NOTIFY loadProgressChanged FINAL)
     Q_PROPERTY(bool canGoForward READ canGoForward NOTIFY canGoForwardChanged FINAL)
@@ -51,7 +47,6 @@ class WebContainer : public QQuickItem
     Q_PROPERTY(bool activeTabRendered READ activeTabRendered NOTIFY activeTabRenderedChanged FINAL)
     Q_PROPERTY(QObject *chromeWindow READ chromeWindow WRITE setChromeWindow NOTIFY chromeWindowChanged FINAL)
     Q_PROPERTY(bool readyToPaint READ readyToPaint WRITE setReadyToPaint NOTIFY readyToPaintChanged FINAL)
-    Q_PROPERTY(Qt::ScreenOrientation pendingWebContentOrientation READ pendingWebContentOrientation NOTIFY pendingWebContentOrientationChanged FINAL)
     Q_PROPERTY(DeclarativeHistoryModel *historyModel READ historyModel WRITE setHistoryModel NOTIFY historyModelChanged FINAL)
     Q_PROPERTY(bool hasInitialUrl READ hasInitialUrl NOTIFY hasInitialUrlChanged FINAL)
     Q_PROPERTY(int visibility READ fakeVisibility NOTIFY visibilityChanged FINAL)
@@ -79,20 +74,19 @@ public:
     bool privateMode() const { return m_privateMode; }
     void setPrivateMode(bool p);
     bool activeTabRendered() const { return m_activeTabRendered; }
-    bool selectionActive() const;
     QObject *chromeWindow() const { return m_chromeWindow; }
     void setChromeWindow(QObject *w);
     bool readyToPaint() const { return m_readyToPaint; }
     void setReadyToPaint(bool r);
-    Qt::ScreenOrientation pendingWebContentOrientation() const { return Qt::PortraitOrientation; }
     DeclarativeHistoryModel *historyModel() const { return m_historyModel; }
     void setHistoryModel(DeclarativeHistoryModel *m);
     bool hasInitialUrl() const { return !m_initialUrl.isEmpty(); }
-    int fakeVisibility() const { return isVisible() ? 5 : 0; } // 5 = FullScreen
+    // As QWindow::Visibility: FullScreen while the item is visible, Hidden otherwise.
+    int fakeVisibility() const { return isVisible() ? 5 : 0; }
     bool needChrome() const;
 
     Q_INVOKABLE void load(const QString &url, const QString &title = QString(), bool newTab = false);
-    Q_INVOKABLE void reload(bool force = true);
+    Q_INVOKABLE void reload();
     Q_INVOKABLE void goForward();
     Q_INVOKABLE void goBack();
     Q_INVOKABLE int activateTab(int tabId, const QString &url = QString());
@@ -119,23 +113,12 @@ public:
     void componentComplete() override;
 
 Q_SIGNALS:
-    void rotationHandlerChanged();
     void contentItemChanged();
     void tabModelChanged();
     void completedChanged();
-    void enabledChanged();
     void foregroundChanged();
-    void allowHidingChanged();
     void maxLiveTabCountChanged();
     void uiPixelRatioChanged();
-    void touchBlockedChanged();
-    void selectionActiveChanged();
-    void portraitChanged();
-    void fullscreenModeChanged();
-    void fullscreenHeightChanged();
-    void imOpenedChanged();
-    void toolbarHeightChanged();
-    void faviconChanged();
     void loadingChanged();
     void loadProgressChanged();
     void canGoForwardChanged();
@@ -143,25 +126,19 @@ Q_SIGNALS:
     void tabIdChanged();
     void titleChanged();
     void urlChanged();
-    void thumbnailPathChanged();
     void privateModeChanged();
     void activeTabRenderedChanged();
     void chromeWindowChanged();
     void chromeExposed();
     void readyToPaintChanged();
-    void pendingWebContentOrientationChanged();
     void webContentOrientationChanged(Qt::ScreenOrientation orientation);
-    void securityChanged();
     void historyModelChanged();
     void applicationClosing();
     void hasInitialUrlChanged();
     void visibilityChanged();
     void needChromeChanged();
-    // New in 'next' branch
+    // A new touch on the active page (WebPage::touched).
     void touched();
-    void keyPressed(int key);
-    void backButtonPressed();
-    void forwardButtonPressed();
 
 private Q_SLOTS:
     void onWindowChangedForForeground(QQuickWindow *win);
@@ -190,13 +167,15 @@ private:
     void activatePage(int tabId);
     void setActiveTabRendered(bool r);
     void connectPage(WebPage *page);
+    // The active page has changed (or gone): every property read through m_contentItem changes with it, and a QML
+    // binding only reads it again when its NOTIFY fires.
+    void emitContentItemChanged();
     // A view the engine opened for a page, waiting for the tab that shows it to be created.
     quint32 m_viewForNextPage = 0;
 
-    // --- Tab discarding (Lever 2): reclaim a backgrounded tab's whole
-    // WebProcess (RSS + GPU) when it falls outside the live-tab budget. The
-    // tab stays in the tab model (URL/title/thumbnail persist); activatePage()
-    // transparently recreates + reloads it via getOrCreatePage() on return. ---
+    // --- Tab discarding: a tab in the background that falls outside the live-tab budget loses its page (and with
+    // it the engine's view, its processes and its memory). The tab stays in the tab model (URL/title/thumbnail
+    // persist); activatePage() recreates and reloads it via getOrCreatePage() on return. ---
     void touchMru(int tabId);              // mark tabId most-recently-used
     void discardPage(int tabId);           // tear down the page, keep the tab
     void enforceLiveTabBudget();           // discard tabs beyond the MRU cap
@@ -217,7 +196,6 @@ private:
     int m_memFreeThresholdMb = 400;         // PACIFIC_TAB_DISCARD_MEMFREE_MB
     bool m_underMemoryPressure = false;
     QPointer<QObject> m_chromeWindow;
-    QPointer<QQuickItem> m_rotationHandler;
     QPointer<QQuickWindow> m_foregroundWindow;
     bool m_completed = false;
     bool m_foreground = true;
@@ -225,8 +203,6 @@ private:
     bool m_activeTabRendered = false;
     bool m_readyToPaint = false;
     bool m_waitingForFreshTitle = false;
-    bool m_touchBlocked = false;
-    bool m_browserEnabled = true;
     int m_maxLiveTabCount = 5;
     qreal m_uiPixelRatio = 0.0;             // Silica Theme.pixelRatio; 0 = unknown
     QString m_initialUrl;

@@ -2,7 +2,7 @@
 # Runs on the phone. usage: start-browser.sh [url] [minutes]
 # Starts the app from /tmp/ladybird (scripts/deploy.sh). Everything it writes goes under /tmp, and it is stopped
 # again after a while.
-cd /tmp/ladybird
+cd /tmp/ladybird || exit 1
 export XDG_RUNTIME_DIR=/run/user/100000
 export WAYLAND_DISPLAY=../../display/wayland-0
 export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/100000/dbus/user_bus_socket
@@ -18,8 +18,11 @@ export PACIFIC_GRAB_DIR=${PACIFIC_GRAB_DIR:-}
 ulimit -c 0
 mkdir -p "$XDG_DATA_HOME" "$XDG_CACHE_HOME"
 url=$1; minutes=${2:-15}
+case $minutes in ''|*[!0-9]*) echo "minutes must be a number: $minutes" >&2; exit 1 ;; esac
 # PACIFIC_NO_STOP=1: the caller has stopped it already (stop.sh waits a second, which timings would count).
 [ -n "$PACIFIC_NO_STOP" ] || sh /tmp/ladybird/stop.sh
+# NB: $url unquoted on purpose: it may carry arguments before the URL (-qmljsdebugger=...). A URL with spaces or
+#     glob characters has to be quoted by the caller.
 ( /tmp/ladybird/bin/harbour-pacific $url > /tmp/ladybird/win.log 2>&1
   echo "harbour-pacific exited with status $?" >> /tmp/ladybird/win.log ) &
 # Only the newest run's timer may stop the browser; an older one would cut this run short.

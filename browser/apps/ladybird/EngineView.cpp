@@ -8,7 +8,6 @@
 
 #include "DirectFrameTextures.h"
 
-#include <QJSEngine>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -83,7 +82,6 @@ void EngineView::ensureEngineView()
     }
     if (!m_engineVisible)
         sendToEngine(LB_EMBED_SET_VISIBLE, 0);
-    emit webViewCreated();
     if (m_pendingUrl.isValid()) {
         QUrl url = m_pendingUrl;
         m_pendingUrl.clear();
@@ -170,18 +168,6 @@ void EngineView::evaluate(const QString& expression, std::function<void(const QJ
     //     travels as JSON, together with the number that says which question it answers.
     QString wrapped = QStringLiteral("JSON.stringify({i:%1,v:(%2\n)})").arg(id).arg(expression);
     sendToEngine(LB_EMBED_RUN_SCRIPT, 0, 0, 0, 0, wrapped.toUtf8());
-}
-
-void EngineView::runJavaScript(const QString& script, const QJSValue& callback)
-{
-    if (!callback.isCallable()) {
-        evaluate(script);
-        return;
-    }
-    QJSValue function = callback;
-    evaluate(script, [function](const QJsonValue& value) mutable {
-        function.call(QJSValueList() << function.engine()->toScriptValue(value.toVariant()));
-    });
 }
 
 void EngineView::setLoadProgress(int progress)

@@ -28,7 +28,6 @@ Column {
     readonly property bool showFindButtons: findInPageActive && webView.contentItem && webView.contentItem.findInPageHasResult
     property var bookmarked
     readonly property alias rowHeight: toolsRow.height
-    readonly property int maxRowCount: 6
 
     readonly property int horizontalOffset: largeScreen ? Theme.paddingLarge : Theme.paddingSmall
     readonly property int buttonPadding: largeScreen

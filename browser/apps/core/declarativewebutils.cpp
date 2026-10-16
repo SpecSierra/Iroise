@@ -33,8 +33,6 @@
 #include "declarativewebutils.h"
 #include "browserpaths.h"
 
-static const auto defaultUserAgentUpdateUrl = QStringLiteral("https://browser.sailfishos.org/gecko/91.0/ua-update.json");
-
 static DeclarativeWebUtils *gSingleton = 0;
 
 static bool fileExists(QString fileName)
@@ -45,7 +43,7 @@ static bool fileExists(QString fileName)
 
 DeclarativeWebUtils::DeclarativeWebUtils()
     : QObject()
-    , m_homePage(QStringLiteral("http://jolla.com"))
+    , m_homePage(QStringLiteral("https://jolla.com/"))
 {
     QString path = BrowserPaths::dataLocation() + QStringLiteral("/.firstUseDone");
     m_firstUseDone = fileExists(path);

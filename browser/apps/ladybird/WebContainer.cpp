@@ -67,11 +67,11 @@ WebContainer::WebContainer(QQuickItem *parent)
     setAcceptedMouseButtons(Qt::AllButtons);
     setFiltersChildMouseEvents(false);
 
-    // --- Tab discarding config (Lever 2) ---
-    // A backgrounded tab keeps its whole WebProcess resident (~250MB RSS +
-    // up to ~1GB pinned GPU tiles, measured on franceinfo/revolut). Keep only
-    // the active tab + a small MRU set live; discard the rest (their tab-model
-    // entry survives, so activatePage() recreates + reloads them on return).
+    // --- Tab discarding ---
+    // A tab in the background keeps its page alive in the engine, with its
+    // processes and their memory. Keep only the active tab + a small MRU set
+    // live; discard the rest (their tab-model entry survives, so activatePage()
+    // recreates + reloads them on return).
     if (qEnvironmentVariableIsSet("PACIFIC_TAB_DISCARD"))
         m_tabDiscardEnabled = qgetenv("PACIFIC_TAB_DISCARD").trimmed() != "0";
     if (qEnvironmentVariableIsSet("PACIFIC_MAX_LIVE_TABS"))
@@ -100,6 +100,7 @@ WebContainer::WebContainer(QQuickItem *parent)
     // never re-fired, so it cannot be trusted for page visibility.)
     connect(this, &QQuickItem::windowChanged,
             this, &WebContainer::onWindowChangedForForeground);
+    connect(this, &QQuickItem::visibleChanged, this, &WebContainer::visibilityChanged);
 }
 
 void WebContainer::onWindowChangedForForeground(QQuickWindow *win)
@@ -304,11 +305,6 @@ bool WebContainer::needChrome() const
     return !m_contentItem || (m_contentItem->chrome() && !m_contentItem->fullscreen());
 }
 
-bool WebContainer::selectionActive() const
-{
-    return m_contentItem && m_contentItem->textSelectionActive();
-}
-
 DeclarativeTabModel *WebContainer::tabModel() const
 {
     return m_tabModel;
@@ -409,15 +405,7 @@ void WebContainer::setPrivateMode(bool p)
             m_contentItem->setActive(false);
             m_contentItem->setVisible(false);
             m_contentItem = nullptr;
-            emit contentItemChanged();
-            emit needChromeChanged();
-            emit tabIdChanged();
-            emit urlChanged();
-            emit titleChanged();
-            emit loadingChanged();
-            emit loadProgressChanged();
-            emit canGoBackChanged();
-            emit canGoForwardChanged();
+            emitContentItemChanged();
         }
 
         emit privateModeChanged();
@@ -521,9 +509,8 @@ void WebContainer::load(const QString &url, const QString &title, bool newTab)
     }
 }
 
-void WebContainer::reload(bool force)
+void WebContainer::reload()
 {
-    Q_UNUSED(force)
     if (m_contentItem) m_contentItem->reload();
 }
 
@@ -612,22 +599,7 @@ void WebContainer::onTabClosed(int tabId)
         page->deleteLater();
         if (m_contentItem == page) {
             m_contentItem = nullptr;
-            emit contentItemChanged();
-            emit needChromeChanged();
-            // Every one of these reads through m_contentItem, so dropping it
-            // changes them all -- but a QML binding only re-evaluates when its
-            // NOTIFY fires. Closing a tab mid-load left the URL bar showing the
-            // dead page's address and the progress bar frozen at whatever it
-            // had reached, because loading/url/loadProgress were never
-            // re-read. The same nulling further up emits the full set; this
-            // path only emitted the first two.
-            emit tabIdChanged();
-            emit urlChanged();
-            emit titleChanged();
-            emit loadingChanged();
-            emit loadProgressChanged();
-            emit canGoBackChanged();
-            emit canGoForwardChanged();
+            emitContentItemChanged();
         }
     }
     // Closing the last private tab ends the private session: private mode entered again later in the same run starts
@@ -661,21 +633,26 @@ void WebContainer::activatePage(int tabId)
     if (m_contentItem != page) {
         m_contentItem = page;
         m_waitingForFreshTitle = page->title().isEmpty();
-        emit contentItemChanged();
-        emit needChromeChanged();
-        emit tabIdChanged();
-        emit urlChanged();
-        emit titleChanged();
-        emit loadingChanged();
-        emit loadProgressChanged();
-        emit canGoBackChanged();
-        emit canGoForwardChanged();
+        emitContentItemChanged();
     }
 
     // The just-activated tab is the most-recently-used; discard anything that
     // now falls outside the live-tab budget.
     touchMru(tabId);
     enforceLiveTabBudget();
+}
+
+void WebContainer::emitContentItemChanged()
+{
+    emit contentItemChanged();
+    emit needChromeChanged();
+    emit tabIdChanged();
+    emit urlChanged();
+    emit titleChanged();
+    emit loadingChanged();
+    emit loadProgressChanged();
+    emit canGoBackChanged();
+    emit canGoForwardChanged();
 }
 
 void WebContainer::touchMru(int tabId)
@@ -702,7 +679,7 @@ void WebContainer::discardPage(int tabId)
     if (!page)
         return;
     // Keep the tab-model entry (URL/title/thumbnail) — only the live page and
-    // its WebProcess go away. activatePage() recreates + reloads it on return.
+    // its engine view go away. activatePage() recreates + reloads it on return.
     page->setActive(false);
     page->setVisible(false);
     // Destroying the page destroys its engine view, and with it the page's processes.
@@ -781,8 +758,7 @@ WebPage *WebContainer::getOrCreatePage(int tabId)
         return m_pages[tabId];
     }
 
-    // Create with nullptr parent so windowChanged fires AFTER EngineView's connect() is set up,
-    // then reparent via setParentItem() to trigger configureWindow() correctly.
+    // No parent yet: the page goes into the scene last, once it is set up.
     WebPage *page = new WebPage(nullptr);
     page->setTabId(tabId);
     if (m_tabModel)
@@ -791,9 +767,9 @@ WebPage *WebContainer::getOrCreatePage(int tabId)
         page->adoptEngineView(m_viewForNextPage);
         m_viewForNextPage = 0;
     }
-    // Tag the page with the mode it was born into, BEFORE it is parented (which
-    // triggers web-view creation): private pages must be constructed against the
-    // ephemeral network session. A page keeps this for its whole life — the two
+    // Tag the page with the mode it was born into, BEFORE it gets its size (with
+    // which the engine's view is created): private pages must be created in the
+    // engine's private session. A page keeps this for its whole life — the two
     // tab models use disjoint id ranges, so a page never switches modes.
     page->setPrivateBrowsing(m_privateMode);
     page->setVisible(false);
@@ -810,8 +786,7 @@ WebPage *WebContainer::getOrCreatePage(int tabId)
     connectPage(page);
     m_pages[tabId] = page;
 
-    // Reparent after all connections are set up — this fires windowChanged which triggers
-    // EngineView::configureWindow() → createWebView().
+    // Into the scene, with its size, mode and connections in place.
     page->setParentItem(this);
     return page;
 }

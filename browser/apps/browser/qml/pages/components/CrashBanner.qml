@@ -5,7 +5,7 @@
 import QtQuick 2.2
 import Sailfish.Silica 1.0
 
-// Sits above the (now blank) web content after a WebProcess crash and offers a
+// Sits above the (now blank) web content after the page's process crashed and offers a
 // reload. Dismissed automatically when a new load starts (crashed resets to
 // false). Driven entirely by the bound webView's contentItem.
 Rectangle {
@@ -39,7 +39,8 @@ Rectangle {
             horizontalAlignment: Text.AlignHCenter
             font.pixelSize: Theme.fontSizeMedium
             color: Theme.primaryColor
-            text: qsTr("This tab has crashed")
+            //% "This tab has crashed"
+            text: qsTrId("pacific-la-tab_crashed")
         }
         Label {
             width: parent.width
@@ -47,11 +48,13 @@ Rectangle {
             font.pixelSize: Theme.fontSizeSmall
             color: Theme.secondaryColor
             wrapMode: Text.WordWrap
-            text: qsTr("The page stopped unexpectedly. Your other tabs are fine.")
+            //% "The page stopped unexpectedly. Your other tabs are fine."
+            text: qsTrId("pacific-la-tab_crashed_description")
         }
         Button {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: qsTr("Reload")
+            //% "Reload"
+            text: qsTrId("pacific-bt-reload_crashed_tab")
             onClicked: crashBanner.webView.reload()
         }
     }

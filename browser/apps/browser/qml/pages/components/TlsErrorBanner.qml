@@ -56,7 +56,8 @@ Rectangle {
             font.pixelSize: Theme.fontSizeMedium
             color: Theme.errorColor
             wrapMode: Text.WordWrap
-            text: qsTr("Connection to %1 is not secure").arg(page ? page.tlsErrorHost : "")
+            //% "Connection to %1 is not secure"
+            text: qsTrId("pacific-la-connection_not_secure").arg(page ? page.tlsErrorHost : "")
         }
         Label {
             width: parent.width
@@ -65,17 +66,21 @@ Rectangle {
             color: Theme.secondaryColor
             wrapMode: Text.WordWrap
             text: page && page.tlsErrorMessage.length > 0
-                  ? qsTr("The site's security certificate is not trusted: %1.").arg(page.tlsErrorMessage)
-                  : qsTr("The site's security certificate is not trusted.")
+                  //% "The site's security certificate is not trusted: %1."
+                  ? qsTrId("pacific-la-certificate_not_trusted_reason").arg(page.tlsErrorMessage)
+                  //% "The site's security certificate is not trusted."
+                  : qsTrId("pacific-la-certificate_not_trusted")
         }
         Button {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: qsTr("Accept and continue anyway")
+            //% "Accept and continue anyway"
+            text: qsTrId("pacific-bt-accept_certificate")
             onClicked: if (tlsErrorBanner.page) tlsErrorBanner.page.acceptTlsCertificate()
         }
         Button {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: qsTr("Dismiss")
+            //% "Dismiss"
+            text: qsTrId("pacific-bt-dismiss_certificate_error")
             onClicked: tlsErrorBanner.dismissed = true
         }
     }

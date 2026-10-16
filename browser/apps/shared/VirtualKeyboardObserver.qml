@@ -47,8 +47,6 @@ Item {
     readonly property bool verticalOrientation: orientation === Orientation.Portrait
                                                 || orientation === Orientation.PortraitInverted
                                                 || orientation === Orientation.None
-    readonly property bool horizontalOrientation: orientation === Orientation.Landscape
-                                                  || orientation === Orientation.LandscapeInverted
 
     property bool testMode
 

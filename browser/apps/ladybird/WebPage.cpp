@@ -52,6 +52,8 @@ const qint64 kUserInputWindowMs = 3000;
 const int kSameLoginSaved = -2;
 const int kThumbnailMaxBusyChecks = 30;
 const int kThumbnailMaxWidth = 540;
+// How far the page has to scroll at once, in CSS pixels, for the toolbar to hide or come back.
+const qreal kChromeScrollThreshold = 10.0;
 
 // The engine reports neither scrolling nor selections, nor whether a video plays. This script, run in each page, does:
 // it posts where the page is scrolled to, what is selected and whether a video is playing, at most once a frame, as
@@ -129,7 +131,7 @@ const char kInputPickerScript[] =
     "var t=(e.getAttribute('type')||'').toLowerCase();"
     "if(['date','month','week','time','datetime-local'].indexOf(t)<0)return null;"
     "window.__pacificPendingInput=e;e.blur();"
-    "return {type:t,value:e.value||'',min:e.getAttribute('min')||'',max:e.getAttribute('max')||'',step:e.getAttribute('step')||''};"
+    "return {type:t,value:e.value||''};"
     "})(%1,%2)";
 
 const char kResolveInputPickerScript[] =
@@ -162,9 +164,6 @@ const char kLongPressScript[] =
     "getSelection().setBaseAndExtent(p.offsetNode,s,p.offsetNode,n);"
     "r.word=true;return r;"
     "})(%1,%2)";
-
-// The selection's text and where its two ends are on screen: the bottom of the first and of the last line box,
-// in CSS pixels at the zoom the user pinched to.
 
 // Moves one end of the selection to the text nearest a point, keeping the other end where it is.
 const char kMoveSelectionScript[] =
@@ -250,26 +249,17 @@ WebPage::WebPage(QQuickItem *parent)
             setChrome(m_pendingChrome);
         m_chromeGestureArmed = false;
     });
-    connect(this, &EngineView::scrollPositionChanged, this, [this](qreal scrollY, qreal scrollHeight, qreal innerHeight) {
+    connect(this, &EngineView::scrollPositionChanged, this, [this](qreal scrollY, qreal, qreal) {
         bool atTop = scrollY <= 0;
-        bool atBottom = (scrollHeight - scrollY - innerHeight) <= 1.0;
-        if (atTop != m_atYBeginning) {
-            m_atYBeginning = atTop;
-            emit atYBeginningChanged();
-        }
-        if (atBottom != m_atYEnd) {
-            m_atYEnd = atBottom;
-            emit atYEndChanged();
-        }
         // Scrolling down the page hides the toolbar, scrolling back up or reaching the top shows it.
-        if (m_chromeGestureEnabled && !m_fixedToolbar && !m_forcedChrome) {
+        if (!m_fixedToolbar && !m_forcedChrome) {
             qreal delta = scrollY - m_lastScrollY;
             bool targetChrome;
             if (atTop) {
                 targetChrome = true;
-            } else if (delta > m_chromeGestureThreshold) {
+            } else if (delta > kChromeScrollThreshold) {
                 targetChrome = false;
-            } else if (delta < -m_chromeGestureThreshold) {
+            } else if (delta < -kChromeScrollThreshold) {
                 targetChrome = true;
             } else {
                 return;
@@ -287,11 +277,6 @@ WebPage::WebPage(QQuickItem *parent)
 WebPage::~WebPage()
 {
     livePages().removeAll(this);
-}
-
-const QList<WebPage *> &WebPage::liveInstances()
-{
-    return livePages();
 }
 
 int WebPage::tabId() const
@@ -344,33 +329,9 @@ void WebPage::setAppForeground(bool foreground)
     updateEngineVisibility();
 }
 
-void WebPage::loadTab(const QString &url, bool force)
-{
-    QUrl target = QUrl::fromUserInput(url);
-    if (!target.isValid())
-        return;
-    if (target == this->url()) {
-        if (force)
-            reload();
-        return;
-    }
-    m_crashed = false;
-    setUrl(target);
-}
-
 void WebPage::loadCurrentUrlAgain()
 {
     reload();
-}
-
-void WebPage::goBack()
-{
-    EngineView::goBack();
-}
-
-void WebPage::goForward()
-{
-    EngineView::goForward();
 }
 
 void WebPage::onLoadingChanged(EngineViewLoadRequest *loadRequest)
@@ -430,7 +391,6 @@ void WebPage::onFrameArrived()
         m_painted = true;
         emit paintedChanged();
     }
-    emit afterRendering();
 }
 
 // --- Thumbnails -------------------------------------------------------------
@@ -510,7 +470,7 @@ void WebPage::setChrome(bool chrome)
 
 void WebPage::forceChrome(bool forced)
 {
-    setForcedChrome(forced);
+    m_forcedChrome = forced;
     if (forced)
         setChrome(true);
 }
@@ -541,21 +501,11 @@ bool WebPage::textSelectionActive() const
     return m_textSelectionActive;
 }
 
-QObject* WebPage::textSelectionController()
-{
-    return this;
-}
-
 QString WebPage::selectedText() const
 {
     return m_selectedText;
 }
 
-bool WebPage::isPhoneNumber() const
-{
-    static const QRegularExpression re(QStringLiteral("^[+\\d][\\d\\s\\-().+]{6,}$"));
-    return re.match(m_selectedText.trimmed()).hasMatch();
-}
 // --- Text input -------------------------------------------------------------
 //
 // The engine says when an editable element has focus. While one has, this item takes the input method's focus,
@@ -673,7 +623,7 @@ void WebPage::touchEvent(QTouchEvent *event)
     EngineView::touchEvent(event);
 }
 
-// --- Everything below is state the interface reads and the engine protocol does not drive yet ---------------
+// --- State the interface reads: load, chrome, fullscreen, media, site options ---------------------------------
 
 bool WebPage::domContentLoaded() const
 {
@@ -685,32 +635,9 @@ bool WebPage::chrome() const
     return m_chrome;
 }
 
-bool WebPage::forcedChrome() const
-{
-    return m_forcedChrome;
-}
-
-void WebPage::setForcedChrome(bool forcedChrome)
-{
-    if (m_forcedChrome == forcedChrome)
-        return;
-    m_forcedChrome = forcedChrome;
-    emit forcedChromeChanged();
-}
-
 bool WebPage::fullscreen() const
 {
     return m_fullscreen;
-}
-
-bool WebPage::atYBeginning() const
-{
-    return m_atYBeginning;
-}
-
-bool WebPage::atYEnd() const
-{
-    return m_atYEnd;
 }
 
 QString WebPage::favicon() const
@@ -724,18 +651,6 @@ void WebPage::setFavicon(const QString &favicon)
         return;
     m_favicon = favicon;
     emit faviconChanged();
-}
-qreal WebPage::fullscreenHeight() const
-{
-    return m_fullscreenHeight;
-}
-
-void WebPage::setFullscreenHeight(qreal height)
-{
-    if (m_fullscreenHeight == height)
-        return;
-    m_fullscreenHeight = height;
-    emit fullscreenHeightChanged();
 }
 
 qreal WebPage::toolbarHeight() const
@@ -759,14 +674,16 @@ bool WebPage::active() const
 // The engine blocks with its own copy of Brave's adblock engine and its own list subscriptions. These two switches
 // are for the whole engine, so they are sent once and not per page.
 static bool s_adBlockEnabled = false;
-static bool s_cookieBannerBlockingEnabled = false;
 
 void WebPage::applyAdBlockEnabledGlobally(bool enabled)
 {
     s_adBlockEnabled = enabled;
     LadybirdEngine::instance()->send(0, LB_EMBED_SET_AD_BLOCKING, enabled ? 1 : 0);
-    for (WebPage *page : livePages())
-        emit page->adBlockEnabledChanged();
+}
+
+bool WebPage::adBlockEnabledGlobally()
+{
+    return s_adBlockEnabled;
 }
 
 void WebPage::applyAdBlockAllowlistGlobally(const QString &json)
@@ -787,10 +704,7 @@ void WebPage::applyAdBlockAllowlistGlobally(const QString &json)
 
 void WebPage::applyCookieBannerBlockingGlobally(bool enabled)
 {
-    s_cookieBannerBlockingEnabled = enabled;
     LadybirdEngine::instance()->send(0, LB_EMBED_SET_COOKIE_BANNER_BLOCKING, enabled ? 1 : 0);
-    for (WebPage *page : livePages())
-        emit page->cookieBannerBlockingEnabledChanged();
 }
 
 // The site options the engine applies itself, as it learns where a tab is going (LB_EMBED_SET_SITE_OPTIONS).
@@ -833,31 +747,6 @@ void WebPage::applyJavaScriptBlocklistGlobally(const QString &json)
         s_noScriptSites.append(host.toString().trimmed().toLower());
     sendSiteOptions();
 }
-bool WebPage::chromeGestureEnabled() const
-{
-    return m_chromeGestureEnabled;
-}
-
-void WebPage::setChromeGestureEnabled(bool enabled)
-{
-    if (m_chromeGestureEnabled == enabled)
-        return;
-    m_chromeGestureEnabled = enabled;
-    emit chromeGestureEnabledChanged();
-}
-
-qreal WebPage::chromeGestureThreshold() const
-{
-    return m_chromeGestureThreshold;
-}
-
-void WebPage::setChromeGestureThreshold(qreal threshold)
-{
-    if (m_chromeGestureThreshold == threshold)
-        return;
-    m_chromeGestureThreshold = threshold;
-    emit chromeGestureThresholdChanged();
-}
 
 bool WebPage::fixedToolbar() const
 {
@@ -870,15 +759,6 @@ void WebPage::setFixedToolbar(bool fixed)
         return;
     m_fixedToolbar = fixed;
     emit fixedToolbarChanged();
-}
-
-bool WebPage::moving() const
-{
-    return false;
-}
-bool WebPage::dragging() const
-{
-    return false;
 }
 
 bool WebPage::desktopMode() const
@@ -943,14 +823,14 @@ void WebPage::selectAll()
     evaluate(QStringLiteral("getSelection().selectAllChildren(document.body),0"));
 }
 
-void WebPage::moveSelectionStart(qreal cssX, qreal cssY)
+void WebPage::moveSelectionStart(qreal x, qreal y)
 {
-    moveSelectionEdge(true, cssX, cssY);
+    moveSelectionEdge(true, x, y);
 }
 
-void WebPage::moveSelectionEnd(qreal cssX, qreal cssY)
+void WebPage::moveSelectionEnd(qreal x, qreal y)
 {
-    moveSelectionEdge(false, cssX, cssY);
+    moveSelectionEdge(false, x, y);
 }
 
 void WebPage::copyToClipboard()
@@ -1422,7 +1302,6 @@ void WebPage::storePendingLogin()
     else
         store->insert(fields);
     m_saveLoginPassword.clear();
-    emit loginSaved();
 }
 
 void WebPage::selectMenuOption(int index)
@@ -1499,13 +1378,10 @@ void WebPage::cancelInputPicker()
     closeInputPicker();
 }
 
-void WebPage::openInputPicker(const QString &type, const QString &value, const QString &min, const QString &max, const QString &step)
+void WebPage::openInputPicker(const QString &type, const QString &value)
 {
     m_inputPickerType = type;
     m_inputPickerValue = value;
-    m_inputPickerMin = min;
-    m_inputPickerMax = max;
-    m_inputPickerStep = step;
     m_inputPickerActive = true;
     emit inputPickerChanged();
     emit inputPickerActiveChanged();
@@ -1539,31 +1415,6 @@ void WebPage::setContextInfo(const QVariantMap &info)
 void WebPage::clearContextInfo()
 {
     setContextInfo(QVariantMap());
-}
-
-bool WebPage::adBlockEnabledGlobally()
-{
-    return s_adBlockEnabled;
-}
-
-bool WebPage::adBlockEnabled() const
-{
-    return s_adBlockEnabled;
-}
-
-void WebPage::setAdBlockEnabled(bool enabled)
-{
-    applyAdBlockEnabledGlobally(enabled);
-}
-
-bool WebPage::cookieBannerBlockingEnabled() const
-{
-    return s_cookieBannerBlockingEnabled;
-}
-
-void WebPage::setCookieBannerBlockingEnabled(bool enabled)
-{
-    applyCookieBannerBlockingGlobally(enabled);
 }
 
 // --- Long press, text selection, select menus and page dialogs -------------------------------------------------
@@ -1624,12 +1475,12 @@ void WebPage::pageMessage(const QString &kind, const QJsonValue &data)
     }
 }
 
-void WebPage::moveSelectionEdge(bool start, qreal cssX, qreal cssY)
+void WebPage::moveSelectionEdge(bool start, qreal x, qreal y)
 {
-    // These arrive in the interface's pixels too, whatever the parameters are called.
+    // The script takes CSS pixels.
     const qreal scale = deviceScaleFactor();
-    cssX /= scale;
-    cssY /= scale;
+    const qreal cssX = x / scale;
+    const qreal cssY = y / scale;
     QString script = QString::fromLatin1(kMoveSelectionScript).arg(cssX, 0, 'f', 2).arg(cssY - kHandleToTextCssPx, 0, 'f', 2).arg(start ? 1 : 0);
     evaluate(script);
 }
@@ -1723,24 +1574,20 @@ void WebPage::tapped(const QPointF &position)
             return;
         QJsonObject input = value.toObject();
         m_inputPickerIsEngineColor = false;
-        openInputPicker(input.value(QStringLiteral("type")).toString(), input.value(QStringLiteral("value")).toString(),
-            input.value(QStringLiteral("min")).toString(), input.value(QStringLiteral("max")).toString(),
-            input.value(QStringLiteral("step")).toString());
+        openInputPicker(input.value(QStringLiteral("type")).toString(), input.value(QStringLiteral("value")).toString());
     });
 }
 
 void WebPage::colorPickerRequested(const QString &color)
 {
     m_inputPickerIsEngineColor = true;
-    openInputPicker(QStringLiteral("color"), color, QString(), QString(), QString());
+    openInputPicker(QStringLiteral("color"), color);
 }
 
 void WebPage::filePickerRequested(bool multiple)
 {
-    if (m_fileChooserSelectMultiple != multiple) {
-        m_fileChooserSelectMultiple = multiple;
-        emit fileChooserSelectMultipleChanged();
-    }
+    // NB: The interface's picker hands back one file, even to an input that takes several.
+    Q_UNUSED(multiple);
     m_fileChooserActive = true;
     emit fileChooserActiveChanged();
 }

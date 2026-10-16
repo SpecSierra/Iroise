@@ -61,7 +61,8 @@ Item {
 
                 width: track.width * 0.3
                 height: progressBar._h
-                color: "white"
+                // White whatever the ambience, as the shimmer is a highlight on the accent colour.
+                color: Theme.lightPrimaryColor
                 opacity: 0.38
 
                 SequentialAnimation on x {

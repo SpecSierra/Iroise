@@ -25,7 +25,7 @@
 class QQuickItemGrabResult;
 class QInputMethodEvent;
 
-// Lightweight security info exposed to QML (mirrors QMozSecurity interface)
+// What the security panel shows about the page's connection and certificate.
 class SecurityInfo : public QObject
 {
     Q_OBJECT
@@ -90,43 +90,30 @@ class WebPage : public EngineView
 {
     Q_OBJECT
 
-public:
-
-private:
     Q_PROPERTY(int tabId READ tabId WRITE setTabId NOTIFY tabIdChanged)
     // The tab whose page opened this one, which closing this one goes back to (0 for none).
     Q_PROPERTY(int parentId READ parentId CONSTANT)
     Q_PROPERTY(bool painted READ painted NOTIFY paintedChanged)
     Q_PROPERTY(bool domContentLoaded READ domContentLoaded NOTIFY domContentLoadedChanged)
     Q_PROPERTY(bool chrome READ chrome WRITE setChrome NOTIFY chromeChanged)
-    Q_PROPERTY(bool forcedChrome READ forcedChrome WRITE setForcedChrome NOTIFY forcedChromeChanged)
     Q_PROPERTY(bool fullscreen READ fullscreen NOTIFY fullscreenChanged)
     Q_PROPERTY(bool mediaAudioActive READ mediaAudioActive NOTIFY mediaAudioActiveChanged FINAL)
     Q_PROPERTY(bool mediaVideoActive READ mediaVideoActive NOTIFY mediaVideoActiveChanged FINAL)
-    Q_PROPERTY(bool atYBeginning READ atYBeginning NOTIFY atYBeginningChanged)
-    Q_PROPERTY(bool atYEnd READ atYEnd NOTIFY atYEndChanged)
     Q_PROPERTY(QString favicon READ favicon WRITE setFavicon NOTIFY faviconChanged)
-    Q_PROPERTY(qreal fullscreenHeight READ fullscreenHeight WRITE setFullscreenHeight NOTIFY fullscreenHeightChanged)
     Q_PROPERTY(qreal toolbarHeight READ toolbarHeight WRITE setToolbarHeight NOTIFY toolbarHeightChanged)
     Q_PROPERTY(bool active READ active WRITE setActive NOTIFY activeChanged)
-    Q_PROPERTY(bool chromeGestureEnabled READ chromeGestureEnabled WRITE setChromeGestureEnabled NOTIFY chromeGestureEnabledChanged)
-    Q_PROPERTY(qreal chromeGestureThreshold READ chromeGestureThreshold WRITE setChromeGestureThreshold NOTIFY chromeGestureThresholdChanged)
     Q_PROPERTY(bool fixedToolbar READ fixedToolbar WRITE setFixedToolbar NOTIFY fixedToolbarChanged)
     Q_PROPERTY(bool loaded READ loaded NOTIFY loadedChanged)
-    Q_PROPERTY(bool moving READ moving NOTIFY movingChanged)
     Q_PROPERTY(bool desktopMode READ desktopMode WRITE setDesktopMode NOTIFY desktopModeChanged)
     Q_PROPERTY(bool textSelectionActive READ textSelectionActive NOTIFY textSelectionActiveChanged FINAL)
-    Q_PROPERTY(QObject* textSelectionController READ textSelectionController CONSTANT FINAL)
-    Q_PROPERTY(bool selectionVisible READ textSelectionActive NOTIFY textSelectionActiveChanged FINAL)
     Q_PROPERTY(QString text READ selectedText NOTIFY selectionTextChanged FINAL)
-    Q_PROPERTY(bool isPhoneNumber READ isPhoneNumber NOTIFY selectionTextChanged FINAL)
     Q_PROPERTY(qreal selectionStartX READ selectionStartX NOTIFY selectionHandlesUpdated FINAL)
     Q_PROPERTY(qreal selectionStartY READ selectionStartY NOTIFY selectionHandlesUpdated FINAL)
     Q_PROPERTY(qreal selectionEndX READ selectionEndX NOTIFY selectionHandlesUpdated FINAL)
     Q_PROPERTY(qreal selectionEndY READ selectionEndY NOTIFY selectionHandlesUpdated FINAL)
 
     // Security / TLS certificate info
-    Q_PROPERTY(QObject* security READ security NOTIFY securityChanged FINAL)
+    Q_PROPERTY(QObject* security READ security CONSTANT FINAL)
 
     // TLS certificate failure (self-signed, expired, ...) — the load is blocked;
     // QML shows a banner and may call acceptTlsCertificate() to proceed.
@@ -174,30 +161,16 @@ private:
     // selectionText, editable, mediaType. Feeds browser.contextMenus.
     Q_PROPERTY(QVariantMap contextInfo READ contextInfo NOTIFY contextInfoChanged FINAL)
     Q_PROPERTY(bool fileChooserActive READ fileChooserActive NOTIFY fileChooserActiveChanged FINAL)
-    Q_PROPERTY(QStringList fileChooserNameFilters READ fileChooserNameFilters NOTIFY fileChooserNameFiltersChanged FINAL)
-    Q_PROPERTY(bool fileChooserSelectMultiple READ fileChooserSelectMultiple NOTIFY fileChooserSelectMultipleChanged FINAL)
 
     // HTML5 date/time/color input pickers — same JS-bridge + NOTIFY-property
     // pattern as selectMenu* above: QML drives the Silica DatePicker/TimePicker/ColorPicker dialogs.
     // inputPickerType is one of date|month|week|time|datetime-local|color;
-    // value/min/max/step are the raw HTML string values.
+    // inputPickerValue is the raw HTML string value.
     Q_PROPERTY(bool inputPickerActive READ inputPickerActive NOTIFY inputPickerActiveChanged FINAL)
     Q_PROPERTY(QString inputPickerType READ inputPickerType NOTIFY inputPickerChanged FINAL)
     Q_PROPERTY(QString inputPickerValue READ inputPickerValue NOTIFY inputPickerChanged FINAL)
-    Q_PROPERTY(QString inputPickerMin READ inputPickerMin NOTIFY inputPickerChanged FINAL)
-    Q_PROPERTY(QString inputPickerMax READ inputPickerMax NOTIFY inputPickerChanged FINAL)
-    Q_PROPERTY(QString inputPickerStep READ inputPickerStep NOTIFY inputPickerChanged FINAL)
 
     Q_PROPERTY(bool crashed READ crashed NOTIFY crashedChanged FINAL)
-
-    // Pinch zoom visual scale, as the engine reports it
-    Q_PROPERTY(qreal visualScale READ visualScale NOTIFY visualScaleChanged)
-    Q_PROPERTY(qreal pinchCenterX READ pinchCenterX NOTIFY pinchCenterChanged)
-    Q_PROPERTY(qreal pinchCenterY READ pinchCenterY NOTIFY pinchCenterChanged)
-
-    Q_PROPERTY(bool adBlockEnabled READ adBlockEnabled WRITE setAdBlockEnabled NOTIFY adBlockEnabledChanged FINAL)
-
-    Q_PROPERTY(bool cookieBannerBlockingEnabled READ cookieBannerBlockingEnabled WRITE setCookieBannerBlockingEnabled NOTIFY cookieBannerBlockingEnabledChanged FINAL)
 
 public:
     explicit WebPage(QQuickItem *parent = nullptr);
@@ -214,21 +187,12 @@ public:
     bool chrome() const;
     void setChrome(bool chrome);
 
-    bool forcedChrome() const;
-    void setForcedChrome(bool forcedChrome);
-
     bool fullscreen() const;
     bool mediaAudioActive() const { return m_mediaAudioActive; }
     bool mediaVideoActive() const { return m_mediaVideoActive; }
-    bool atYBeginning() const;
-    bool atYEnd() const;
 
     QString favicon() const;
     void setFavicon(const QString &favicon);
-    // A page advertised an OpenSearch description; offer it in settings.
-
-    qreal fullscreenHeight() const;
-    void setFullscreenHeight(qreal height);
 
     qreal toolbarHeight() const;
     void setToolbarHeight(qreal height);
@@ -241,15 +205,9 @@ public:
     // to decide whether the engine should treat the page as visible.
     void setAppForeground(bool foreground);
 
-    // All live WebPage instances. Pages get only a visual parent
-    // (setParentItem), never a QObject parent, so findChildren() on the view
-    // cannot discover them — the render-recovery code must use this instead.
-    static const QList<WebPage *> &liveInstances();
-
-    // Apply the ad-block toggle process-wide: flips the UI-process cosmetic
-    // gate and notifies every live page's WebProcess extension. Driven by the
-    // dconf binding in BrowserPage.qml (via WebContainer::setAdBlockEnabled),
-    // so it works with any number of tabs (or none) open.
+    // Ad blocking for the whole engine, on or off: the engine blocks requests and hides elements for every page.
+    // Driven by the setting in BrowserPage.qml (via WebContainer::setAdBlockEnabled), so it holds with any
+    // number of tabs (or none) open.
     static void applyAdBlockEnabledGlobally(bool enabled);
     static bool adBlockEnabledGlobally();
     static void applyAdBlockAllowlistGlobally(const QString &json);
@@ -259,76 +217,38 @@ public:
     static void applySiteUaOverridesGlobally(const QString &json);
     static void applyJavaScriptBlocklistGlobally(const QString &json);
 
-
-    bool chromeGestureEnabled() const;
-    void setChromeGestureEnabled(bool enabled);
-
-    qreal chromeGestureThreshold() const;
-    void setChromeGestureThreshold(qreal threshold);
-
     bool fixedToolbar() const;
     void setFixedToolbar(bool fixed);
 
     bool loaded() const;
-    bool moving() const;
-
-
-    bool dragging() const;
     bool desktopMode() const;
     void setDesktopMode(bool desktop);
-    // Pick and apply the UA for a destination URL (handles per-site quirks
-    // such as Google Maps); called from the navigation policy handler.
-    // True when the URL gets a per-site UA quirk (Maps, Cloudflare hosts).
 
-    // Popunder guard: after a popup is routed into this view, same-tab
-    // scripted redirects to an unrelated site are blocked for a short window
-    // (the reverse-popunder puts the real content in the popup and JS-redirects
-    // the original tab to the ad).
     // Leaves the fullscreen the page asked for, from the interface's close button.
     Q_INVOKABLE void exitFullscreen();
     // Pauses the media of every tab: a call has come in.
     Q_INVOKABLE void pauseAllMedia();
 
-    Q_INVOKABLE void loadTab(const QString &url, bool force = false);
     // Re-request the URL already showing (setUrl() dedupes such an assignment away).
     void loadCurrentUrlAgain();
-    // Warm the connection for a navigation the UI expects (link under the
-    // finger, URL-bar completion). Fetches nothing; rate-limited per origin;
-    // inert unless PACIFIC_PRECONNECT is set.
     Q_INVOKABLE void grabThumbnail(const QSize &size);
 
-    // History preview ("instant Back"). During a back/forward navigation the
-    // engine keeps presenting the OUTGOING page's last frame until the incoming
-    // page paints, while the chrome switches to the destination URL immediately
-    // — so the viewport shows one page and the URL bar names another. Measured
-    // on edition.cnn.com (2026-08-19): back_forward navigation, DCL 14 988 ms,
-    // load 23 774 ms, 188 resources re-run, because bfcache capacity is 0 under
-    // PACIFIC_CACHE_MODEL=viewer. These overrides capture the page being left
-    // and hand the UI the destination entry's last-seen pixels to cover the gap.
-    //
-    // Deliberately NOT virtual in the base: WebContainer calls through a
-    // WebPage*, so name hiding is enough and the engine plugin stays untouched.
-    Q_INVOKABLE void goBack();
-    Q_INVOKABLE void goForward();
-    // Cached preview file for a history entry, or empty when none was stored.
-
-    // Screenshot cache for "instant Back": nothing else deletes these files.
+    // Keeps the toolbar showing (true) whatever the page's scrolling does, or lets scrolling hide it again.
     Q_INVOKABLE void forceChrome(bool forced);
     Q_INVOKABLE void suspendView();
     Q_INVOKABLE void resumeView();
     // Scroll the focused editable back into view after the layout viewport
     // shrank under it (virtual keyboard opening). No-op when nothing editable
     // is focused. See WebContainer::setContentBottomInset().
-    Q_INVOKABLE void revealFocusedEditable();
+    void revealFocusedEditable();
     Q_INVOKABLE void clearSelection();
     Q_INVOKABLE void selectAll();
-    Q_INVOKABLE void moveSelectionStart(qreal cssX, qreal cssY);
-    Q_INVOKABLE void moveSelectionEnd(qreal cssX, qreal cssY);
+    // Move one end of the selection to the text at a point, in the interface's pixels.
+    Q_INVOKABLE void moveSelectionStart(qreal x, qreal y);
+    Q_INVOKABLE void moveSelectionEnd(qreal x, qreal y);
     Q_INVOKABLE void copyToClipboard();
     Q_INVOKABLE void handleJsSelectionClear();
     Q_INVOKABLE void handleJsSelectionUpdate(const QString &text, qreal startX, qreal startY, qreal endX, qreal endY);
-
-    // Editable focus reported from cross-origin subframes (editableFocus bridge)
 
     // Find-in-page
     Q_INVOKABLE void findText(const QString &text, bool backwards = false);
@@ -386,8 +306,6 @@ public:
     bool saveLoginIsUpdate() const { return m_saveLoginExistingUid >= 0; }
     Q_INVOKABLE void resolveSaveLogin(bool save);
 
-    // Save page as PDF
-
     // HTML <select> dropdown
     Q_INVOKABLE void selectMenuOption(int index);
     Q_INVOKABLE void downloadUrl(const QString &url);
@@ -401,14 +319,10 @@ public:
     // HTML-formatted value string on accept, or cancelInputPicker() on dismiss.
     Q_INVOKABLE void resolveInputPicker(const QString &value);
     Q_INVOKABLE void cancelInputPicker();
-    void openInputPicker(const QString &type, const QString &value,
-                         const QString &min, const QString &max, const QString &step);
+    void openInputPicker(const QString &type, const QString &value);
     bool inputPickerActive() const { return m_inputPickerActive; }
     QString inputPickerType() const { return m_inputPickerType; }
     QString inputPickerValue() const { return m_inputPickerValue; }
-    QString inputPickerMin() const { return m_inputPickerMin; }
-    QString inputPickerMax() const { return m_inputPickerMax; }
-    QString inputPickerStep() const { return m_inputPickerStep; }
 
     // Image long-press
     void openImageLongPress(const QString &imageUrl);
@@ -421,26 +335,11 @@ public:
     QStringList selectMenuOptions() const { return m_selectMenuOptions; }
     int selectMenuSelectedIndex() const { return m_selectMenuSelectedIdx; }
     bool fileChooserActive() const { return m_fileChooserActive; }
-    QStringList fileChooserNameFilters() const { return m_fileChooserNameFilters; }
-    bool fileChooserSelectMultiple() const { return m_fileChooserSelectMultiple; }
-
-    // Pinch zoom visual scale
-    qreal visualScale() const { return m_visualScale; }
-    qreal pinchCenterX() const { return m_pinchCenterX; }
-    qreal pinchCenterY() const { return m_pinchCenterY; }
 
     bool crashed() const { return m_crashed; }
 
-    bool adBlockEnabled() const;
-    void setAdBlockEnabled(bool enabled);
-
-    bool cookieBannerBlockingEnabled() const;
-    void setCookieBannerBlockingEnabled(bool enabled);
-
     bool textSelectionActive() const;
-    QObject* textSelectionController();
     QString selectedText() const;
-    bool isPhoneNumber() const;
     qreal selectionStartX() const { return m_selectionStartX; }
     qreal selectionStartY() const { return m_selectionStartY; }
     qreal selectionEndX() const { return m_selectionEndX; }
@@ -451,22 +350,14 @@ signals:
     void paintedChanged();
     void domContentLoadedChanged();
     void chromeChanged();
-    void forcedChromeChanged();
     void fullscreenChanged();
     void mediaAudioActiveChanged();
     void mediaVideoActiveChanged();
-    void atYBeginningChanged();
-    void atYEndChanged();
     void faviconChanged();
-    void fullscreenHeightChanged();
     void toolbarHeightChanged();
     void activeChanged();
-    void chromeGestureEnabledChanged();
-    void chromeGestureThresholdChanged();
     void fixedToolbarChanged();
     void loadedChanged();
-    void movingChanged();
-    void draggingChanged();
     void desktopModeChanged();
     // Fired on every new touch sequence (TouchBegin); forwarded by
     // WebContainer::touched() for the active page so QML can track
@@ -477,7 +368,6 @@ signals:
     void selectionTextChanged();
     void selectionHandlesUpdated();
 
-    void securityChanged();
     void tlsErrorChanged();
     void permissionChanged();
     void jsDialogChanged();
@@ -485,16 +375,10 @@ signals:
     void saveLoginChanged();
     // The user wants a login saved and the vault is locked or not created yet: show the page that opens it.
     void saveLoginNeedsUnlock();
-    void loginSaved();
     void findInPageHasResultChanged();
 
-    void recvAsyncMessage(const QString &message, const QVariant &data);
     // A new thumbnail of the page: a file, or for a private tab a data URL kept in memory only.
     void thumbnailCaptured(const QString &source);
-    // Emitted at the start of a history navigation when the destination entry
-    // has a stored preview. The UI shows it until the live page takes over.
-    void historyPreviewReady(const QString &imagePath);
-    void afterRendering();
 
     void selectMenuActiveChanged();
     void selectMenuOptionsChanged();
@@ -502,21 +386,9 @@ signals:
     void imageLongPressUrlChanged();
     void contextInfoChanged();
     void fileChooserActiveChanged();
-    void fileChooserNameFiltersChanged();
-    void fileChooserSelectMultipleChanged();
     void inputPickerActiveChanged();
     void inputPickerChanged();
-
-    void visualScaleChanged();
-    void pinchCenterChanged();
     void crashedChanged();
-    void adBlockEnabledChanged();
-    void cookieBannerBlockingEnabledChanged();
-
-public:
-    // Last committed main-frame URL; source URL for redirect-hop ad blocking
-    // (written/read by the load-changed C callbacks).
-
 
 protected:
     QVariant inputMethodQuery(Qt::InputMethodQuery query) const override;
@@ -567,15 +439,10 @@ private:
     void updateMediaState();
     bool m_mediaAudioActive = false;
     bool m_mediaVideoActive = false;
-    bool m_atYBeginning = true;
-    bool m_atYEnd = false;
     QString m_favicon;
-    qreal m_fullscreenHeight = 0.0;
     qreal m_toolbarHeight = 0.0;
     bool m_active = false;
     bool m_appForeground = true;
-    bool m_chromeGestureEnabled = true;
-    qreal m_chromeGestureThreshold = 10.0;
     bool m_fixedToolbar = false;
     bool m_loaded = false;
     bool m_desktopMode = false;
@@ -588,9 +455,6 @@ private:
     qreal m_selectionEndY = 0.0;
     bool m_findInPageHasResult = false;
     SecurityInfo *m_security = nullptr;
-    qreal m_visualScale = 1.0;
-    qreal m_pinchCenterX = 0.0;
-    qreal m_pinchCenterY = 0.0;
     QTimer m_thumbnailTimer;
     QTimer m_saveLoginExpiryTimer;
     QSize m_thumbnailSize;
@@ -609,7 +473,7 @@ private:
 
     // The picker that is open belongs to the engine (a colour) rather than to our own script (dates and times).
     bool m_inputPickerIsEngineColor = false;
-    void moveSelectionEdge(bool start, qreal cssX, qreal cssY);
+    void moveSelectionEdge(bool start, qreal x, qreal y);
 
     // The engine's ids of the options in m_selectMenuOptions.
     QList<int> m_selectMenuIds;
@@ -625,14 +489,9 @@ private:
     QString m_imageLongPressUrl;
     QVariantMap m_contextInfo;
     bool m_fileChooserActive = false;
-    QStringList m_fileChooserNameFilters;
-    bool m_fileChooserSelectMultiple = false;
     bool m_inputPickerActive = false;
     QString m_inputPickerType;
     QString m_inputPickerValue;
-    QString m_inputPickerMin;
-    QString m_inputPickerMax;
-    QString m_inputPickerStep;
     bool m_crashed = false;
     bool m_tlsErrorPending = false;
     QString m_tlsErrorFailingUri;

@@ -13,9 +13,6 @@ import QtQuick 2.2
 import QtQuick.Window 2.2 as QuickWindow
 import Sailfish.Silica 1.0
 import harbour.pacific 1.0
-import Sailfish.WebView.Pickers 1.0 as Pickers
-import Sailfish.WebView.Popups 1.0 as Popups
-import Sailfish.WebView.Controls 1.0
 import Nemo.Configuration 1.0
 import "." as Browser
 
@@ -23,17 +20,12 @@ WebContainer {
     id: webView
 
     property bool activePortalMode
-    readonly property bool moving: contentItem && contentItem.moving
-    property bool portrait: true
+    // Whether the page can be used (no overlay over it); the virtual keyboard observer follows it.
+    property bool browserEnabled: true
     property bool contentFullscreen: contentItem && contentItem.fullscreen
     // needChrome is provided as FINAL by WebContainer C++ (cannot override)
     property real fullscreenHeight
-    property bool imOpened
-    property real toolbarHeight
     uiPixelRatio: Theme.pixelRatio
-    property string favicon: contentItem ? contentItem.favicon : ""
-    property bool findInPageHasResult: contentItem ? contentItem.findInPageHasResult : false
-    property bool canShowSelectionMarkers: true
 
     property var resourceController: ResourceController {
         webPage: contentItem
@@ -45,26 +37,6 @@ WebContainer {
         resourceController._htmlVideoActive = contentItem ? contentItem.mediaVideoActive : false
         resourceController.calculateStatus()
     }
-
-    property Component _selectionUIComponent: Component {
-        TextSelectionController {
-            opacity: canShowSelectionMarkers ? 1.0 : 0.0
-            contentWidth: webView.rotationHandler ? webView.rotationHandler.width : 0
-            contentHeight: Math.max(0, webView.fullscreenHeight - webView.toolbarHeight)
-            // Push below the overlay
-            z: -1
-            anchors {
-                fill: parent
-                bottomMargin: webView.toolbarHeight
-            }
-
-            Behavior on opacity { FadeAnimator {} }
-
-            onStartHandleMaskChanged: browserPage.inputRegion.selectionStartHandleMask = startHandleMask
-            onEndHandleMaskChanged: browserPage.inputRegion.selectionEndHandleMask = endHandleMask
-        }
-    }
-
 
     property QtObject fixedToolbarConfig: ConfigurationValue {
         key: "/apps/harbour-pacific/settings/fixed_toolbar"
@@ -116,7 +88,6 @@ WebContainer {
 
     function thumbnailCaptureSize() {
         if (webView.activePortalMode) {
-            console.log("Thumbnail size tried accessed in captive portal mode")
             return Qt.size(0, 0)
         }
 
@@ -148,15 +119,11 @@ WebContainer {
 
     // foreground is owned by WebContainer C++ (tracks the real window
     // visibility); the old binding here evaluated false at startup and never
-    // re-fired (fakeVisibility has no notify), which kept pages hidden.
+    // re-fired, which kept pages hidden.
     readyToPaint: resourceController.videoActive ? webView.visible && !resourceController.displayOff
                                                  : webView.visible && webView.contentItem
                                                    && (webView.contentItem.domContentLoaded
                                                        || webView.contentItem.painted)
-
-    touchBlocked: contentItem && contentItem.popupOpener && contentItem.popupOpener.active || false
-
-    onKeyPressed: handleKeyPress(key)
 
     // Refresh the active tab's thumbnail when the browser leaves the
     // foreground, so the cover shows the page as it was left (scroll position
@@ -169,10 +136,6 @@ WebContainer {
             grabActivePage()
         }
     }
-
-    onBackButtonPressed: webView.goBack()
-
-    onForwardButtonPressed: webView.goForward()
 
     // Selection drag handles (at container level so contentItem is available)
     // The selection's handles, in the interface's pixels (the page reports the selection in them already).

@@ -42,7 +42,7 @@ MimeType=text/html;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/
 X-Nemo-Application-Type=no-invoker
 
 [X-Sailjail]
-Permissions=Internet;Audio;Microphone;Camera;Location;Downloads;WebView
+Permissions=Internet;Audio;Microphone;Location;Downloads
 OrganizationName=org.pacific
 ApplicationName=harbour-pacific
 DESKTOP
@@ -57,6 +57,6 @@ fpm -s dir -t rpm -n harbour-pacific -v "$VERSION" --iteration "$RELEASE" --arch
     --depends sailfishsilica-qt5 --depends qt5-qtpositioning --depends qt5-qtgraphicaleffects --depends libkeepalive \
     --depends nemo-qml-plugin-configuration-qt5 --depends nemo-qml-plugin-dbus-qt5 \
     --depends nemo-qml-plugin-notifications-qt5 \
-    --depends sailfish-components-webview-qt5-popups --depends sailfish-components-webview-qt5-pickers \
+    --depends sailfish-components-webview-qt5-popups --depends sailfish-components-pickers-qt5 \
     --force -p "$OUT/harbour-pacific-$VERSION-$RELEASE.aarch64.rpm" -C "$S" .
 ls -la "$OUT"

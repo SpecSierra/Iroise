@@ -54,7 +54,8 @@ Item {
                     anchors.centerIn: parent
                     font.pixelSize: Theme.fontSizeLarge
                     color: Theme.highlightColor
-                    text: qsTr("Select option")
+                    //% "Select option"
+                    text: qsTrId("pacific-he-select_option")
                 }
             }
 

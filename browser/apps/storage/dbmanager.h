@@ -14,7 +14,6 @@
 #include <QObject>
 #include <QMap>
 #include <QThread>
-#include <QVariantList>
 
 #include "link.h"
 #include "tab.h"
@@ -35,8 +34,6 @@ public:
     void removeTab(int tabId);
     void removeAllTabs();
     void navigateTo(int tabId, const QString &url, const QString &title = QString(), const QString &path = QString());
-    void goForward(int tabId);
-    void goBack(int tabId);
 
     void updateThumbPath(int tabId, const QString &path);
     void updateUrl(int tabId, const QString &requestedUrl, const QString &resolvedUrl);
@@ -47,24 +44,15 @@ public:
     void addHistoryEntry(const QString &url, const QString &title);
     void clearHistory(int period = 0);
     void getHistory(const QString &filter = "");
-    // browser.history: tagged, ranged and with the visit metadata that
-    // getHistory() drops. See DBWorker::searchHistory().
-    void searchHistory(int requestId, const QString &text, qint64 startTime, qint64 endTime,
-                       int maxResults);
-    void deleteHistoryRange(qint64 startTime, qint64 endTime);
-    void getTabHistory(int tabId);
 
     void saveSetting(const QString &name, const QString &value);
     QString getSetting(const QString &name);
-    void deleteSetting(const QString &name);
 
     int getMaxTabId();
 
 signals:
     void tabsAvailable(QList<Tab> tab);
     void historyAvailable(QList<Link> links);
-    void historySearchAvailable(int requestId, QVariantList entries);
-    void tabHistoryAvailable(int tabId, QList<Link> links, int currentLinkId);
     void thumbPathChanged(int tabId, const QString &path);
     void titleChanged(const QString &url, const QString &title);
     void settingsChanged();

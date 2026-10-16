@@ -1,6 +1,6 @@
 # Pacific: the Qt-free front end for the Ladybird engine on Sailfish OS.
-# --headless is handled by WebView::Application itself; otherwise the engine is embedded by the Silica browser,
-# which shows the frames it sends as dma-bufs (ui/protocol/EmbedProtocol.h).
+# The engine is embedded by the Silica browser, which shows the frames it sends as dma-bufs
+# (ui/protocol/EmbedProtocol.h).
 if (NOT USE_GLES_HYBRIS)
     message(FATAL_ERROR "The SFOS front end needs GLES painting into shared gralloc buffers (USE_GLES_HYBRIS)")
 endif()
@@ -10,6 +10,14 @@ endif()
 # with its ladybird_main() renamed after the role.
 set(PACIFIC_HELPERS AudioServer Compositor ImageDecoder MediaServer RequestServer WasmCompiler WebContent WebWorker)
 add_library(pacificengine SHARED EngineMain.cpp main.cpp EmbeddedHost.cpp)
+# EngineMain.cpp picks a role from this list; it is written from the one above so that the two cannot differ.
+set(pacific_helper_roles "")
+foreach (helper IN LISTS PACIFIC_HELPERS)
+    string(APPEND pacific_helper_roles " X(${helper})")
+endforeach()
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/EngineHelperRoles.h"
+    CONTENT "#define ENUMERATE_HELPER_ROLES(X)${pacific_helper_roles}\n" @ONLY)
+target_include_directories(pacificengine PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 set_source_files_properties(main.cpp PROPERTIES COMPILE_DEFINITIONS "ladybird_main=ladybird_main_Ladybird")
 foreach (helper IN LISTS PACIFIC_HELPERS)
     set(helper_main "${LADYBIRD_SOURCE_DIR}/Services/${helper}/main.cpp")

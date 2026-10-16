@@ -16,7 +16,6 @@ SilicaFlickable {
     id: root
 
     property var security
-    readonly property bool _validCert: security && security.subjectDisplayName.length > 0
     readonly property bool _secure: security && security.allGood
 
     contentHeight: certInfoColumn.height

@@ -77,11 +77,13 @@ Item {
 
                 Button {
                     visible: jsDialog.kind !== "alert"
-                    text: qsTr("Cancel")
+                    //% "Cancel"
+                    text: qsTrId("pacific-bt-js_dialog_cancel")
                     onClicked: if (jsDialog.page) jsDialog.page.resolveJsDialog(false, "")
                 }
                 Button {
-                    text: qsTr("OK")
+                    //% "OK"
+                    text: qsTrId("pacific-bt-js_dialog_ok")
                     onClicked: if (jsDialog.page) jsDialog.page.resolveJsDialog(true, answer.text)
                 }
             }

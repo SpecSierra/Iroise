@@ -53,9 +53,8 @@ private:
 
     // Never hand off to an already running instance: an embedded engine belongs to the app that started it.
     virtual bool should_coordinate_browser_process() const override { return false; }
-    // A headless run leaves nothing behind. An embedded engine is somebody's browser: its settings, its filter
-    // lists and its site data have to be there next time.
-    virtual bool should_use_temporary_profile_by_default() const override { return browser_options().headless_mode.has_value(); }
+    // The engine is somebody's browser: its settings, its filter lists and its site data have to be there next time.
+    virtual bool should_use_temporary_profile_by_default() const override { return false; }
 
     // We only say how far the finger moved and when it lifted; the compositor makes the fling.
     virtual bool platform_reports_scroll_momentum() const override { return false; }
@@ -1047,12 +1046,9 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
 
     auto app = TRY(Ladybird::Application::create(arguments));
 
-    if (Ladybird::Application::browser_options().headless_mode.has_value())
-        return app->execute();
-
     auto socket_path = Core::Environment::get(StringView { LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE, strlen(LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE) });
     if (!socket_path.has_value())
-        return Error::from_string_literal("Run headless, or embedded by the browser (" LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE ")");
+        return Error::from_string_literal("The engine runs embedded by the browser (" LB_EMBED_SOCKET_ENVIRONMENT_VARIABLE ")");
 
     auto host = TRY(Ladybird::EmbeddedHost::connect(ByteString { *socket_path }));
     host->on_disconnect = [] {

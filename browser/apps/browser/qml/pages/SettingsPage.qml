@@ -292,7 +292,7 @@ Page {
                 onClicked: {
                     // dconf is the single source of truth: BrowserPage's
                     // ConfigurationValue pushes the change into the engine via
-                    // contentItem.adBlockEnabled. The old extra
+                    // webView.setAdBlockEnabled. The old extra
                     // settingManager.setAdBlockEnabled(!adBlockConf.value)
                     // call read the value AFTER the flip, so it set the engine
                     // to the INVERSE of the visible switch state.
@@ -360,7 +360,7 @@ Page {
         id: homePageConfig
 
         key: "/apps/harbour-pacific/settings/home_page"
-        defaultValue: "http://jolla.com/"
+        defaultValue: "https://jolla.com/"
     }
 
     ConfigurationValue {

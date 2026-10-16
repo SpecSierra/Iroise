@@ -30,7 +30,6 @@ Page {
     readonly property size thumbnailSize: Qt.size(
         _thumbCaptureWidth,
         _thumbCaptureWidth * 1.5 - (Theme.iconSizeSmall + Theme.paddingMedium * 2))
-    property Component tabPageComponent
     property string pendingOpenUrl: ""
     // overlay.active drops and returns every time a page is pushed over the
     // browser, so this handler fires far more often than "the browser just
@@ -44,7 +43,6 @@ Page {
     property alias overlay: overlay
     property alias tabs: webView.tabModel
     property alias history: historyModel
-    property alias viewLoading: webView.loading
     property alias url: webView.url
     property alias title: webView.title
     property alias webView: webView
@@ -53,7 +51,7 @@ Page {
     ConfigurationValue {
         id: homePageConf
         key: "/apps/harbour-pacific/settings/home_page"
-        defaultValue: "http://jolla.com"
+        defaultValue: "https://jolla.com/"
         // Settings live in dconf and only QML reads them (ConfigurationValue); each one is pushed into C++.
         onValueChanged: WebUtils.setHomePage(value)
         Component.onCompleted: WebUtils.setHomePage(value)
@@ -81,10 +79,8 @@ Page {
         id: adBlockEngine
         key: "/apps/harbour-pacific/settings/adblock_enabled"
         defaultValue: true
-        // webView.setAdBlockEnabled applies process-wide: every live tab plus
-        // the init state handed to future WebProcesses. The old binding wrote
-        // webView.contentItem.adBlockEnabled, which missed background tabs and
-        // silently did nothing when settings was opened with no tab open.
+        // webView.setAdBlockEnabled applies to the whole engine: every tab,
+        // open or still to come, and it holds with no tab open.
         // Component.onCompleted restores it on startup, onValueChanged covers
         // the settings-page switch.
         onValueChanged: webView.setAdBlockEnabled(value)
@@ -250,7 +246,7 @@ Page {
     Shared.VirtualKeyboardObserver {
         id: virtualKeyboardObserver
 
-        active: webView.enabled
+        active: webView.browserEnabled
         transpose: window._transpose
         orientation: browserPage.orientation
 
@@ -265,7 +261,7 @@ Page {
         // once per show/hide instead of on every animation frame. Same
         // discipline as the toolbar inset's "chromeVisible" gating.
         readonly property real contentInset:
-            (opened && webView.enabled) ? imSize : 0
+            (opened && webView.browserEnabled) ? imSize : 0
     }
 
     QtObject {
@@ -342,12 +338,9 @@ Page {
         Shared.WebView {
             id: webView
 
-            enabled: overlay.animator.allowContentUse
+            browserEnabled: overlay.animator.allowContentUse
             fullscreenHeight: browserPage.height
-            portrait: browserPage.isPortrait
             maxLiveTabCount: maxliveTabs.value
-            toolbarHeight: overlay.animator.opened ? overlay.toolBar.rowHeight : 0
-            rotationHandler: browserPage
 
             // Bottom URL-bar viewport inset: reserve the toolbar strip in the page's
             // layout viewport while the chrome is settled-visible, so position:fixed bottom
@@ -374,8 +367,6 @@ Page {
                     ? overlay.toolBar.rowHeight : 0,
                     contentFullscreen ? 0 : virtualKeyboardObserver.contentInset)
             on_DesiredContentBottomInsetChanged: setContentBottomInset(_desiredContentBottomInset)
-            imOpened: virtualKeyboardObserver.opened
-            canShowSelectionMarkers: !orientationFader.waitForWebContentOrientationChanged
             historyModel: historyModel
 
             // Show overlay immediately at top if needed.
@@ -877,9 +868,7 @@ Page {
         }
     }
 
-    // Tab crash banner — shown when the WebProcess for the active tab crashes.
-    // Crash banner, HTML <select> dropdown, and image long-press panel —
-    // extracted into their own components (kept this page from sprawling).
+    // Tab crash banner — shown when the active tab's page (or the engine) crashes.
     Browser.CrashBanner { webView: webView }
 
     // TLS certificate failure banner — accept-and-retry for self-signed sites.

@@ -377,46 +377,6 @@ void DBWorker::navigateTo(int tabId, const QString &url, const QString &title, c
 #endif
 }
 
-void DBWorker::goForward(int tabId)
-{
-    QSqlQuery query = prepare("SELECT id FROM tab_history WHERE tab_id = ? "
-                              "AND id > (SELECT tab_history_id FROM tab WHERE tab_id = ?) ORDER BY id ASC LIMIT 1;");
-    query.bindValue(0, tabId);
-    query.bindValue(1, tabId);
-    if (!execute(query)) {
-        return;
-    }
-
-    int historyId = 0;
-    if (query.first()) {
-        historyId = query.value(0).toInt();
-    }
-
-    if (historyId > 0) {
-        updateTab(tabId, historyId);
-    }
-}
-
-void DBWorker::goBack(int tabId)
-{
-    QSqlQuery query = prepare("SELECT id FROM tab_history WHERE tab_id = ? "
-                              "AND id < (SELECT tab_history_id FROM tab WHERE tab_id = ?) ORDER BY id DESC LIMIT 1;");
-    query.bindValue(0, tabId);
-    query.bindValue(1, tabId);
-    if (!execute(query)) {
-        return;
-    }
-
-    int historyId = 0;
-    if (query.first()) {
-        historyId = query.value(0).toInt();
-    }
-
-    if (historyId > 0) {
-        updateTab(tabId, historyId);
-    }
-}
-
 Link DBWorker::getCurrentLink(int tabId)
 {
     QSqlQuery query = prepare("SELECT link.link_id, link.url, link.thumb_path, link.title "
@@ -623,55 +583,6 @@ void DBWorker::getHistory(const QString &filter)
     emit historyAvailable(linkList);
 }
 
-void DBWorker::searchHistory(int requestId, const QString &text, qint64 startTime,
-                             qint64 endTime, int maxResults)
-{
-    // Times cross the bridge in milliseconds, as the API uses; the column is
-    // in seconds.
-    QStringList conditions;
-    conditions << QStringLiteral("url NOT LIKE 'about:%'");
-    if (!text.isEmpty())
-        conditions << QStringLiteral("(url LIKE :search OR title LIKE :search)");
-    if (startTime > 0)
-        conditions << QStringLiteral("date >= :start");
-    if (endTime > 0)
-        conditions << QStringLiteral("date <= :end");
-
-    QSqlQuery query = prepare(QStringLiteral("SELECT id, url, title, date, visited_count "
-                                             "FROM browser_history WHERE %1 "
-                                             "ORDER BY date DESC LIMIT :limit;")
-                                  .arg(conditions.join(QStringLiteral(" AND "))));
-    if (!text.isEmpty())
-        query.bindValue(QStringLiteral(":search"), QStringLiteral("%%1%").arg(text));
-    if (startTime > 0)
-        query.bindValue(QStringLiteral(":start"), startTime / 1000);
-    if (endTime > 0)
-        query.bindValue(QStringLiteral(":end"), endTime / 1000);
-    query.bindValue(QStringLiteral(":limit"), qBound(1, maxResults, 1000));
-
-    QVariantList entries;
-    if (execute(query)) {
-        while (query.next()) {
-            QVariantMap entry;
-            entry.insert(QStringLiteral("id"), query.value(0).toInt());
-            entry.insert(QStringLiteral("url"), query.value(1).toString());
-            entry.insert(QStringLiteral("title"), query.value(2).toString());
-            entry.insert(QStringLiteral("lastVisitTime"), query.value(3).toLongLong() * 1000);
-            entry.insert(QStringLiteral("visitCount"), query.value(4).toInt());
-            entries.append(entry);
-        }
-    }
-    emit historySearchAvailable(requestId, entries);
-}
-
-void DBWorker::deleteHistoryRange(qint64 startTime, qint64 endTime)
-{
-    QSqlQuery query = prepare("DELETE FROM browser_history WHERE date >= ? AND date <= ?;");
-    query.bindValue(0, startTime / 1000);
-    query.bindValue(1, endTime > 0 ? endTime / 1000 : qint64(QDateTime::currentDateTimeUtc().toTime_t()));
-    execute(query);
-}
-
 QList<Link> DBWorker::getHistoryQList()
 {
     QString filterQuery("WHERE url NOT LIKE 'about:%'");
@@ -700,37 +611,6 @@ QList<Link> DBWorker::getHistoryQList()
     }
 
     return linkList;
-}
-
-void DBWorker::getTabHistory(int tabId)
-{
-    QSqlQuery query = prepare("SELECT link.link_id, link.url, link.thumb_path, link.title, "
-                              " (tab_history.id == tab.tab_history_id) AS current "
-                              "FROM tab_history "
-                              "INNER JOIN tab ON tab.tab_id = tab_history.tab_id "
-                              "INNER JOIN link ON tab_history.link_id = link.link_id "
-                              "WHERE tab_history.tab_id = ? "
-                              "ORDER BY tab_history.id DESC;");
-    query.bindValue(0, tabId);
-    if (!execute(query)) {
-        return;
-    }
-
-    QList<Link> linkList;
-    int currentLinkId(-1);
-    while (query.next()) {
-        int linkId = query.value(0).toInt();
-        Link tmp(linkId,
-                query.value(1).toString(),
-                query.value(2).toString(),
-                query.value(3).toString());
-        linkList.append(tmp);
-        if (query.value(4).toBool()) {
-            currentLinkId = linkId;
-        }
-    }
-
-    emit tabHistoryAvailable(tabId, linkList, currentLinkId);
 }
 
 void DBWorker::removeHistoryEntry(int linkId)
@@ -864,9 +744,3 @@ SettingsMap DBWorker::getSettings()
     return settings;
 }
 
-void DBWorker::deleteSetting(const QString &name)
-{
-    QSqlQuery query = prepare("DELETE FROM settings WHERE name = ?");
-    query.bindValue(0, name);
-    execute(query);
-}

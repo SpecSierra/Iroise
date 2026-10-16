@@ -9,7 +9,6 @@
 
 #include <QHash>
 #include <QMap>
-#include <QJSValue>
 #include <QJsonValue>
 #include <QPointF>
 #include <QTimer>
@@ -38,16 +37,13 @@ class EngineView : public QQuickItem, public LadybirdEngineClient {
 public:
     enum LoadStatus {
         LoadStartedStatus,
-        LoadStoppedStatus,
-        LoadSucceededStatus,
-        LoadFailedStatus
+        LoadSucceededStatus
     };
 
     EngineView(QQuickItem* parent = nullptr);
     ~EngineView() override;
 
     QSGNode* updatePaintNode(QSGNode*, UpdatePaintNodeData*) final;
-    void triggerUpdate() { QMetaObject::invokeMethod(this, "update"); }
 
     QUrl url() const { return m_url; }
     void setUrl(const QUrl&);
@@ -66,7 +62,6 @@ public:
 
     // Whether the page counts as on screen: a hidden page stops animating and painting.
     void setEngineVisible(bool visible);
-    bool webKitVisible() const { return m_engineVisible; }
 
     void setPrivateBrowsing(bool p) { m_privateBrowsing = p; }
     bool privateBrowsing() const { return m_privateBrowsing; }
@@ -76,7 +71,6 @@ public:
     quint32 frameSerial() const { return static_cast<quint32>(m_frame.serial); }
     // How much of the view the newest frame covers. Less than the view right after it grew.
     QSize paintedSize() const { return m_frame.paintedSize; }
-    bool sceneGraphComposited() const { return true; }
 
     // Runs a JavaScript expression in the page. The callback gets its value, as far as JSON can carry it; it is
     // not called at all if the expression throws or the page goes away first.
@@ -90,10 +84,8 @@ public Q_SLOTS:
     void goForward();
     void reload();
     void stop();
-    void runJavaScript(const QString& script, const QJSValue& callback = QJSValue());
 
 Q_SIGNALS:
-    void webViewCreated();
     // The page asked to close (window.close).
     void closeRequested();
     void urlChanged();
@@ -102,11 +94,6 @@ Q_SIGNALS:
     void loadProgressChanged();
     void backForwardChanged();
     void scrollPositionChanged(qreal scrollY, qreal scrollHeight, qreal innerHeight);
-    void faviconUrlChanged(const QString& url);
-    void selectedTextChanged(const QString& text);
-    void selectionHandlesChanged(qreal startX, qreal startY, qreal endX, qreal endY);
-    void enterFullscreenRequested();
-    void leaveFullscreenRequested();
     void frameArrived();
     // The new page of a load has taken over the view (its document exists; it may still be loading).
     void committed();

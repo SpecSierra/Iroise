@@ -19,11 +19,16 @@ Rectangle {
         if (!page)
             return ""
         switch (page.permissionType) {
-        case "geolocation":       return qsTr("%1 wants to know your location")
-        case "camera":            return qsTr("%1 wants to use your camera")
-        case "microphone":        return qsTr("%1 wants to use your microphone")
-        case "camera+microphone": return qsTr("%1 wants to use your camera and microphone")
-        default:                  return qsTr("%1 is asking for a permission")
+        //% "%1 wants to know your location"
+        case "geolocation":       return qsTrId("pacific-la-permission_location")
+        //% "%1 wants to use your camera"
+        case "camera":            return qsTrId("pacific-la-permission_camera")
+        //% "%1 wants to use your microphone"
+        case "microphone":        return qsTrId("pacific-la-permission_microphone")
+        //% "%1 wants to use your camera and microphone"
+        case "camera+microphone": return qsTrId("pacific-la-permission_camera_microphone")
+        //% "%1 is asking for a permission"
+        default:                  return qsTrId("pacific-la-permission_other")
         }
     }
     readonly property string permissionIcon: {
@@ -71,12 +76,14 @@ Rectangle {
         }
         Button {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: qsTr("Allow")
+            //% "Allow"
+            text: qsTrId("pacific-bt-permission_allow")
             onClicked: if (permissionBanner.page) permissionBanner.page.resolvePermission(true)
         }
         Button {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: qsTr("Deny")
+            //% "Deny"
+            text: qsTrId("pacific-bt-permission_deny")
             onClicked: if (permissionBanner.page) permissionBanner.page.resolvePermission(false)
         }
     }

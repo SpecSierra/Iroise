@@ -40,7 +40,8 @@ enum lb_embed_message_type {
                                    caret that it replaces */
     LB_EMBED_COMPOSE_TEXT = 12, /* text = what is being composed; empty to stop composing */
     LB_EMBED_KEY = 13,          /* a = lb_embed_key, sent as a press followed by a release */
-    /* These two are for the whole engine, not one view. Both are off until the app says otherwise. */
+    /* From here, messages for the whole engine (view 0), not one view. What they switch on is off until the app
+       says otherwise. */
     LB_EMBED_SET_AD_BLOCKING = 14,            /* a = 1 to block advertising and trackers */
     LB_EMBED_SET_COOKIE_BANNER_BLOCKING = 15, /* a = 1 to block cookie banners */
     LB_EMBED_SET_DARK_MODE = 16,              /* a = 1 for pages to prefer their dark colours */
@@ -99,7 +100,8 @@ enum lb_embed_message_type {
     LB_EMBED_PAGE_MESSAGE = 116,  /* text = what a script of the app's posted from the page, by calling
                                      console.log(LB_EMBED_PAGE_MESSAGE_MARKER, text). Any script in the page can
                                      post one too, so the app treats these as hints, never as proof. */
-    LB_EMBED_PAGE_COLOR = 115,
+    LB_EMBED_PAGE_COLOR = 115,    /* a = lb_embed_page_color; text = the colour as #rrggbb, empty when the page
+                                     no longer names one */
     LB_EMBED_NEW_VIEW = 122,      /* the engine opened this view for a page (a link with a target, window.open);
                                      a = 1 to show it now. The app adopts it as a new tab and sends its size. */
     LB_EMBED_CLOSE_VIEW = 123,    /* the page asked to close its view (window.close) */
@@ -110,8 +112,7 @@ enum lb_embed_message_type {
     LB_EMBED_FULLSCREEN = 120,    /* a = 1 when the page went fullscreen (a video, usually), 0 when it left */
     LB_EMBED_MEDIA = 121,         /* a = 1 while the page plays sound; b = 1 while it holds a screen wake lock */
     LB_EMBED_PERMISSION = 117,    /* a = an id for the answer, LB_EMBED_PERMISSION_DECIDED; text = JSON {"name"
-                                     ("geolocation" or "microphone"), "origin"}. The page waits for the answer. */    /* a = lb_embed_page_color; text = the colour as #rrggbb, empty when the page
-                                     no longer names one */
+                                     ("geolocation" or "microphone"), "origin"}. The page waits for the answer. */
     /* For the whole engine (view 0). Downloads start when a page navigates to something that is not a page, or
        on LB_EMBED_DOWNLOAD_START; either way the engine saves the file itself and only reports. */
     LB_EMBED_DOWNLOAD = 114,      /* a = the download's id; b = lb_embed_download_status;

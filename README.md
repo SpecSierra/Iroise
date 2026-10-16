@@ -169,8 +169,10 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   together with a number that says which question the answer belongs to.
 - Page messages: the engine reports neither scrolling nor selections, so a small script of ours (the page agent,
   `kPageAgentScript`) runs in every page and posts them, at most once a frame, through `console.log` with a marker.
-  The engine forwards those as `LB_EMBED_PAGE_MESSAGE`. Any script in the page could post the same, so they are
-  hints for the interface (where to put the toolbar, the selection handles), never grounds for trust.
+  The engine forwards those as `LB_EMBED_PAGE_MESSAGE`. Any script in the page could post the same, a frame of
+  another site's included (every document's console reaches the front end), so they are hints for the interface
+  (where to put the toolbar, the selection handles), never grounds for trust. What only the user can cause (a login
+  sent, a selection begun) counts only within three seconds of the user's own touch or key.
 - Text selection: a finger held for half a second is a long press (detected in the interface, which then cancels
   the touch so the engine makes no tap of it). A script looks at what is under it: a link or an image opens the
   action panel; text gets its word selected, and the agent reports the selection and where its two ends are. The
@@ -190,7 +192,8 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   engine's `clear_browsing_data`.
 - Permissions: the engine asks the front end about the microphone, and it grants geolocation to any page and then
   wants a position. The front end puts both to the user (`LB_EMBED_PERMISSION`, the interface's permission banner)
-  before the view's own handling runs; an answer holds for that site and kind until the browser closes. Positions
+  before the view's own handling runs; an answer holds for that site and kind until the browser closes. A
+  geolocation request from another page than the tab's own (a frame of another site) is refused. Positions
   come from the interface's Qt Positioning source (`LadybirdGeolocation`) through a `Core::GeolocationProvider` of
   the front end's own.
 - The engine presents itself as a touch phone (patch 0012): Chrome on Android's user agent and `navigator.platform`,
@@ -217,11 +220,19 @@ surface cannot sit under a Silica window on lipstick (see Atlantic's
   is filled into a login form the user has just touched (a page focusing a field itself gets nothing), on the
   https origin the tab is at, which the fill script checks again in the page. Ladybird has no isolated script
   world, so this runs in the page's own; the site always comes from the tab's URL, never from the page.
-- Certificates: a certificate the engine cannot verify ends the load on its error page, which the interface
-  recognises and answers with its banner. Accepting trusts that host for the rest of the run: the hosts go to every
+- Certificates: a certificate the engine cannot verify ends the load on its error page. The page says so, but a
+  page can say anything, so the banner shows only if the interface's own TLS connection (`QSslSocket`) finds the
+  host's certificate does not verify. Accepting trusts that host for the rest of the run: the hosts go to every
   RequestServer (`LB_EMBED_SET_CERTIFICATE_EXCEPTIONS`, patch 0010), which then skips verification for exactly
-  them. The security panel's details (issuer, dates, cipher, errors) come from a TLS connection of the interface's
-  own (`QSslSocket`), once per host and run, since the engine does not hand out the certificates it checked.
+  them, whatever certificate they show. So the interface keeps the accepted certificate's SHA-256, checks it again
+  when a page of that host loads, and withdraws the trust (stopping the load, asking again) if the host shows
+  another. Trust goes with "clear site data", and what was trusted from private tabs when the last one closes. The
+  security panel's details (issuer, dates, cipher, errors) come from that same connection, once per host and run
+  (not for private tabs), since the engine does not hand out the certificates it checked.
+- Engine crashes: when the engine goes away every tab shows its crash banner, a new engine is started and given
+  the app's settings again, and Reload loads the tab's page in it (not after three deaths within a minute).
+  Messages the interface is too busy for are queued in order, except frames, which the next one replaces; a text
+  too long for one message (160 KiB) is refused rather than cut.
 - Favicons: the engine decodes the page's icon and sends it as a PNG data URL (`LB_EMBED_FAVICON`; an icon too
   large for one message is left out). The interface keeps it per site for the tab overview, favourites and
   history, except for private tabs.

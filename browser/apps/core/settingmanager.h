@@ -24,8 +24,6 @@ class SettingManager : public QObject
     Q_PROPERTY(int toolbarLarge READ toolbarLarge CONSTANT FINAL)
 
 public:
-    bool initialize();
-
     int toolbarSmall();
     int toolbarLarge();
 

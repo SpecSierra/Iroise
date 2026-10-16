@@ -13,7 +13,7 @@ BookmarkEditDialog {
             var bookmarkWriter = desktopBookmarkWriter.createObject(bookmarkWriterParent)
             bookmarkWriter.save(editedUrl, editedTitle, icon)
         } else {
-            console.log("Cannot save to launcher without bookmark writer!!")
+            console.warn("AddToAppGridDialog: no bookmark writer, nothing saved")
         }
     }
 }

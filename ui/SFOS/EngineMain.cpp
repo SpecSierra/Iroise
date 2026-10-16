@@ -21,16 +21,12 @@
 #include <time.h>
 #include <UI/SFOS/EngineMain.h>
 
+// The helpers come from CMakeLists.txt (PACIFIC_HELPERS), which compiles their main.cpp in.
+#include <EngineHelperRoles.h>
+
 #define ENUMERATE_ENGINE_ROLES(X) \
     X(Ladybird)                   \
-    X(AudioServer)                \
-    X(Compositor)                 \
-    X(ImageDecoder)               \
-    X(MediaServer)                \
-    X(RequestServer)              \
-    X(WasmCompiler)               \
-    X(WebContent)                 \
-    X(WebWorker)
+    ENUMERATE_HELPER_ROLES(X)
 
 #define DECLARE_ROLE(role) ErrorOr<int> ladybird_main_##role(Main::Arguments);
 ENUMERATE_ENGINE_ROLES(DECLARE_ROLE)

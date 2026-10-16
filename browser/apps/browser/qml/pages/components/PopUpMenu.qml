@@ -26,9 +26,7 @@ SilicaControl {
     property real wallpaperHeight: height
     property int horizontalMargin: Math.max(Theme.paddingMedium, _biggestCorner * 0.5)
     property int verticalMargin: horizontalMargin
-    readonly property int cornerRadius: 12
     readonly property int widthRatio: 18
-    readonly property int heightRatio: 28
 
     property int _biggestCorner: Math.max(Screen.topLeftCorner.radius,
                                           Screen.topRightCorner.radius,
@@ -124,7 +122,6 @@ SilicaControl {
             id: menuItem
 
             property real percentageClosed
-            readonly property real menuTop: Math.max(0, headerItem.y - menuFlickable.contentY)
             readonly property real topPadding: Theme.paddingLarge
 
             width: popUpMenu.width

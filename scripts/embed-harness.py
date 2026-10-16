@@ -9,7 +9,7 @@ plain bitmaps and sends no frames, which does not matter for what this is for: n
 Run it in an empty directory: it creates embed.sock, embed.log and a dlhome/ that stands in for $HOME, and the
 host build needs --disable-sandbox.
 """
-import os, socket, struct, subprocess, sys, time, select
+import re, os, socket, struct, subprocess, sys, time, select
 HDR = '<IiiiiIdII'
 def msg(t, view=1, a=0, b=0, c=0, d=0, scale=0.0, text=b''):
     return struct.pack(HDR, t, a, b, c, d, 0, scale, len(text), view) + text
@@ -18,12 +18,16 @@ if os.path.exists(path): os.unlink(path)
 srv = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET); srv.bind(path); srv.listen(1)
 home = os.path.abspath('dlhome')
 os.makedirs(home + '/Downloads', exist_ok=True)
-env = dict(os.environ, LADYBIRD_SFOS_EMBED_SOCKET=path, HOME=home, XDG_DOWNLOAD_DIR=home + '/Downloads', LADYBIRD_UI_SFOS='1')
+env = dict(os.environ, LADYBIRD_SFOS_EMBED_SOCKET=path, HOME=home, XDG_DOWNLOAD_DIR=home + '/Downloads')
 proc = subprocess.Popen([sys.argv[1]] + sys.argv[3:], env=env, stdout=open('embed.log', 'w'), stderr=subprocess.STDOUT)
 srv.settimeout(20); conn, _ = srv.accept()
 conn.send(msg(7, a=1032, b=2110, scale=2.5))                     # create view
 conn.send(msg(1, text=sys.argv[2].encode()))                     # load
-names = {101:'FRAME',102:'URL',103:'TITLE',104:'LOADING',105:'HISTORY',114:'DOWNLOAD',115:'PAGE_COLOR',107:'CRASHED'}
+# Every message type's name, from the protocol header itself.
+protocol = open(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'ui', 'protocol', 'EmbedProtocol.h')).read()
+message_types = protocol[protocol.index('enum lb_embed_message_type'):]
+message_types = message_types[:message_types.index('};')]
+names = {int(number): name for name, number in re.findall(r'LB_EMBED_(\w+) = (\d+)', message_types)}
 def pump(seconds):
     end = time.time() + seconds
     while time.time() < end:

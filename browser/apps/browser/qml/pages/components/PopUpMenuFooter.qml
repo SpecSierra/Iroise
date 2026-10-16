@@ -14,8 +14,6 @@ import "." as Components
 Components.FrostedBox {
     id: root
 
-    readonly property real overlayOpacity: 0.15
-
     // Same derivation as PopUpMenuItem.pageHost: "" when no real page is open.
     readonly property string pageHost: {
         var m = /^https?:\/\/([^\/:?#]+)/.exec(webView.url || "")

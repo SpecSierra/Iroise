@@ -7,8 +7,8 @@ import Sailfish.Silica 1.0
 import Sailfish.Pickers 1.0
 
 // File chooser page for HTML <input type=file>. Pushed by BrowserPage with
-// webView + browserPage set; commits the selection to the WebProcess file
-// chooser (with a short retry, since the picker reports selection async) and
+// webView + browserPage set; hands the selection to the page's file chooser
+// (with a short retry, since the picker reports selection async) and
 // clears browserPage._filePickerOpen when done.
 ContentPickerPage {
     id: filePicker
@@ -17,7 +17,8 @@ ContentPickerPage {
     property var webView
     property var browserPage
 
-    title: qsTr("Select file")
+    //% "Select file"
+    title: qsTrId("pacific-he-select_file")
     property bool _selectionCommitted: false
     property int _selectionRetryCount: 0
 

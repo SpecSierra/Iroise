@@ -114,9 +114,8 @@ void DataFetcher::fetch(const QString &url)
             });
         }
         connect(reply, &QNetworkReply::finished, this, &DataFetcher::dataReady);
-        // qOverload(T functionPointer) would be handy to resolve right error method but it is introduced only
-        // in Qt5.7. QNetWorkReply has signal error(QNetworkReply::NetworkError) and method error().
-        // connect(reply, qOverload<QNetworkReply::NetworkError>(&QNetworkReply::error), this, DataFetcher::error);
+        // NB: QNetworkReply has both a signal and a method called error(), and Qt 5.6 has no qOverload to tell
+        //     them apart in a pointer-to-member connect.
         connect(reply, SIGNAL(error(QNetworkReply::NetworkError)), this, SLOT(error(QNetworkReply::NetworkError)));
     }
 }
