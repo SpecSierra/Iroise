@@ -6,20 +6,13 @@ Pacific puts Ladybird, a new browser engine written from scratch, behind a nativ
 toolbar, menus and settings you would expect on a Sailfish phone, with pages painted on the GPU. It is the
 successor to Atlantic, our WebKit-based browser, which is now kept in maintenance only.
 
-## What it can do
-
-Most of what you use a browser for day to day already works: tabs and private tabs, bookmarks and history,
-downloads, find in page, pinch zoom, text selection and copy, a password vault, ad and cookie-banner blocking,
-desktop mode and per-site settings, location and microphone permissions, and video, H.264 included, thanks to the
-phone's own media libraries. Pages are drawn to the pace of the screen (90 Hz on the Jolla Phone 2).
-
-It is developed on the Jolla Phone 2 and also runs on the Xperia 10 II, where pages are still painted in software.
-
 ## Status
 
 Pacific is in development and has not been released. It is meant for the Jolla Store, so it follows the store's
 rules on what an app may use. Nothing is published yet, and the app does not use the Ladybird name anywhere you
 would see it: the Ladybird project has not yet said how its name may be used by others, and we are waiting for that.
+
+It is developed on the Jolla Phone 2 and also runs on the Xperia 10 II, where pages are still painted in software.
 
 ## Building
 
