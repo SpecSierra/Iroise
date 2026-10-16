@@ -17,10 +17,10 @@ index cd71044d..dd57572e 100644
      static constexpr size_t cage_offset_mask = default_cage_size - 1;
      // NB: JIT code accesses typed array elements at a masked offset plus a
 diff --git a/Libraries/LibJS/Rust/build.rs b/Libraries/LibJS/Rust/build.rs
-index 0ffe9d1d..63364412 100644
+index 6d6889cc..fc408791 100644
 --- a/Libraries/LibJS/Rust/build.rs
 +++ b/Libraries/LibJS/Rust/build.rs
-@@ -106,6 +106,16 @@ fn heap_region_size(target: &Target, thread_sanitizer: bool) -> u64 {
+@@ -110,6 +110,16 @@ fn heap_region_size(target: &Target, thread_sanitizer: bool) -> u64 {
      }
  }
  
@@ -37,7 +37,7 @@ index 0ffe9d1d..63364412 100644
  fn main() {
      let manifest_directory = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
      let output_directory = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
-@@ -130,7 +140,7 @@ fn main() {
+@@ -133,7 +143,7 @@ fn main() {
      let configuration = layout_table::LayoutConfiguration {
          heap_region_offset_mask: heap_region_size(&target, thread_sanitizer) - 1,
          // Mirrors GC::PrimitiveStorage::default_cage_size.

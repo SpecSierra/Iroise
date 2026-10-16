@@ -28,7 +28,7 @@ index 1373f954..4a92e6b6 100644
      target_link_libraries(LibGfx PUBLIC Vulkan::Headers)
 diff --git a/Libraries/LibGfx/GLESContext.cpp b/Libraries/LibGfx/GLESContext.cpp
 new file mode 100644
-index 00000000..5bd33ba6
+index 00000000..84d8317f
 --- /dev/null
 +++ b/Libraries/LibGfx/GLESContext.cpp
 @@ -0,0 +1,359 @@
@@ -393,7 +393,7 @@ index 00000000..5bd33ba6
 +}
 diff --git a/Libraries/LibGfx/GLESContext.h b/Libraries/LibGfx/GLESContext.h
 new file mode 100644
-index 00000000..75621cfd
+index 00000000..bcc57698
 --- /dev/null
 +++ b/Libraries/LibGfx/GLESContext.h
 @@ -0,0 +1,62 @@
@@ -872,10 +872,10 @@ index 4a2cd467..52eedc07 100644
          Vector<Gfx::SharedImage> shared_images;
          shared_images.ensure_capacity(buffer_count);
 diff --git a/vcpkg.json b/vcpkg.json
-index 574dba01..95d6f8dc 100644
+index 58070fec..9fb47b71 100644
 --- a/vcpkg.json
 +++ b/vcpkg.json
-@@ -213,6 +213,7 @@
+@@ -212,6 +212,7 @@
          "fontconfig",
          "harfbuzz",
          "icu",

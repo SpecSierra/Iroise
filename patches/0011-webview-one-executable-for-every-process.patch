@@ -1,6 +1,8 @@
+diff --git a/Libraries/LibWebCommon/WebView/Utilities.cpp b/Libraries/LibWebCommon/WebView/Utilities.cpp
+index 1afa64a0..d48265df 100644
 --- a/Libraries/LibWebCommon/WebView/Utilities.cpp
 +++ b/Libraries/LibWebCommon/WebView/Utilities.cpp
-@@ -53,6 +53,10 @@
+@@ -53,6 +53,10 @@ static ErrorOr<ByteString> application_directory()
  {
      if (s_ladybird_binary_path.has_value())
          return *s_ladybird_binary_path;
@@ -11,6 +13,8 @@
  
      auto current_executable_path = TRY(Core::System::current_executable_path());
      return LexicalPath::dirname(current_executable_path);
+diff --git a/Libraries/LibWebView/HelperProcess.cpp b/Libraries/LibWebView/HelperProcess.cpp
+index 6a21c41a..5f11e4cf 100644
 --- a/Libraries/LibWebView/HelperProcess.cpp
 +++ b/Libraries/LibWebView/HelperProcess.cpp
 @@ -7,6 +7,7 @@
@@ -21,7 +25,7 @@
  #include <LibCore/File.h>
  #include <LibCore/Process.h>
  #include <LibCore/System.h>
-@@ -172,6 +173,11 @@
+@@ -172,6 +173,11 @@ static ErrorOr<pid_t> launch_helper_process(StringView server_name, Vector<ByteS
      auto const& browser_options = WebView::Application::browser_options();
  
      auto candidate_server_paths = TRY(get_paths_for_helper_process(server_name));

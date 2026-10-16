@@ -1,5 +1,5 @@
 diff --git a/Libraries/LibWebView/HelperProcess.cpp b/Libraries/LibWebView/HelperProcess.cpp
-index c3e03cc0..e7324d7f 100644
+index b65a90c4..6a21c41a 100644
 --- a/Libraries/LibWebView/HelperProcess.cpp
 +++ b/Libraries/LibWebView/HelperProcess.cpp
 @@ -556,6 +556,17 @@ ErrorOr<NonnullRefPtr<WebWorkerClient>> launch_web_worker_process(Web::HTML::Age
@@ -30,7 +30,7 @@ index c3e03cc0..e7324d7f 100644
          apply_dns_settings(*client);
  
 diff --git a/Libraries/LibWebView/HelperProcess.h b/Libraries/LibWebView/HelperProcess.h
-index be09ba75..baa653af 100644
+index 9cd54d85..467261ad 100644
 --- a/Libraries/LibWebView/HelperProcess.h
 +++ b/Libraries/LibWebView/HelperProcess.h
 @@ -34,6 +34,8 @@ WEBVIEW_API ErrorOr<NonnullRefPtr<WebView::CompositorClient>> launch_compositor_
@@ -43,10 +43,10 @@ index be09ba75..baa653af 100644
  WEBVIEW_API ErrorOr<NonnullRefPtr<WasmCompilerClient::Client>> launch_wasm_compiler_process();
  #endif
 diff --git a/Services/RequestServer/ControlConnectionFromClient.cpp b/Services/RequestServer/ControlConnectionFromClient.cpp
-index 8ad5c462..8c622398 100644
+index 5dbc5f33..1ccba140 100644
 --- a/Services/RequestServer/ControlConnectionFromClient.cpp
 +++ b/Services/RequestServer/ControlConnectionFromClient.cpp
-@@ -170,6 +170,11 @@ void ControlConnectionFromClient::set_proxy_configuration(HTTP::ProxyConfigurati
+@@ -160,6 +160,11 @@ void ControlConnectionFromClient::set_proxy_configuration(HTTP::ProxyConfigurati
      RequestServer::set_proxy_configuration(move(proxy_configuration));
  }
  
@@ -59,10 +59,10 @@ index 8ad5c462..8c622398 100644
  {
      Request::set_performance_monitor_enabled(enabled);
 diff --git a/Services/RequestServer/ControlConnectionFromClient.h b/Services/RequestServer/ControlConnectionFromClient.h
-index 2669cdfb..1546f336 100644
+index 60af7871..4b17916c 100644
 --- a/Services/RequestServer/ControlConnectionFromClient.h
 +++ b/Services/RequestServer/ControlConnectionFromClient.h
-@@ -48,6 +48,7 @@ private:
+@@ -46,6 +46,7 @@ private:
      virtual void set_use_system_dns() override;
  
      virtual void set_proxy_configuration(HTTP::ProxyConfiguration) override;
@@ -142,10 +142,10 @@ index 63fd505c..ad5a3b6d 100644
 +
  }
 diff --git a/Services/RequestServer/RequestServerControl.ipc b/Services/RequestServer/RequestServerControl.ipc
-index 36055bd2..fc9d5c99 100644
+index 321e419c..d0c316fb 100644
 --- a/Services/RequestServer/RequestServerControl.ipc
 +++ b/Services/RequestServer/RequestServerControl.ipc
-@@ -26,6 +26,9 @@ endpoint RequestServerControl
+@@ -25,6 +25,9 @@ endpoint RequestServerControl
  
      set_proxy_configuration(HTTP::ProxyConfiguration proxy_configuration) =|
  

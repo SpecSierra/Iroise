@@ -14,10 +14,10 @@ index 6cf45cc2..405e0db0 100644
  
  GC::Ref<ServiceWorker::ServiceWorkerContainer> Navigator::service_worker()
 diff --git a/Libraries/LibWeb/HTML/Window.cpp b/Libraries/LibWeb/HTML/Window.cpp
-index a52089fa..477a677c 100644
+index fc4524ec..63c8a7f7 100644
 --- a/Libraries/LibWeb/HTML/Window.cpp
 +++ b/Libraries/LibWeb/HTML/Window.cpp
-@@ -609,10 +609,11 @@ CSS::Parser::ValueParserFFI::FfiMediaFeatureValue Window::query_media_feature(CS
+@@ -615,10 +615,11 @@ CSS::Parser::ValueParserFFI::FfiMediaFeatureValue Window::query_media_feature(CS
  
      // https://www.w3.org/TR/mediaqueries-5/#media-descriptor-table
      switch (media_feature) {
@@ -31,7 +31,7 @@ index a52089fa..477a677c 100644
      case CSS::MediaFeatureID::AspectRatio:
          return ratio_media_feature_value(inner_width(), inner_height());
      case CSS::MediaFeatureID::Color:
-@@ -645,7 +646,7 @@ CSS::Parser::ValueParserFFI::FfiMediaFeatureValue Window::query_media_feature(CS
+@@ -651,7 +652,7 @@ CSS::Parser::ValueParserFFI::FfiMediaFeatureValue Window::query_media_feature(CS
      case CSS::MediaFeatureID::HorizontalViewportSegments:
          return integer_media_feature_value(1);
      case CSS::MediaFeatureID::Hover:
@@ -40,7 +40,7 @@ index a52089fa..477a677c 100644
      case CSS::MediaFeatureID::InvertedColors:
          return ident_media_feature_value(CSS::Keyword::None);
      case CSS::MediaFeatureID::Monochrome:
-@@ -659,7 +660,7 @@ CSS::Parser::ValueParserFFI::FfiMediaFeatureValue Window::query_media_feature(CS
+@@ -665,7 +666,7 @@ CSS::Parser::ValueParserFFI::FfiMediaFeatureValue Window::query_media_feature(CS
      case CSS::MediaFeatureID::OverflowInline:
          return ident_media_feature_value(CSS::Keyword::Scroll);
      case CSS::MediaFeatureID::Pointer:

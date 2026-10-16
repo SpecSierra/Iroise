@@ -11,7 +11,7 @@ index 7a122bcb..e1648ff5 100644
  # lto1 uses a crazy amount of RAM in static builds.
  # Disable LTO for static gcc builds unless explicitly asked for.
 diff --git a/Meta/CMake/compile_options.cmake b/Meta/CMake/compile_options.cmake
-index 062721ff..199ecd16 100644
+index b0f56cf4..a69282cc 100644
 --- a/Meta/CMake/compile_options.cmake
 +++ b/Meta/CMake/compile_options.cmake
 @@ -69,6 +69,11 @@ if (ENABLE_CI_BASELINE_CPU)
