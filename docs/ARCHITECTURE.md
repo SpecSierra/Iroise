@@ -112,9 +112,18 @@ private tab closes.
 engine's own. On the Jolla Phone 2, H.264 plays at full speed up to 1080p at 30 frames a second, and at 53 to 57 frames a
 second for 1080p60, all decoded in software.
 
-**Blocking ads and cookie banners.** Ladybird has an ad blocker built in (Brave's). The Adblock switch turns on
-EasyList, EasyPrivacy and the list for the phone's language; the cookie-banner switch turns on EasyList's cookie
-list. Turning blocking off for one site adds an exception for it. The lists are refreshed daily.
+**Blocking ads and cookie banners.** Ladybird has an ad blocker built in (Brave's), and Pacific gives it the
+lists Atlantic used. The Adblock switch turns on EasyList and EasyPrivacy, uBlock Origin's filters and annoyances,
+Fanboy's annoyance and social lists, eyeo's lists against sites that defeat blockers (in English and the phone's
+language), the ads list for the phone's language, and a few rules of our own for what those miss. The
+cookie-banner switch turns on EasyList's and uBlock's cookie-notice lists, and DuckDuckGo's autoconsent, which
+answers the consent dialogs it knows with "reject" (on a site that only offers "accept or subscribe", it
+accepts). Autoconsent runs in every frame of every page before the page's own scripts. Turning blocking off for
+one site adds an exception for it.
+
+The lists are downloaded on the phone and refreshed daily, so they stay current without a new package; uBlock's
+script rules (`+js`) are not run, but its blocking and hiding rules are. Each page process compiles the lists for
+itself, about 55 MB of memory per process with the full set.
 
 **Saved logins.** When a login form is sent, the interface offers to save it into the password vault (SQLCipher,
 opened with a master password). A saved login is filled in only when you touch a login field yourself, and only
@@ -158,6 +167,7 @@ Each patch in `patches/` does one thing:
 | 0015 | builds for plain ARMv8.0, which older phones' processors need |
 | 0016 | maps read-only files privately, which older kernels (the Xperia 10 II's) need |
 | 0017 | accepts Sailfish OS's FFmpeg 5.1 for H.264 and AAC |
+| 0018 | runs the embedder's scripts in every document, frames included, before the document's own (autoconsent) |
 
 `patches/vcpkg-skia-gl-without-system-libraries.patch` builds Skia's OpenGL backend without linking a GL library,
 for the reason above.

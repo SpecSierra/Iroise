@@ -5,7 +5,7 @@
 #   share/harbour-pacific/lib/engine     the engine (libpacificengine.so) and the libraries of its build it needs,
 #                                        which find each other by $ORIGIN. Kept apart, so the interface's Qt never
 #                                        picks up the engine's own libcrypto, freetype and the like.
-#   share/harbour-pacific/share/Lagom    the engine's resources
+#   share/harbour-pacific/share/Lagom    the engine's resources, and ours in pacific/ (autoconsent.js)
 #   share/harbour-pacific/qml            the interface, with the search engines it ships
 #   share/harbour-pacific/translations
 # Run scripts/build.sh, scripts/build-browser.sh and scripts/build-sqlcipher.sh first.
@@ -28,6 +28,10 @@ cp -L "$BUILD/lib/libpacificengine.so" "$ENGINE/"
 ldd "$BUILD/lib/libpacificengine.so" | awk '/=>/ {print $3}' | grep -E "^$BUILD/|/libstdc\+\+\.so|/libgcc_s\.so" | sort -u |
     while read -r lib; do cp -L "$lib" "$ENGINE/"; done
 cp -a "$BUILD/share/Lagom" "$SHARE/share/"
+# The cookie-consent answerer the engine runs in pages (scripts/fetch-autoconsent.sh).
+"$ROOT/scripts/fetch-autoconsent.sh"
+mkdir -p "$SHARE/share/Lagom/pacific"
+cp "$ROOT/build/autoconsent/autoconsent.js" "$SHARE/share/Lagom/pacific/"
 strip --strip-unneeded "$ENGINE"/*.so* 2>/dev/null || true
 for f in "$ENGINE"/*.so*; do patchelf --set-rpath '$ORIGIN' "$f"; done
 

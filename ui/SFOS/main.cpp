@@ -12,7 +12,9 @@
 #include <AK/JsonObject.h>
 #include <AK/JsonValue.h>
 #include <AK/LexicalPath.h>
+#include <AK/StringBuilder.h>
 #include <LibCore/ElapsedTimer.h>
+#include <LibCore/File.h>
 #include <LibCore/Environment.h>
 #include <LibCore/GeolocationProvider.h>
 #include <LibCore/EventLoop.h>
@@ -31,6 +33,7 @@
 #include <LibWebCommon/Page/InputEvent.h>
 #include <LibWebCommon/Page/ScreenWakeLockState.h>
 #include <LibWebCommon/WebView/ConsoleOutput.h>
+#include <LibURL/Parser.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/FileDownloader.h>
 #include <LibWebView/HelperProcess.h>
@@ -696,6 +699,32 @@ private:
         page.async_debug_request("scripting"sv, scripting ? "on"sv : "off"sv);
     }
 
+    // DuckDuckGo's autoconsent answers sites' cookie-consent dialogs with "reject" (scripts/fetch-autoconsent.sh).
+    // The engine runs it in every http(s) document of every page, frames of other sites included, before the
+    // document's own scripts (patch 0018), while cookie-banner blocking is on. Read once; empty if not shipped.
+    static ByteString const& autoconsent_source()
+    {
+        static ByteString source = [] {
+            auto path = LexicalPath::join(WebView::s_ladybird_resource_root, "pacific"sv, "autoconsent.js"sv);
+            auto file = Core::File::open(path.string(), Core::File::OpenMode::Read);
+            if (file.is_error()) {
+                warnln("pacific: no autoconsent at {}: {}", path, file.error());
+                return ByteString {};
+            }
+            auto contents = file.value()->read_until_eof();
+            return contents.is_error() ? ByteString {} : ByteString { contents.value().bytes() };
+        }();
+        return source;
+    }
+
+    void apply_user_scripts()
+    {
+        Vector<ByteString> scripts;
+        if (m_block_cookie_banners && !autoconsent_source().is_empty())
+            scripts.append(autoconsent_source());
+        WebView::Application::the().set_user_scripts(move(scripts));
+    }
+
     void set_site_options(StringView text)
     {
         m_site_user_agents.clear();
@@ -733,31 +762,123 @@ private:
     }
 
     // The engine has Brave's adblock engine and a set of filter list subscriptions built in, all switched off
-    // until someone asks. These turn the app's two switches into which of those lists are on.
+    // until someone asks. These turn the app's two switches into which lists are on: the engine's own, and those
+    // Atlantic used that it does not have, added once as subscriptions of our own.
+    struct ExtraList {
+        StringView name;
+        StringView url;
+    };
+    static constexpr StringView ublock_lists_url = "https://raw.githubusercontent.com/uBlockOrigin/uAssets/master/filters/"sv;
+    static constexpr StringView anti_circumvention_url = "https://gitlab.com/eyeo/anti-cv/abp-filters-anti-cv/-/raw/master/"sv;
+
+    // uBlock Origin's lists, named by what their index files (filters.txt, annoyances.txt) include: the engine does
+    // not follow !#include. Their scriptlets (+js) are not run, but their network and hiding rules are.
+    static constexpr Array<ExtraList, 11> ad_lists { {
+        { "uBlock filters"sv, "filters-general.txt"sv },
+        { "uBlock filters 2020"sv, "filters-2020.txt"sv },
+        { "uBlock filters 2021"sv, "filters-2021.txt"sv },
+        { "uBlock filters 2022"sv, "filters-2022.txt"sv },
+        { "uBlock filters 2023"sv, "filters-2023.txt"sv },
+        { "uBlock filters 2024"sv, "filters-2024.txt"sv },
+        { "uBlock filters 2025"sv, "filters-2025.txt"sv },
+        { "uBlock filters 2026"sv, "filters-2026.txt"sv },
+        { "uBlock filters for mobile"sv, "filters-mobile.txt"sv },
+        { "uBlock annoyances"sv, "annoyances-others.txt"sv },
+        { "Anti-circumvention"sv, "distribution/abp-filters-core.txt"sv },
+    } };
+    static constexpr ExtraList cookie_list { "uBlock cookie notices"sv, "annoyances-cookies.txt"sv };
+
+    // A language's lists: the engine's list of its sites' ads, and eyeo's list against sites that defeat blockers in
+    // it (english.txt, french.txt, ...). Both are worth having only for someone who reads that language.
+    struct LanguageLists {
+        StringView language;
+        StringView engine_list;
+        StringView anti_circumvention;
+    };
+    static constexpr Array<LanguageLists, 33> language_lists { {
+        { "ar"sv, "listeAR"sv, "arabic"sv },
+        { "be"sv, "ruAdList"sv, "russian"sv },
+        { "bg"sv, "bulgarianList"sv, "bulgarian"sv },
+        { "cs"sv, "easyListCzechAndSlovak"sv, "czech"sv },
+        { "da"sv, "nordicFilters"sv, "nordic"sv },
+        { "de"sv, "easyListGermany"sv, "german"sv },
+        { "en"sv, {}, "english"sv },
+        { "es"sv, "easyListSpanish"sv, "spanish"sv },
+        { "fi"sv, "nordicFilters"sv, "nordic"sv },
+        { "fr"sv, "listeFR"sv, "french"sv },
+        { "he"sv, "easyListHebrew"sv, "hebrew"sv },
+        { "hi"sv, "indianList"sv, "indian"sv },
+        { "hu"sv, {}, "hungarian"sv },
+        { "id"sv, "abpindo"sv, "indonesian"sv },
+        { "is"sv, "nordicFilters"sv, "nordic"sv },
+        { "it"sv, "easyListItaly"sv, "italian"sv },
+        { "ko"sv, "koreanList"sv, {} },
+        { "lt"sv, "easyListLithuania"sv, "lithuanian"sv },
+        { "lv"sv, "latvianList"sv, "latvian"sv },
+        { "ms"sv, "abpindo"sv, {} },
+        { "nb"sv, "nordicFilters"sv, "nordic"sv },
+        { "nl"sv, "easyListDutch"sv, "dutch"sv },
+        { "nn"sv, "nordicFilters"sv, "nordic"sv },
+        { "pl"sv, "easyListPolish"sv, "polish"sv },
+        { "pt"sv, "easyListPortuguese"sv, "portuguese"sv },
+        { "ro"sv, "roList"sv, "romanian"sv },
+        { "ru"sv, "ruAdList"sv, "russian"sv },
+        { "sk"sv, "easyListCzechAndSlovak"sv, "czech"sv },
+        { "sv"sv, "nordicFilters"sv, "nordic"sv },
+        { "ta"sv, "indianList"sv, "tamil"sv },
+        { "tr"sv, {}, "turkish"sv },
+        { "uk"sv, "ruAdList"sv, "russian"sv },
+        { "vi"sv, "abpvn"sv, "vietnamese"sv },
+    } };
+
+    // A subscription of ours by its address: the one already in the settings, or a new one.
+    static String subscription(StringView name, String const& url)
+    {
+        auto& settings = WebView::Application::settings();
+        for (auto const& list : settings.content_blocker_lists()) {
+            if (!list.built_in && list.url.has_value() && list.url->serialize() == url)
+                return list.identifier;
+        }
+        return settings.add_content_blocker_list(MUST(String::from_utf8(name)), URL::Parser::basic_parse(url));
+    }
+
     void apply_content_blocking()
     {
         auto& settings = WebView::Application::settings();
 
-        // The lists for a language's sites are worth having only for someone who reads that language.
-        static constexpr Array<Array<StringView, 2>, 9> language_lists { {
-            { "fr"sv, "listeFR"sv },
-            { "de"sv, "easyListGermany"sv },
-            { "it"sv, "easyListItaly"sv },
-            { "es"sv, "easyListSpanish"sv },
-            { "nl"sv, "easyListDutch"sv },
-            { "pl"sv, "easyListPolish"sv },
-            { "pt"sv, "easyListPortuguese"sv },
-            { "ru"sv, "ruAdList"sv },
-            { "uk"sv, "ruAdList"sv },
-        } };
-        auto language = Core::Environment::get("LANG"sv).value_or({});
+        auto locale = Core::Environment::get("LANG"sv).value_or({});
+        auto language = locale.substring_view(0, min(locale.length(), locale.find('_').value_or(locale.length())));
 
-        for (auto list : { "easyList"sv, "easyPrivacy"sv, "adblockWarningRemoval"sv })
+        for (auto list : { "easyList"sv, "easyPrivacy"sv, "adblockWarningRemoval"sv, "fanboyAnnoyances"sv, "fanboySocial"sv })
             settings.set_content_blocker_list_enabled(list, m_block_ads);
-        for (auto const& entry : language_lists)
-            settings.set_content_blocker_list_enabled(entry[1], m_block_ads && language.starts_with(entry[0]));
+        for (auto const& list : ad_lists) {
+            auto base = list.url.starts_with("distribution/"sv) ? anti_circumvention_url : ublock_lists_url;
+            settings.set_content_blocker_list_enabled(subscription(list.name, MUST(String::formatted("{}{}", base, list.url))), m_block_ads);
+        }
+
+        // NB: Every language's lists are switched, so that one left on by an earlier language goes off. Languages
+        //     share some lists (the Nordic ones), so a list is on if the phone's language uses it. English sites
+        //     are everybody's, so their anti-circumvention list is always on.
+        auto uses = [&](auto member, StringView list) {
+            return any_of(language_lists, [&](auto const& entry) { return entry.language == language && entry.*member == list; });
+        };
+        for (auto const& entry : language_lists) {
+            if (!entry.engine_list.is_empty())
+                settings.set_content_blocker_list_enabled(entry.engine_list, m_block_ads && uses(&LanguageLists::engine_list, entry.engine_list));
+            if (entry.anti_circumvention.is_empty())
+                continue;
+            auto url = MUST(String::formatted("{}{}.txt", anti_circumvention_url, entry.anti_circumvention));
+            bool on = m_block_ads && (entry.anti_circumvention == "english"sv || uses(&LanguageLists::anti_circumvention, entry.anti_circumvention));
+            // Only a list someone needs is subscribed to at all.
+            bool subscribed = any_of(settings.content_blocker_lists(), [&](auto const& list) { return list.url.has_value() && list.url->serialize() == url; });
+            if (on || subscribed)
+                settings.set_content_blocker_list_enabled(subscription(MUST(String::formatted("Anti-circumvention ({})", entry.anti_circumvention)), url), on);
+        }
+
         settings.set_content_blocker_list_enabled("easyListCookie"sv, m_block_cookie_banners);
+        settings.set_content_blocker_list_enabled(subscription(cookie_list.name, MUST(String::formatted("{}{}", ublock_lists_url, cookie_list.url))), m_block_cookie_banners);
         settings.set_content_blocker_enabled(m_block_ads || m_block_cookie_banners);
+        apply_custom_filters();
 
         // NB: A list that was just switched on has never been downloaded. The engine fetches lists when updates
         //     are switched on, and then daily, so switching updates off and on again fetches what is missing
@@ -779,6 +900,37 @@ private:
         m_restart_list_updates_timer->restart();
     }
 
+    // Rules of our own for what the lists miss, found on the phone (Atlantic's atlantic-extra.txt), on top of the
+    // app's per-site exceptions.
+    static constexpr StringView extra_ad_filters =
+        // jeuxvideo.com's ad library mutates the page on a ~74 Hz timer, forcing restyle, layout and repaint while
+        // idle: forum threads scrolled at ~2 fps.
+        "||getjad.io^\n"
+        "||getjan.io^\n"
+        // Reddit's "get the app" sheet, which the lists only hide with a selector the engine cannot honour.
+        "reddit.com##.configured-xpromo\n"
+        // A tap on a video went first to the site's own ad click tracker, which redirects to rotating casino
+        // pages. $document, since untyped path rules do not match top-level navigations.
+        "||pornhub.com/_xa/deep_click$document\n"
+        "||youporn.com/_xa/deep_click$document\n"
+        "||redtube.com/_xa/deep_click$document\n"
+        "||tube8.com/_xa/deep_click$document\n"
+        "||pornhub.com/_xa/deep_click\n"
+        "||youporn.com/_xa/deep_click\n"
+        "||redtube.com/_xa/deep_click\n"
+        "||tube8.com/_xa/deep_click\n"
+        "||epicrespin.com^\n"
+        "||epicbet.com^\n"sv;
+
+    void apply_custom_filters()
+    {
+        StringBuilder filters;
+        if (m_block_ads)
+            filters.append(extra_ad_filters);
+        filters.append(m_app_filters);
+        WebView::Application::settings().set_custom_content_blocker_filters(MUST(filters.to_string()));
+    }
+
     void handle(lb_embed_header const& header, StringView text)
     {
         if (header.type == LB_EMBED_SET_AD_BLOCKING || header.type == LB_EMBED_SET_COOKIE_BANNER_BLOCKING) {
@@ -786,6 +938,8 @@ private:
             if (flag != (header.a != 0)) {
                 flag = header.a != 0;
                 apply_content_blocking();
+                // NB: Pages already open start or stop answering consent dialogs from their next document on.
+                apply_user_scripts();
             }
             return;
         }
@@ -804,7 +958,8 @@ private:
             return;
         }
         if (header.type == LB_EMBED_SET_BLOCKER_FILTERS) {
-            WebView::Application::settings().set_custom_content_blocker_filters(String::from_utf8_with_replacement_character(text));
+            m_app_filters = String::from_utf8_with_replacement_character(text);
+            apply_custom_filters();
             return;
         }
         if (header.type == LB_EMBED_DOWNLOAD_START) {
@@ -1017,6 +1172,8 @@ private:
     HashMap<u32, NonnullOwnPtr<PresentedWebView>> m_views;
     bool m_block_ads { false };
     bool m_block_cookie_banners { false };
+    // The per-site exceptions the app sends (LB_EMBED_SET_BLOCKER_FILTERS).
+    String m_app_filters;
     bool m_dark_mode { false };
     // The downloads the app knows of, and when it last heard of each.
     HashMap<u64, MonotonicTime> m_reported_downloads;
