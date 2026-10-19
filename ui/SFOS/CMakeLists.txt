@@ -32,7 +32,7 @@ target_sources(pacificengine PRIVATE "${LADYBIRD_SOURCE_DIR}/Services/RendererSa
 target_include_directories(pacificengine PRIVATE ${LADYBIRD_SOURCE_DIR} ${LADYBIRD_SOURCE_DIR}/Services)
 # What each process's own executable links (Services/*/CMakeLists.txt), except LibMain, whose main() is ours.
 target_link_libraries(pacificengine PRIVATE
-    LibWebView LibCore LibSandbox LibThreading LibFileSystem LibURL LibAudio LibMedia
+    LibWebView LibCore LibSandbox LibThreading LibFileSystem LibURL LibAudio LibMedia LibUnicode
     audioserverservice compositorservice imagedecoderservice mediaserverservice requestserverservice
     wasmcompilerservice webcontentservice webworkerservice
     OpenSSL::Crypto OpenSSL::SSL)

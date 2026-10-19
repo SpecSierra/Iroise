@@ -23,6 +23,7 @@
 #include <LibGfx/ImageFormats/PNGWriter.h>
 #include <LibGfx/SystemTheme.h>
 #include <LibMain/Main.h>
+#include <LibUnicode/Locale.h>
 #include <LibWebCommon/CSS/PreferredColorScheme.h>
 #include <LibWebCommon/Geolocation/GeolocationPositionErrorCode.h>
 #include <LibWebCommon/HTML/AudioPlayState.h>
@@ -48,6 +49,28 @@
 
 namespace Ladybird {
 
+// The phone's language as pages want it: LANG=fr_FR.utf8 gives fr-FR, then fr. Empty for C/POSIX or a language the
+// engine has no data for, which leaves the engine's own default (en-US, en).
+static Vector<String> phone_languages()
+{
+    auto locale = Core::Environment::get("LANG"sv).value_or({});
+    if (auto end = locale.find_any_of(".@"sv); end.has_value())
+        locale = locale.substring_view(0, *end);
+    if (locale.is_empty() || locale == "C"sv || locale == "POSIX"sv)
+        return {};
+
+    Vector<String> languages;
+    auto tag = MUST(MUST(String::from_utf8(locale)).replace("_"sv, "-"sv, ReplaceMode::All));
+    if (Unicode::is_locale_available(tag))
+        languages.append(tag);
+    if (auto separator = locale.find('_'); separator.has_value()) {
+        auto language = MUST(String::from_utf8(locale.substring_view(0, *separator)));
+        if (Unicode::is_locale_available(language))
+            languages.append(move(language));
+    }
+    return languages;
+}
+
 class Application final : public WebView::Application {
     WEB_VIEW_APPLICATION(Application)
 
@@ -61,6 +84,9 @@ private:
 
     // We only say how far the finger moved and when it lifted; the compositor makes the fling.
     virtual bool platform_reports_scroll_momentum() const override { return false; }
+
+    // A new profile starts on the phone's language rather than English.
+    virtual Vector<String> platform_preferred_languages() const override { return phone_languages(); }
 };
 
 // A HeadlessWebView already knows how to run a page without a toolkit. This one also hands its frames to the Silica
@@ -1215,6 +1241,10 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
         Core::EventLoop::current().quit(0);
     };
     Ladybird::AppGeolocationProvider::s_host = host.ptr();
+    // The browser has no language setting of its own, so pages follow the phone, also in a profile made before the
+    // engine asked for the phone's languages (those say English) and after the user changes the phone's language.
+    if (auto languages = phone_languages(); !languages.is_empty() && languages != WebView::Application::settings().languages())
+        WebView::Application::settings().set_languages(move(languages));
     // Pages still ask the user first, each time (see the gate in create_view).
     WebView::Application::settings().set_geolocation_enabled(true);
     // NB: The engine fetches a large download over several connections at once, in byte ranges. On a phone that
