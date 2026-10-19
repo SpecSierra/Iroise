@@ -699,7 +699,8 @@ private:
     // The user agent and scripting the site the view is going to gets. Everything else uses the engine's defaults.
     void apply_site_options(PresentedWebView& view, WebView::WebContentPage& page, URL::URL const& url)
     {
-        auto host = url.serialized_host().to_byte_string();
+        // NB: data:, file: and about: URLs have no host, and asking for one aborts; they match no site.
+        auto host = url.host().has_value() ? url.serialized_host().to_byte_string() : ByteString {};
         // The most specific entry wins: m.example.com over example.com.
         Optional<StringView> preset;
         size_t matched_length = 0;
