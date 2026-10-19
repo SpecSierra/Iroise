@@ -1243,7 +1243,7 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
     Ladybird::AppGeolocationProvider::s_host = host.ptr();
     // The browser has no language setting of its own, so pages follow the phone, also in a profile made before the
     // engine asked for the phone's languages (those say English) and after the user changes the phone's language.
-    if (auto languages = phone_languages(); !languages.is_empty() && languages != WebView::Application::settings().languages())
+    if (auto languages = Ladybird::phone_languages(); !languages.is_empty() && languages != WebView::Application::settings().languages())
         WebView::Application::settings().set_languages(move(languages));
     // Pages still ask the user first, each time (see the gate in create_view).
     WebView::Application::settings().set_geolocation_enabled(true);
