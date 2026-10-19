@@ -74,6 +74,17 @@ WebContainer::WebContainer(QQuickItem *parent)
     // recreates + reloads them on return).
     if (qEnvironmentVariableIsSet("PACIFIC_TAB_DISCARD"))
         m_tabDiscardEnabled = qgetenv("PACIFIC_TAB_DISCARD").trimmed() != "0";
+    // A tab is a whole page process: phones with less memory keep fewer of them alive.
+    {
+        QFile meminfo(QStringLiteral("/proc/meminfo"));
+        if (meminfo.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            const QByteArray line = meminfo.readLine();
+            if (line.startsWith("MemTotal:")) {
+                const long totalMb = line.mid(9).trimmed().split(' ').first().toLong() / 1024;
+                m_maxLiveTabCount = totalMb <= 4096 ? 3 : totalMb <= 6144 ? 4 : 5;
+            }
+        }
+    }
     if (qEnvironmentVariableIsSet("PACIFIC_MAX_LIVE_TABS"))
         m_maxLiveTabCount = qMax(1, qEnvironmentVariableIntValue("PACIFIC_MAX_LIVE_TABS"));
     if (qEnvironmentVariableIsSet("PACIFIC_TAB_DISCARD_KEEP_MIN"))
