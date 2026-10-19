@@ -748,7 +748,7 @@ index 1907c0eb..c62203f6 100644
 +
  }
 diff --git a/Libraries/LibGfx/SkiaBackendContext.h b/Libraries/LibGfx/SkiaBackendContext.h
-index efd0e9eb..28640599 100644
+index 76b38884..7c6ab2de 100644
 --- a/Libraries/LibGfx/SkiaBackendContext.h
 +++ b/Libraries/LibGfx/SkiaBackendContext.h
 @@ -22,6 +22,10 @@
@@ -784,7 +784,7 @@ index efd0e9eb..28640599 100644
  private:
      void perform_post_flush_cleanup();
 diff --git a/Meta/CMake/check_for_dependencies.cmake b/Meta/CMake/check_for_dependencies.cmake
-index d6763069..993fefde 100644
+index fb13aa74..00f01ef1 100644
 --- a/Meta/CMake/check_for_dependencies.cmake
 +++ b/Meta/CMake/check_for_dependencies.cmake
 @@ -41,7 +41,16 @@ if (NOT APPLE AND NOT ANDROID AND NOT WIN32)
@@ -872,10 +872,10 @@ index 4a2cd467..52eedc07 100644
          Vector<Gfx::SharedImage> shared_images;
          shared_images.ensure_capacity(buffer_count);
 diff --git a/vcpkg.json b/vcpkg.json
-index 58070fec..9fb47b71 100644
+index c30fe015..e4f86f35 100644
 --- a/vcpkg.json
 +++ b/vcpkg.json
-@@ -212,6 +212,7 @@
+@@ -211,6 +211,7 @@
          "fontconfig",
          "harfbuzz",
          "icu",
