@@ -69,6 +69,12 @@ ContentPickerPage {
 
     onStatusChanged: {
         if (status === PageStatus.Inactive) {
+            // NB: Opening a folder pushes the picker's own page over this one, which leaves it Inactive too. Only
+            //     a picker that is gone (back on the browser page) is done; cancelling here would answer the page
+            //     with no file while the user is still choosing one.
+            if (pageStack.find(function(page) { return page === filePicker }) && pageStack.currentPage !== browserPage) {
+                return
+            }
             browserPage._filePickerOpen = false
             submitSelection()
             if (!_selectionCommitted) {
