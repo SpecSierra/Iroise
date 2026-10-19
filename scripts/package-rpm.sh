@@ -42,7 +42,7 @@ MimeType=text/html;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/
 X-Nemo-Application-Type=no-invoker
 
 [X-Sailjail]
-Permissions=Internet;Audio;Microphone;Location;Downloads
+Permissions=Internet;Audio;Microphone;Location;Downloads;Documents;Pictures;Videos;Music;RemovableMedia;MediaIndexing
 OrganizationName=org.pacific
 ApplicationName=harbour-pacific
 DESKTOP
