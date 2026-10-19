@@ -1,0 +1,19 @@
+diff --git a/Libraries/LibSandbox/Seccomp.cpp b/Libraries/LibSandbox/Seccomp.cpp
+index 34ccf2a9..8a034b1a 100644
+--- a/Libraries/LibSandbox/Seccomp.cpp
++++ b/Libraries/LibSandbox/Seccomp.cpp
+@@ -2011,6 +2011,14 @@ ErrorOr<void> SeccompPolicy::install()
+     append(SECCOMP_ERRNO(EAFNOSUPPORT));
+ #endif
+ 
++    // So is connecting a socket. A process that no group lets create sockets only has its socket pairs, which are
++    // connected already; the connect() that remains comes from a library that went on after its socket() was
++    // refused. The Mali GPU driver of the Jolla Phone does so once its memory profiling is on.
++#ifdef __NR_connect
++    append(BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_connect, 0, 1));
++    append(SECCOMP_ERRNO(EACCES));
++#endif
++
+ #ifdef __NR_sendto
+     append(BPF_JUMP(BPF_JMP | BPF_JEQ | BPF_K, __NR_sendto, 0, 1));
+     append(SECCOMP_ERRNO(EPERM));
