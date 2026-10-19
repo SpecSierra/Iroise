@@ -163,9 +163,10 @@ private:
         on_ready_to_paint = [this] { present(); };
     }
 
-    virtual void prepare_page_for_tab(WebView::WebContentPage& page) override
+    // Runs for the tab's page and for every process hosting one of its cross-site frames.
+    virtual void prepare_page_for_navigable(WebView::WebContentPage& page) override
     {
-        WebView::HeadlessWebView::prepare_page_for_tab(page);
+        WebView::HeadlessWebView::prepare_page_for_navigable(page);
         // The Compositor paces the page by the display's rate, which it only learns from the view (60 otherwise).
         WebView::Application::the().update_compositor_display_metadata(page.compositor_context_id(), display_id(), m_maximum_frames_per_second);
         send_screen_rect(page);
@@ -180,7 +181,8 @@ private:
     {
         Vector<Web::DevicePixelRect> screen_rects;
         screen_rects.append(Web::DevicePixelRect({}, viewport_size()));
-        page.async_update_screen_rects(screen_rects, 0);
+        // The system keeps nothing of the screen for itself while the browser is in front.
+        page.async_update_screen_rects(screen_rects, screen_rects, 0);
     }
 
     void present()
