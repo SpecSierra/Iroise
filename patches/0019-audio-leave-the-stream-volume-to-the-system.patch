@@ -1,0 +1,17 @@
+diff --git a/Services/AudioServer/PlaybackStreamPulseAudio.cpp b/Services/AudioServer/PlaybackStreamPulseAudio.cpp
+index c985e53c..02dabf6f 100644
+--- a/Services/AudioServer/PlaybackStreamPulseAudio.cpp
++++ b/Services/AudioServer/PlaybackStreamPulseAudio.cpp
+@@ -50,9 +50,9 @@ NonnullRefPtr<PlaybackStream::CreatePromise> PlaybackStreamPulseAudio::create(Ou
+             return data_request_callback(buffer, buffer_starts_playing_at);
+         })));
+ 
+-        // PulseAudio retains the last volume it sets for an application. We want to consistently
+-        // start at 100% volume instead.
+-        TRY_OR_REJECT_AND_EXIT(internal_state->stream()->set_volume(1.0));
++        // NB: The stream starts at the volume the system gives it. On Sailfish OS that is the media volume the user
++        //     set with the volume keys, which a stream set to 100% here would ignore until the next key press. The
++        //     page's own volume is applied in the mixer.
+ 
+         {
+             main_thread_event_loop.deferred_invoke([promise = move(promise), playback_stream = move(playback_stream)] mutable {
