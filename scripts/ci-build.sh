@@ -26,7 +26,8 @@ ln -sfn "$CACHE/venv" "$ROOT/.venv"
 if [ ! -d "$UP/.git" ]; then
     git clone -q https://github.com/LadybirdBrowser/ladybird.git "$UP"
 fi
-stamp="$(cat "$ROOT/UPSTREAM_COMMIT" "$ROOT"/patches/*.patch | sha256sum | cut -d' ' -f1)"
+# NB: build.sh too, which decides how the patches go in.
+stamp="$(cat "$ROOT/UPSTREAM_COMMIT" "$ROOT"/patches/*.patch "$ROOT/scripts/build.sh" | sha256sum | cut -d' ' -f1)"
 if [ "$(cat "$CACHE/upstream.stamp" 2>/dev/null)" != "$stamp" ]; then
     git -C "$UP" cat-file -e "$PIN^{commit}" 2>/dev/null || git -C "$UP" fetch -q origin
     git -C "$UP" checkout -q -f --detach "$PIN"

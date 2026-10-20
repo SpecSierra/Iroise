@@ -10,16 +10,22 @@ JOBS="${JOBS:-12}"
 # Apply our patches once; the front end itself lives in this repo and is linked in.
 # A patch that is neither applied nor cleanly applicable means upstream/ was edited by hand: regenerate that patch
 # from the tree (git -C upstream diff -- <its files>) rather than letting patch half-apply it.
-for p in "$ROOT"/patches/[0-9]*.patch; do
-    if patch -d "$UP" -p1 -R --dry-run -s -f < "$p" >/dev/null 2>&1; then
-        continue
-    elif patch -d "$UP" -p1 --dry-run -s -f < "$p" >/dev/null 2>&1; then
-        patch -d "$UP" -p1 -s -f < "$p"
-    else
-        echo "$(basename "$p") does not match upstream/" >&2
-        exit 1
-    fi
-done
+# NB: Once the whole series is in, upstream/.pacific-patches says which. A patch that later ones change where it
+#     changed things (the touch patches) can no longer be undone alone, so the check below only works on its way in.
+series="$(cat "$ROOT"/patches/[0-9]*.patch | sha256sum | cut -d' ' -f1)"
+if [ "$(cat "$UP/.pacific-patches" 2>/dev/null)" != "$series" ]; then
+    for p in "$ROOT"/patches/[0-9]*.patch; do
+        if patch -d "$UP" -p1 -R --dry-run -s -f < "$p" >/dev/null 2>&1; then
+            continue
+        elif patch -d "$UP" -p1 --dry-run -s -f < "$p" >/dev/null 2>&1; then
+            patch -d "$UP" -p1 -s -f < "$p"
+        else
+            echo "$(basename "$p") does not match upstream/" >&2
+            exit 1
+        fi
+    done
+    echo "$series" > "$UP/.pacific-patches"
+fi
 ln -sfn "$ROOT/ui/SFOS" "$UP/UI/SFOS"
 ln -sfn "$ROOT/ui/protocol" "$UP/UI/protocol"
 
