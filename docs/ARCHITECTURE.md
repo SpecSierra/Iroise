@@ -103,6 +103,16 @@ come from Sailfish's location service.
 no hover), so sites send their mobile pages; desktop mode switches to a desktop browser's identity. Per-site user
 agents and a per-site JavaScript switch are applied as soon as the engine knows where a tab is going.
 
+**Touch.** Ladybird has no touch events, and a page written for phones often needs them: a video player's control
+bar cancels `touchend` so that the tap does not also reach the player and hide the bar. A script of ours, run in
+every document before the document's own (`ui/SFOS/TouchEvents.h`), gives pages `ontouchstart` and the rest, and
+says so once a page listens for them. From then on the front end presses the mouse in a way no real mouse does,
+with the Forward button held as well; the script hides that press from the page and fires the touch event in its
+place, and tells the front end whether the page cancelled it. Only then does the finger scroll, or end in the mouse
+events of a tap, as in other browsers. The press being a real one is what lets a page go fullscreen or start a
+video from `touchend`. Pages that do not listen for touches get a scroll or a tap straight away, and a page in
+fullscreen without touch listeners gets the finger as a mouse with its button held, so a seek bar can be dragged.
+
 **New windows and private tabs.** A link that opens a new window, or `window.open`, becomes a new tab, and
 `window.close` closes it. Private tabs get their own cookies and storage, kept in memory and dropped when the last
 private tab closes.

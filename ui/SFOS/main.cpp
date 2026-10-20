@@ -46,6 +46,7 @@
 #include <LibWebView/Utilities.h>
 #include <LibWebView/WebContentPage.h>
 #include <UI/SFOS/EmbeddedHost.h>
+#include <UI/SFOS/TouchEvents.h>
 
 namespace Ladybird {
 
@@ -119,6 +120,12 @@ public:
         traversable().for_each_hosting_page([&](WebView::WebContentPage& page) { send_screen_rect(page); });
     }
 
+    // One finger, which the app passes on as it comes down, moves and lifts. It becomes one of three things:
+    //  - on a page that listens for touches, touch events (see TouchEvents.h), and then the scroll or the tap the
+    //    page did not cancel;
+    //  - on a page in fullscreen, a mouse with its button held: it has nothing to scroll, and its player's controls
+    //    are pressed and dragged;
+    //  - otherwise a scroll when it travels, or the mouse events of a tap where it lifts.
     void handle_touch(TouchPhase phase, int id, Gfx::IntPoint position)
     {
         using enum TouchPhase;
@@ -126,14 +133,20 @@ public:
         if (phase == Down) {
             if (m_active_touch.has_value())
                 return;
+            // A tap still waiting for the page's word is sent as it is (the page is slow to answer).
+            send_pending_tap();
             m_active_touch = id;
-            m_touch_start = m_touch_last = position;
+            m_touch_start = m_touch_last = m_touch_position = position;
             m_is_scrolling = false;
-            // NB: The engine has no touch events, so a page only ever sees a mouse. A page in fullscreen has nothing
-            //     to scroll, and its player's controls are pressed and dragged (a seek bar): there the finger is the
-            //     mouse, its button held from the moment it touches until it lifts.
-            m_touch_is_mouse = is_page_fullscreen;
-            if (m_touch_is_mouse) {
+            m_touch_mode = page_listens_for_touches ? TouchMode::TouchEvents : is_page_fullscreen ? TouchMode::Mouse : TouchMode::Classic;
+            if (m_touch_mode == TouchMode::TouchEvents) {
+                m_page_reported_start = false;
+                m_page_owns_touch = false;
+                m_awaiting_scroll = false;
+                m_cancelable_moves_sent = 0;
+                m_cancelable_moves_reported = 0;
+                send_carrier(Web::MouseEvent::Type::MouseDown, position);
+            } else if (m_touch_mode == TouchMode::Mouse) {
                 send_mouse_event(Web::MouseEvent::Type::MouseMove, position);
                 send_mouse_event(Web::MouseEvent::Type::MouseDown, position);
                 m_mouse_held = true;
@@ -143,17 +156,50 @@ public:
         if (m_active_touch != id)
             return;
 
-        if (m_touch_is_mouse) {
+        if (m_touch_mode == TouchMode::Mouse) {
             if (phase == Motion) {
                 m_touch_last = position;
                 send_mouse_event(Web::MouseEvent::Type::MouseMove, position);
                 return;
             }
             m_active_touch.clear();
-            m_touch_is_mouse = false;
             m_mouse_held = false;
             // A cancelled touch (a second finger came) lets go of the button where the finger last was.
             send_mouse_event(Web::MouseEvent::Type::MouseUp, phase == Cancel ? m_touch_last : position);
+            return;
+        }
+
+        if (m_touch_mode == TouchMode::TouchEvents) {
+            if (phase == Motion) {
+                m_touch_position = position;
+                // NB: Once the page scrolls, it may no longer cancel the touch, as in other browsers.
+                send_carrier(Web::MouseEvent::Type::MouseMove, position, m_is_scrolling);
+                if (!m_is_scrolling)
+                    ++m_cancelable_moves_sent;
+                auto travelled = position - m_touch_start;
+                if (!m_is_scrolling && !m_awaiting_scroll && !m_page_owns_touch && max(abs(travelled.x()), abs(travelled.y())) > touch_slop) {
+                    // Whether it scrolls is the page's to say, by what it does with this touchmove.
+                    m_awaiting_scroll = true;
+                    m_cancelable_moves_needed = m_cancelable_moves_sent;
+                    m_touch_answer_timer->restart();
+                }
+                scroll_if_page_allows();
+                return;
+            }
+            m_active_touch.clear();
+            send_carrier(Web::MouseEvent::Type::MouseUp, position, phase == Cancel);
+            if (m_is_scrolling) {
+                send_mouse_event(Web::MouseEvent::Type::MouseWheel, position, {}, Web::ScrollGesturePhase::Ended);
+                m_is_scrolling = false;
+                return;
+            }
+            // A finger that travelled was a gesture, of the page's or a scroll that never began; neither is a tap.
+            if (phase == Cancel || m_page_owns_touch || m_awaiting_scroll) {
+                m_awaiting_scroll = false;
+                return;
+            }
+            m_pending_tap = position;
+            m_touch_answer_timer->restart();
             return;
         }
 
@@ -176,9 +222,45 @@ public:
         }
         if (phase == Cancel)
             return;
-        send_mouse_event(Web::MouseEvent::Type::MouseMove, position);
-        send_mouse_event(Web::MouseEvent::Type::MouseDown, position);
-        send_mouse_event(Web::MouseEvent::Type::MouseUp, position);
+        send_tap(position);
+    }
+
+    // What the page made of the touch events (TouchEvents.h): "start <cancelled>", "move <cancelled> <count>",
+    // "end <cancelled>", or "listening" when it first listens for touches.
+    // NB: Any script in the page can send these. They only decide what the page itself gets from the finger.
+    void handle_touch_report(StringView report)
+    {
+        auto parts = report.split_view(' ');
+        if (parts.is_empty())
+            return;
+        if (parts[0] == "listening"sv) {
+            page_listens_for_touches = true;
+            return;
+        }
+        if (m_touch_mode != TouchMode::TouchEvents || parts.size() < 2)
+            return;
+        bool cancelled = parts[1] == "1"sv;
+        if (parts[0] == "start"sv) {
+            m_page_reported_start = true;
+            m_page_owns_touch |= cancelled;
+        } else if (parts[0] == "move"sv && parts.size() >= 3) {
+            m_page_owns_touch |= cancelled;
+            m_cancelable_moves_reported = max(m_cancelable_moves_reported, parts[2].to_number<unsigned>().value_or(0));
+        } else if (parts[0] == "end"sv) {
+            if (m_pending_tap.has_value() && !cancelled && !m_page_owns_touch)
+                send_tap(*m_pending_tap);
+            m_pending_tap.clear();
+        }
+        if (m_page_owns_touch)
+            m_awaiting_scroll = false;
+        scroll_if_page_allows();
+    }
+
+    void page_committed()
+    {
+        // A new document listens for touches only once it says so.
+        page_listens_for_touches = false;
+        m_pending_tap.clear();
     }
 
     // Every page that comes to host the tab, also after a cross-site navigation moved it to another process.
@@ -188,6 +270,8 @@ public:
     bool plays_audio { false };
     bool holds_wake_lock { false };
     bool is_page_fullscreen { false };
+    // Whether the page has said it listens for touch events (see TouchEvents.h).
+    bool page_listens_for_touches { false };
 
     void handle_pinch(Gfx::IntPoint position, double scale)
     {
@@ -253,6 +337,65 @@ private:
         }
     }
 
+    void send_tap(Gfx::IntPoint position)
+    {
+        send_mouse_event(Web::MouseEvent::Type::MouseMove, position);
+        send_mouse_event(Web::MouseEvent::Type::MouseDown, position);
+        send_mouse_event(Web::MouseEvent::Type::MouseUp, position);
+    }
+
+    void send_pending_tap()
+    {
+        if (auto tap = m_pending_tap; tap.has_value()) {
+            m_pending_tap.clear();
+            send_tap(*tap);
+        }
+    }
+
+    // A press of the mouse that the page never sees as one: TouchEvents.h makes a touch event of it. Flagged, a move
+    // makes a touchmove the page cannot cancel and a release makes touchcancel.
+    void send_carrier(Web::MouseEvent::Type type, Gfx::IntPoint position, bool flagged = false)
+    {
+        Web::MouseEvent event {};
+        event.type = type;
+        event.position = position.to_type<Web::DevicePixels>();
+        event.screen_position = position.to_type<Web::DevicePixels>();
+        unsigned buttons = Pacific::touch_carrier_button | (flagged ? Pacific::touch_flag_button : 0);
+        if (type == Web::MouseEvent::Type::MouseDown || type == Web::MouseEvent::Type::MouseUp) {
+            event.button = Web::UIEvents::MouseButton::Primary;
+            event.click_count = 1;
+        }
+        if (type != Web::MouseEvent::Type::MouseUp)
+            buttons |= Web::UIEvents::MouseButton::Primary;
+        event.buttons = static_cast<Web::UIEvents::MouseButton>(buttons);
+        enqueue_input_event(move(event));
+    }
+
+    // Starts the scroll the finger asks for once the page has had its say on the touch, or has taken too long to.
+    void scroll_if_page_allows(bool timed_out = false)
+    {
+        if (!m_awaiting_scroll || !m_active_touch.has_value())
+            return;
+        if (m_page_owns_touch) {
+            m_awaiting_scroll = false;
+            return;
+        }
+        if (!timed_out && (!m_page_reported_start || m_cancelable_moves_reported < m_cancelable_moves_needed))
+            return;
+        m_awaiting_scroll = false;
+        m_is_scrolling = true;
+        send_mouse_event(Web::MouseEvent::Type::MouseWheel, m_touch_position, m_touch_last - m_touch_position, Web::ScrollGesturePhase::Ongoing);
+        m_touch_last = m_touch_position;
+    }
+
+    void touch_answer_timed_out()
+    {
+        if (m_awaiting_scroll)
+            scroll_if_page_allows(true);
+        // NB: The page is busy or the touch went to a frame that cannot answer: the tap still happens.
+        send_pending_tap();
+    }
+
     void send_mouse_event(Web::MouseEvent::Type type, Gfx::IntPoint position, Gfx::IntPoint wheel_delta = {}, Web::ScrollGesturePhase phase = Web::ScrollGesturePhase::None)
     {
         auto is_button_event = type == Web::MouseEvent::Type::MouseDown || type == Web::MouseEvent::Type::MouseUp;
@@ -285,9 +428,26 @@ private:
     Gfx::IntPoint m_touch_start;
     Gfx::IntPoint m_touch_last;
     bool m_is_scrolling { false };
-    // This touch is passed on as a mouse with its button held (see handle_touch).
-    bool m_touch_is_mouse { false };
+    enum class TouchMode {
+        Classic,
+        Mouse,
+        TouchEvents,
+    };
+    TouchMode m_touch_mode { TouchMode::Classic };
+    // The finger's latest position, which a scroll the page has yet to allow catches up to.
+    Gfx::IntPoint m_touch_position;
+    // A mouse button held for a touch in fullscreen.
     bool m_mouse_held { false };
+    // Touch events: what the page has said about this touch so far.
+    bool m_page_reported_start { false };
+    bool m_page_owns_touch { false };
+    bool m_awaiting_scroll { false };
+    unsigned m_cancelable_moves_sent { 0 };
+    unsigned m_cancelable_moves_needed { 0 };
+    unsigned m_cancelable_moves_reported { 0 };
+    Optional<Gfx::IntPoint> m_pending_tap;
+    // How long the page may take to say what became of a touch before the front end goes on without it.
+    RefPtr<Core::Timer> m_touch_answer_timer = Core::Timer::create_single_shot(250, [this] { touch_answer_timed_out(); });
 
     Core::ElapsedTimer m_frame_timer;
     i64 m_frames_presented { 0 };
@@ -515,17 +675,24 @@ private:
         };
         view->on_load_start = [this, id] { m_host.send_flags(id, LB_EMBED_LOADING, true); };
         view->on_load_finish = [this, id](URL::URL const&) { m_host.send_flags(id, LB_EMBED_LOADING, false); };
-        view->on_top_level_navigation_commit = [this, id] { m_host.send_flags(id, LB_EMBED_COMMIT, true); };
+        view->on_top_level_navigation_commit = [this, id, raw_view] {
+            raw_view->page_committed();
+            m_host.send_flags(id, LB_EMBED_COMMIT, true);
+        };
         view->on_input_method_state_change = [this, id, raw_view] {
             m_host.send_flags(id, LB_EMBED_TEXT_INPUT, raw_view->input_method_state().is_enabled);
         };
         view->on_web_content_crashed = [this, id](auto) { m_host.send_flags(id, LB_EMBED_CRASHED, true); };
 
         // The app's scripts in the page talk back through the console, the one way a page reaches us unasked.
-        view->on_console_message = [this, id](WebView::ConsoleOutput output) {
+        view->on_console_message = [this, id, raw_view](WebView::ConsoleOutput output) {
             auto const* log = output.output.get_pointer<WebView::ConsoleLog>();
             if (!log || log->arguments.size() != 2 || !log->arguments[0].is_string() || !log->arguments[1].is_string())
                 return;
+            if (log->arguments[0].as_string() == Pacific::touch_message_marker) {
+                raw_view->handle_touch_report(log->arguments[1].as_string().bytes_as_string_view());
+                return;
+            }
             if (log->arguments[0].as_string() != LB_EMBED_PAGE_MESSAGE_MARKER ""sv)
                 return;
             m_host.send_text(id, LB_EMBED_PAGE_MESSAGE, log->arguments[1].as_string().bytes_as_string_view());
@@ -778,6 +945,7 @@ private:
     void apply_user_scripts()
     {
         Vector<ByteString> scripts;
+        scripts.append(Pacific::touch_events_script);
         if (m_block_cookie_banners && !autoconsent_source().is_empty())
             scripts.append(autoconsent_source());
         WebView::Application::the().set_user_scripts(move(scripts));
