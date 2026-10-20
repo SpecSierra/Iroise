@@ -148,6 +148,7 @@ public:
                 // NB: Before the clock starts anew: the steps of a scroll still being replayed are timed by it.
                 flush_scroll_steps();
                 m_touch_clock.start();
+                m_touch_number = (m_touch_number + 1) % 8;
                 m_touch_samples.clear();
                 m_touch_samples.append({ 0, position });
                 log_touch("down"sv);
@@ -195,7 +196,7 @@ public:
                     m_slop_sample = m_touch_samples.size() - 1;
                     if (page_touches_may_block_scrolling) {
                         log_touch("waiting for the page to scroll"sv);
-                        m_touch_answer_timer->restart();
+                        m_touch_answer_timer->restart(scroll_answer_timeout_ms);
                     } else {
                         scroll_if_page_allows(true);
                     }
@@ -227,7 +228,7 @@ public:
                 return;
             }
             m_pending_tap = position;
-            m_touch_answer_timer->restart();
+            m_touch_answer_timer->restart(tap_answer_timeout_ms);
             return;
         }
 
@@ -253,8 +254,9 @@ public:
         send_tap(position);
     }
 
-    // What the page made of the touch events (TouchEvents.h): "start <cancelled>", "move <cancelled> <count>",
-    // "end <cancelled>", or "listening" when it first listens for touches.
+    // What the page made of the touch events (TouchEvents.h): "start <touch> <cancelled>",
+    // "move <touch> <cancelled> <count>", "end <touch> <cancelled>", or "listening <may block scrolling> [<by what>]"
+    // when it first listens for touches.
     // NB: Any script in the page can send these. They only decide what the page itself gets from the finger.
     void handle_touch_report(StringView report)
     {
@@ -262,22 +264,29 @@ public:
         if (parts.is_empty())
             return;
         if (parts[0] == "listening"sv) {
+            if (s_log_touch)
+                warnln("pacific: touch: the page {}", report);
             page_listens_for_touches = true;
             if (parts.size() >= 2 && parts[1] == "1"sv)
                 page_touches_may_block_scrolling = true;
             return;
         }
-        if (m_touch_mode == TouchMode::TouchEvents)
-            log_touch(report);
-        if (m_touch_mode != TouchMode::TouchEvents || parts.size() < 2)
+        if (m_touch_mode != TouchMode::TouchEvents || parts.size() < 3)
             return;
-        bool cancelled = parts[1] == "1"sv;
+        // A report on a touch before this one comes too late to matter.
+        if (parts[1].to_number<unsigned>().value_or(8) != m_touch_number) {
+            if (s_log_touch)
+                log_touch(ByteString::formatted("late: {}", report));
+            return;
+        }
+        log_touch(report);
+        bool cancelled = parts[2] == "1"sv;
         if (parts[0] == "start"sv) {
             m_page_reported_start = true;
             m_page_owns_touch |= cancelled;
-        } else if (parts[0] == "move"sv && parts.size() >= 3) {
+        } else if (parts[0] == "move"sv && parts.size() >= 4) {
             m_page_owns_touch |= cancelled;
-            m_cancelable_moves_reported = max(m_cancelable_moves_reported, parts[2].to_number<unsigned>().value_or(0));
+            m_cancelable_moves_reported = max(m_cancelable_moves_reported, parts[3].to_number<unsigned>().value_or(0));
         } else if (parts[0] == "end"sv) {
             if (m_pending_tap.has_value() && !cancelled && !m_page_owns_touch) {
                 log_touch("taps"sv);
@@ -414,7 +423,7 @@ private:
         event.type = type;
         event.position = position.to_type<Web::DevicePixels>();
         event.screen_position = position.to_type<Web::DevicePixels>();
-        unsigned buttons = Pacific::touch_carrier_button | (flagged ? Pacific::touch_flag_button : 0);
+        unsigned buttons = Pacific::touch_carrier_button | (flagged ? Pacific::touch_flag_button : 0) | (m_touch_number << Pacific::touch_number_shift);
         if (type == Web::MouseEvent::Type::MouseDown || type == Web::MouseEvent::Type::MouseUp) {
             event.button = Web::UIEvents::MouseButton::Primary;
             event.click_count = 1;
@@ -589,8 +598,13 @@ private:
     Vector<ScrollStep> m_scroll_steps;
     i64 m_scroll_delay_ms { 0 };
     RefPtr<Core::Timer> m_scroll_step_timer = Core::Timer::create_single_shot(1, [this] { pump_scroll_steps(); });
-    // How long the page may take to say what became of a touch before the front end goes on without it.
-    RefPtr<Core::Timer> m_touch_answer_timer = Core::Timer::create_single_shot(250, [this] { touch_answer_timed_out(); });
+    // The touch's number, which the page's reports carry back.
+    unsigned m_touch_number { 0 };
+    // How long the page may take to say what became of a touch before the front end goes on without it: whether
+    // a finger that travels scrolls (as long as Chrome on Android waits), and whether a tap is one.
+    static constexpr int scroll_answer_timeout_ms = 100;
+    static constexpr int tap_answer_timeout_ms = 250;
+    RefPtr<Core::Timer> m_touch_answer_timer = Core::Timer::create_single_shot(tap_answer_timeout_ms, [this] { touch_answer_timed_out(); });
 
     Core::ElapsedTimer m_frame_timer;
     i64 m_frames_presented { 0 };

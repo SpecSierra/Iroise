@@ -23,6 +23,9 @@ namespace Pacific {
 static constexpr auto touch_message_marker = "\001pacific-touch"sv;
 static constexpr unsigned touch_carrier_button = 16; // Forward
 static constexpr unsigned touch_flag_button = 8;     // Backward: on the release, touchcancel instead of touchend
+// Three more bits, which no button has, number the touch (modulo 8), and the page's reports carry the number back:
+// a busy page can answer a touch after the next has begun.
+static constexpr unsigned touch_number_shift = 5;
 
 static constexpr auto touch_events_script = R"js((() => {
     "use strict";
@@ -43,11 +46,23 @@ static constexpr auto touch_events_script = R"js((() => {
     // engine as in other browsers.)
     let listening = false;
     let blocking = false;
-    const report = () => log(marker, "listening " + (blocking ? 1 : 0));
-    const listen = mayBlock => {
+    let blocker = "";
+    const report = () => log(marker, "listening " + (blocking ? 1 : 0) + (blocker ? " " + blocker : ""));
+    const describe = (target, type) => {
+        if (target === window || target === document)
+            return type + " on the " + (target === window ? "window" : "document");
+        const element = target instanceof Element ? target : null;
+        if (!element)
+            return type;
+        return type + " on " + element.localName + (element.id ? "#" + element.id : "")
+            + (typeof element.className === "string" && element.className ? "." + element.className.trim().split(/\s+/).slice(0, 3).join(".") : "");
+    };
+    const listen = (mayBlock, target, type) => {
         if (listening && (blocking || !mayBlock))
             return;
         listening = true;
+        if (mayBlock && !blocking)
+            blocker = describe(target, type);
         blocking = blocking || mayBlock;
         report();
     };
@@ -72,7 +87,7 @@ static constexpr auto touch_events_script = R"js((() => {
         writable: true,
         value: function addEventListener(type, listener, options) {
             if (listener && types.includes(String(type)))
-                listen(mayBlock(this, String(type), options));
+                listen(mayBlock(this, String(type), options), this, String(type));
             return add.call(this, type, listener, options);
         },
     });
@@ -105,7 +120,7 @@ static constexpr auto touch_events_script = R"js((() => {
                     }
                     own[name] = typeof value === "function" ? value : null;
                     if (own[name])
-                        listen(mayBlock(this, type));
+                        listen(mayBlock(this, type), this, "on" + type);
                 },
             });
         }
@@ -176,6 +191,7 @@ static constexpr auto touch_events_script = R"js((() => {
     };
 
     const isCarrier = event => event.isTrusted && (event.buttons & carrier) !== 0;
+    const number = event => (event.buttons >> 5) & 7;
     const hide = event => {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -187,7 +203,7 @@ static constexpr auto touch_events_script = R"js((() => {
         hide(event);
         active = { identifier: nextIdentifier++, target: event.composedPath()[0] || event.target, owned: false, moves: 0 };
         active.owned = fire("touchstart", true, event);
-        log(marker, "start " + (active.owned ? 1 : 0));
+        log(marker, "start " + number(event) + " " + (active.owned ? 1 : 0));
     }, capture);
     add.call(window, "pointermove", event => {
         if (!isCarrier(event))
@@ -199,7 +215,7 @@ static constexpr auto touch_events_script = R"js((() => {
         if (fire("touchmove", cancelable, event) && cancelable)
             active.owned = true;
         if (cancelable)
-            log(marker, "move " + (active.owned ? 1 : 0) + " " + ++active.moves);
+            log(marker, "move " + number(event) + " " + (active.owned ? 1 : 0) + " " + ++active.moves);
     }, capture);
     add.call(window, "pointerup", event => {
         if (!isCarrier(event))
@@ -211,7 +227,7 @@ static constexpr auto touch_events_script = R"js((() => {
             cancelled = fire(cancel ? "touchcancel" : "touchend", !cancel, event) || active.owned;
         }
         active = null;
-        log(marker, "end " + (cancelled ? 1 : 0));
+        log(marker, "end " + number(event) + " " + (cancelled ? 1 : 0));
     }, capture);
     // The rest of the press: the mouse events the pointer events would bring, and the click it ends in.
     for (const type of ["pointerover", "pointerout", "pointerenter", "pointerleave", "pointercancel", "mousedown",
