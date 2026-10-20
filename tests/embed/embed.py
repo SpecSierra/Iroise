@@ -71,8 +71,11 @@ class Engine:
         listener = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
         listener.bind(path)
         listener.listen(1)
+        # NB: A runtime directory of its own too: CI's service user has none, and the engine would make one in /run.
+        runtime = os.path.join(self.directory, 'runtime')
+        os.makedirs(runtime, mode=0o700)
         environment = dict(os.environ, LADYBIRD_SFOS_EMBED_SOCKET=path, LADYBIRD_UNSAFE_ALLOW_MISSING_LANDLOCK='1',
-            HOME=self.home, XDG_CACHE_HOME=self.home + '/.cache', XDG_CONFIG_HOME=self.home + '/.config',
+            XDG_RUNTIME_DIR=runtime, HOME=self.home, XDG_CACHE_HOME=self.home + '/.cache', XDG_CONFIG_HOME=self.home + '/.config',
             XDG_DATA_HOME=self.home + '/.local/share', XDG_DOWNLOAD_DIR=self.downloads)
         self.log_path = os.path.join(self.directory, 'engine.log')
         with open(self.log_path, 'w') as log:
@@ -81,6 +84,8 @@ class Engine:
         listener.settimeout(30)
         try:
             self.connection, _ = listener.accept()
+        except socket.timeout:
+            raise TimeoutError('the engine did not connect within 30 s:\n' + self.log()[-4000:]) from None
         finally:
             listener.close()
         self.messages = []
