@@ -43,3 +43,7 @@ jobs:
           path: dist/rpm/harbour-pacific-*.rpm
           retention-days: 7
           if-no-files-found: error
+
+      # After keeping it, so that a package the store would refuse can still be looked at.
+      - name: Check against the store's rules
+        run: scripts/validate-rpm.sh dist/rpm/harbour-pacific-*-${{ github.run_number }}.aarch64.rpm
