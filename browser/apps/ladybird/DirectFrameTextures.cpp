@@ -18,6 +18,9 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+#ifndef GL_BGRA_EXT
+#    define GL_BGRA_EXT 0x80E1
+#endif
 #ifndef EGL_NATIVE_BUFFER_HYBRIS
 #    define EGL_NATIVE_BUFFER_HYBRIS 0x3140
 #endif
@@ -107,15 +110,44 @@ DirectFrameTextures::~DirectFrameTextures()
 {
     for (Texture& texture : m_textures)
         release(texture);
+    dropUploaded();
+}
+
+bool DirectFrameTextures::inOurContext() const
+{
+    return m_context && QOpenGLContext::currentContext() == m_context;
+}
+
+void DirectFrameTextures::deleteTexture(uint textureId)
+{
+    // NB: In any other context the name is another texture's, or nobody's. A context that is gone took its
+    //     textures with it.
+    if (textureId && inOurContext())
+        m_context->functions()->glDeleteTextures(1, &textureId);
+}
+
+void DirectFrameTextures::adoptCurrentContext()
+{
+    QOpenGLContext* current = QOpenGLContext::currentContext();
+    if (m_hadContext && current && m_context == current)
+        return;
+    if (m_hadContext) {
+        // NB: Binding one of our names now would bind a texture of the scene graph's: the page's pixels would
+        //     land on the app's background, and deleting it would take that texture away.
+        m_context = nullptr;
+        for (Texture& texture : m_textures)
+            release(texture);
+        m_textures.clear();
+        dropUploaded();
+    }
+    m_context = current;
+    m_hadContext = true;
 }
 
 void DirectFrameTextures::release(Texture& texture)
 {
     delete texture.texture;
-    if (texture.textureId) {
-        if (QOpenGLContext* context = QOpenGLContext::currentContext())
-            context->functions()->glDeleteTextures(1, &texture.textureId);
-    }
+    deleteTexture(texture.textureId);
     if (texture.image)
         hybris().destroyImage(hybris().display, texture.image);
     if (texture.buffer)
@@ -217,6 +249,7 @@ bool DirectFrameTextures::import(QQuickWindow* window, const LadybirdFrame& fram
 
 QSGTexture* DirectFrameTextures::textureFor(QQuickWindow* window, const LadybirdFrame& frame)
 {
+    adoptCurrentContext();
     if (!hybris().usable || frame.bufferFd < 0 || !frame.bufferId)
         return nullptr;
 
@@ -262,4 +295,57 @@ QSGTexture* DirectFrameTextures::textureFor(QQuickWindow* window, const Ladybird
     m_textures.insert(frame.bufferId, texture);
     ++m_generation;
     return texture.texture;
+}
+
+void DirectFrameTextures::dropUploaded()
+{
+    if (!m_uploaded && !m_uploadedId)
+        return;
+    delete m_uploaded;
+    deleteTexture(m_uploadedId);
+    m_uploaded = nullptr;
+    m_uploadedId = 0;
+    m_uploadedTextureSize = QSize();
+    m_uploadedPaintedSize = QSize();
+    m_uploadedSerial = 0;
+    ++m_generation;
+}
+
+QSGTexture* DirectFrameTextures::upload(QQuickWindow* window, const LadybirdFrame& frame)
+{
+    adoptCurrentContext();
+    if (!frame.pixels || (m_uploaded && frame.serial == m_uploadedSerial))
+        return m_uploaded;
+
+    QOpenGLContext* context = QOpenGLContext::currentContext();
+    QOpenGLFunctions* gl = context->functions();
+    // NB: GLES 2 cannot be told the row length, so upload whole rows including the padding at their end and
+    //     leave the padding out with the node's source rectangle.
+    QSize textureSize(frame.pitch / 4, frame.bufferSize.height());
+    // The engine's pixels are BGRA. Without this extension the page would be shown with red and blue swapped.
+    static const bool hasBgra = context->hasExtension(QByteArrayLiteral("GL_EXT_texture_format_BGRA8888"));
+    GLenum format = hasBgra ? GL_BGRA_EXT : GL_RGBA;
+
+    if (!m_uploaded || textureSize != m_uploadedTextureSize) {
+        // A texture of another size is a new texture, which changes the generation: see generation().
+        dropUploaded();
+        gl->glGenTextures(1, &m_uploadedId);
+        gl->glBindTexture(GL_TEXTURE_2D, m_uploadedId);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+        gl->glTexImage2D(GL_TEXTURE_2D, 0, format, textureSize.width(), textureSize.height(), 0, format, GL_UNSIGNED_BYTE, frame.pixels);
+        m_uploadedTextureSize = textureSize;
+        // We delete the GL texture ourselves, and only in its own context.
+        m_uploaded = window->createTextureFromId(m_uploadedId, textureSize);
+        ++m_generation;
+    } else {
+        gl->glBindTexture(GL_TEXTURE_2D, m_uploadedId);
+        gl->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, textureSize.width(), textureSize.height(), format, GL_UNSIGNED_BYTE, frame.pixels);
+    }
+    m_uploadedSerial = frame.serial;
+    m_uploadedPaintedSize = frame.paintedSize;
+    window->resetOpenGLState();
+    return m_uploaded;
 }

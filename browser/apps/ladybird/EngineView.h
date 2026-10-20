@@ -134,6 +134,10 @@ protected:
     void sendToEngine(lb_embed_message_type type, int a = 0, int b = 0, int c = 0, int d = 0, const QByteArray& text = QByteArray());
     bool hasEngineView() const { return m_view != 0; }
 
+private Q_SLOTS:
+    // Qt Quick calls a slot of this name on the render thread (see EngineView.cpp).
+    void invalidateSceneGraph();
+
 private:
     void engineRestarted();
     void ensureEngineView();
@@ -183,10 +187,6 @@ private:
     quint64 m_directGeneration = 0;
     bool m_loggedPath = false;
     bool m_coverNodeShown = false;
-    QSGTexture* m_texture = nullptr;
-    uint m_textureId = 0;
-    QSize m_textureSize;
-    quint64 m_uploadedSerial = 0;
 };
 
 class EngineViewLoadRequest : public QObject {

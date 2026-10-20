@@ -12,16 +12,11 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLineF>
-#include <QOpenGLContext>
-#include <QOpenGLFunctions>
 #include <QQuickWindow>
 #include <QSGSimpleRectNode>
 #include <QSGSimpleTextureNode>
 #include <QTouchEvent>
 
-#ifndef GL_BGRA_EXT
-#    define GL_BGRA_EXT 0x80E1
-#endif
 
 // How long a finger rests before it is a long press, and how far it may wander meanwhile (the engine's own
 // distance for telling a tap from a scroll).
@@ -365,86 +360,39 @@ QSGNode* EngineView::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*)
     }
     QSGSimpleTextureNode* node = static_cast<QSGSimpleTextureNode*>(oldNode);
 
-    // Where the GPU can sample the engine's buffer as it is, the frame is shown from there and nothing is copied.
     if (!m_directTextures)
         m_directTextures = new DirectFrameTextures;
     for (quint64 bufferId : m_buffersGone)
         m_directTextures->forget(bufferId);
     m_buffersGone.clear();
-    QSGTexture* direct = m_frame.pixels ? m_directTextures->textureFor(window(), m_frame) : nullptr;
+
+    // Where the GPU can sample the engine's buffer as it is, the frame is shown from there and nothing is copied.
+    // Otherwise its pixels are uploaded. Without a frame (its buffer is gone), the last one uploaded stays.
+    QSGTexture* texture = m_frame.pixels ? m_directTextures->textureFor(window(), m_frame) : nullptr;
+    QSizeF painted = QSizeF(m_frame.paintedSize);
+    if (m_frame.pixels && !m_loggedPath) {
+        m_loggedPath = true;
+        qWarning("EngineView: frames are %s", texture ? "shown from the engine's buffers, without a copy" : "uploaded to a texture");
+    }
+    if (texture) {
+        m_directTextures->dropUploaded();
+    } else if (m_frame.pixels) {
+        texture = m_directTextures->upload(window(), m_frame);
+    } else {
+        texture = m_directTextures->uploaded();
+        painted = QSizeF(m_directTextures->uploadedSize());
+    }
+
     if (m_directTextures->generation() != m_directGeneration) {
-        // NB: As with the uploaded texture below, a node must not carry texture coordinates over to a texture
-        //     that happens to be created at the address of one that was deleted.
+        // NB: The node works out its texture coordinates when it is given a texture or a source rectangle that
+        //     differs from the one it has. A new texture can land at the address of one that was deleted, with the
+        //     same source rectangle, and the node would then keep coordinates for the old one's size and show the
+        //     page stretched. So a new texture gets a new node.
         m_directGeneration = m_directTextures->generation();
         delete node;
         node = nullptr;
     }
-    if (m_frame.pixels && !m_loggedPath) {
-        m_loggedPath = true;
-        qWarning("EngineView: frames are %s", direct ? "shown from the engine's buffers, without a copy" : "uploaded to a texture");
-    }
-    if (direct) {
-        if (m_texture) {
-            delete node;
-            node = nullptr;
-            delete m_texture;
-            m_texture = nullptr;
-            m_textureId = 0;
-            m_textureSize = QSize();
-        }
-        if (!node) {
-            node = new QSGSimpleTextureNode;
-            node->setFiltering(QSGTexture::Linear);
-        }
-        node->setTexture(direct);
-        node->setSourceRect(QRectF(QPointF(0, 0), QSizeF(m_frame.paintedSize)));
-        node->setRect(QRectF(QPointF(0, 0), QSizeF(m_frame.paintedSize)));
-        node->markDirty(QSGNode::DirtyMaterial);
-        return node;
-    }
-
-    if (!m_frame.pixels && !m_texture) {
-        delete node;
-        return nullptr;
-    }
-
-    if (m_frame.pixels && m_frame.serial != m_uploadedSerial) {
-        QOpenGLContext* context = QOpenGLContext::currentContext();
-        QOpenGLFunctions* gl = context->functions();
-        // NB: GLES 2 cannot be told the row length, so upload whole rows including the padding at their end and
-        //     leave the padding out with the node's source rectangle.
-        QSize textureSize(m_frame.pitch / 4, m_frame.bufferSize.height());
-        // The engine's pixels are BGRA. Without this extension the page would be shown with red and blue swapped.
-        static const bool hasBgra = context->hasExtension(QByteArrayLiteral("GL_EXT_texture_format_BGRA8888"));
-        GLenum format = hasBgra ? GL_BGRA_EXT : GL_RGBA;
-
-        if (!m_textureId || textureSize != m_textureSize) {
-            // NB: The node works out its texture coordinates when it is given a texture or a source rectangle that
-            //     differs from the one it has. A new texture of another size can land at the old one's address
-            //     with the same source rectangle, and the node would then keep coordinates for the old size and
-            //     show the page stretched. So a new texture gets a new node.
-            delete node;
-            node = nullptr;
-            delete m_texture;
-            m_texture = nullptr;
-            gl->glGenTextures(1, &m_textureId);
-            gl->glBindTexture(GL_TEXTURE_2D, m_textureId);
-            gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-            gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
-            gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-            gl->glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-            gl->glTexImage2D(GL_TEXTURE_2D, 0, format, textureSize.width(), textureSize.height(), 0, format, GL_UNSIGNED_BYTE, m_frame.pixels);
-            m_textureSize = textureSize;
-            m_texture = window()->createTextureFromId(m_textureId, textureSize, QQuickWindow::TextureOwnsGLTexture);
-        } else {
-            gl->glBindTexture(GL_TEXTURE_2D, m_textureId);
-            gl->glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, textureSize.width(), textureSize.height(), format, GL_UNSIGNED_BYTE, m_frame.pixels);
-        }
-        m_uploadedSerial = m_frame.serial;
-        window()->resetOpenGLState();
-    }
-
-    if (!m_texture) {
+    if (!texture) {
         delete node;
         return nullptr;
     }
@@ -452,8 +400,7 @@ QSGNode* EngineView::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*)
         node = new QSGSimpleTextureNode;
         node->setFiltering(QSGTexture::Linear);
     }
-    QSizeF painted = m_frame.pixels ? QSizeF(m_frame.paintedSize) : QSizeF(m_textureSize);
-    node->setTexture(m_texture);
+    node->setTexture(texture);
     node->setSourceRect(QRectF(QPointF(0, 0), painted));
     node->setRect(QRectF(QPointF(0, 0), painted));
     node->markDirty(QSGNode::DirtyMaterial);
@@ -462,16 +409,23 @@ QSGNode* EngineView::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*)
 
 void EngineView::releaseResources()
 {
-    // NB: The scene graph deletes textures it was given through a node only on its own thread.
-    if (m_texture)
-        m_texture->deleteLater();
-    m_texture = nullptr;
-    m_textureId = 0;
-    m_uploadedSerial = 0;
+    // NB: The textures live on the render thread and are let go of there.
     if (m_directTextures)
         m_directTextures->deleteLater();
     m_directTextures = nullptr;
     m_directGeneration = 0;
+}
+
+// Called by the scene graph on the render thread, with its GL context still current, before it lets go of that
+// context: Silica does so while the app is in the background. Our textures go with it, now, and the frame is
+// shown anew from the engine's buffers when the app comes back.
+void EngineView::invalidateSceneGraph()
+{
+    delete m_directTextures;
+    m_directTextures = nullptr;
+    m_directGeneration = 0;
+    // NB: The scene graph has deleted our node.
+    m_coverNodeShown = false;
 }
 
 void EngineView::abandonTouch()
