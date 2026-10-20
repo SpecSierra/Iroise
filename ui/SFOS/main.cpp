@@ -140,7 +140,11 @@ public:
                 send_mouse_event(Web::MouseEvent::Type::MouseDown, position);
                 m_mouse_held = true;
             } else {
+                ++m_touch_serial;
+                m_touch_may_scroll = true;
                 send_touch_event(Web::MouseEvent::Type::TouchStart, position);
+                if (s_touch_events)
+                    m_touch_starts_awaiting_page.append(m_touch_serial);
             }
             return;
         }
@@ -164,9 +168,10 @@ public:
         if (phase == Motion) {
             send_touch_event(Web::MouseEvent::Type::TouchMove, position);
             auto travelled = position - m_touch_start;
-            if (!m_is_scrolling && max(abs(travelled.x()), abs(travelled.y())) > touch_slop)
+            if (!m_is_scrolling && m_touch_may_scroll && max(abs(travelled.x()), abs(travelled.y())) > touch_slop)
                 m_is_scrolling = true;
-            if (m_is_scrolling) {
+            // NB: A touchstart's word that comes once the scroll began stops it there.
+            if (m_is_scrolling && m_touch_may_scroll) {
                 // The content follows the finger, so it scrolls the opposite way.
                 send_mouse_event(Web::MouseEvent::Type::MouseWheel, position, m_touch_last - position, Web::ScrollGesturePhase::Ongoing);
                 m_touch_last = position;
@@ -198,6 +203,13 @@ public:
     // The page has handled an input event. Its touchend decides whether a tap is one.
     void touch_event_finished(Web::MouseEvent const& event, Web::EventResult result)
     {
+        // A touchstart the page cancelled, or whose touch-action allows no panning (a map's), scrolls nothing.
+        if (event.type == Web::MouseEvent::Type::TouchStart && !m_touch_starts_awaiting_page.is_empty()) {
+            auto serial = m_touch_starts_awaiting_page.take_first();
+            if (serial == m_touch_serial && result == Web::EventResult::Cancelled)
+                m_touch_may_scroll = false;
+            return;
+        }
         if (event.type != Web::MouseEvent::Type::TouchEnd || m_touch_ends_awaiting_page.is_empty())
             return;
         auto touch_end = m_touch_ends_awaiting_page.take_first();
@@ -348,6 +360,11 @@ private:
     };
     Vector<TouchEndAwaitingPage> m_touch_ends_awaiting_page;
     bool m_sending_tap { false };
+    // Which touch this is, and the touchstarts the page has yet to finish. A touch scrolls unless its touchstart says
+    // otherwise.
+    u64 m_touch_serial { 0 };
+    Vector<u64> m_touch_starts_awaiting_page;
+    bool m_touch_may_scroll { true };
     // This touch is passed on as a mouse with its button held (see handle_touch).
     bool m_touch_is_mouse { false };
     bool m_mouse_held { false };

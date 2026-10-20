@@ -28,7 +28,15 @@ and the body are passive unless they say otherwise, so on most pages nothing eve
 Chrome: `pointerover`, `pointerenter` and `pointerdown`, then `pointermove`, then `pointerup`, `pointerout` and
 `pointerleave`. The pointer stays with the element it went down on (implicit capture), and once the finger scrolls
 it gets `pointercancel` and fires no more. The mouse events of a tap fire no pointer events of their own, and a
-cancelled `pointerdown` keeps its `mousedown` and `mouseup` from firing (its `click` still does).
+cancelled `pointerdown` keeps its `mousedown` and `mouseup` from firing (its `click` still does). A pointer whose
+element leaves the document goes on at the document, so that a page counting its pointers there (a map's) still hears
+it go up.
+
+**`touch-action` decides what a finger may pan.** At `touchstart`, the engine works out what `touch-action` allows
+on the element the touch began on and every element around it. Where it allows no panning at all (`none`, as on a
+map), the result of the `touchstart` tells the front end, which then scrolls nothing for that finger. Where it allows
+one direction only (`pan-y`, as on a carousel), the direction the finger first moves in decides: the other direction
+is the page's, and its pointer is not cancelled.
 
 **The tap's mouse events come after the page's say.** The front end sends the mouse events of a tap only once
 WebContent has finished `TouchEnd`, and only if the page cancelled neither `touchstart` nor `touchend`. It learns that
@@ -60,7 +68,10 @@ touch, and a tap's mouse events without their own). The front end sends touches 
 
 ## Not yet
 
-- `touch-action`, which Ladybird parses.
+- `touch-action` is decided at `touchstart` and by the first scroll step, not by the compositor, which knows only
+  blocking listeners. Where no blocking listener holds the steps back, a `pan-y` area on a page that can scroll
+  sideways still scrolls it sideways (its pointer goes on regardless). The compositor would need `touch-action`
+  areas next to its blocking-listener areas.
 - `setPointerCapture`, which Ladybird does not implement yet (a touch's pointer keeps its own element anyway).
 - The mouse boundary events of a tap (`mouseover` and the rest) still bring `pointerover`, `pointerenter`,
   `pointerout` and `pointerleave` of type `"mouse"`: Ladybird fires those where it moves the hover, in
