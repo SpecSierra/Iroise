@@ -24,6 +24,12 @@ The page decides by its touch events instead: a cancelled `touchstart` or `touch
 scrolling. Once a step has scrolled, `touchmove` can no longer be cancelled. Listeners on the window, the document
 and the body are passive unless they say otherwise, so on most pages nothing ever waits.
 
+**Touches are pointers too.** Each touch fires pointer events of type `"touch"` before its touch events, as in
+Chrome: `pointerover`, `pointerenter` and `pointerdown`, then `pointermove`, then `pointerup`, `pointerout` and
+`pointerleave`. The pointer stays with the element it went down on (implicit capture), and once the finger scrolls
+it gets `pointercancel` and fires no more. The mouse events of a tap fire no pointer events of their own, and a
+cancelled `pointerdown` keeps its `mousedown` and `mouseup` from firing (its `click` still does).
+
 **The tap's mouse events come after the page's say.** The front end sends the mouse events of a tap only once
 WebContent has finished `TouchEnd`, and only if the page cancelled neither `touchstart` nor `touchend`. It learns that
 from the result of the input event (`on_finish_handling_mouse_event`).
@@ -47,13 +53,18 @@ The rest are hooks of a few lines each in Ladybird's own files:
 - Lists: `UIEvents/EventNames.h`, `HTML/GlobalEventHandlers.h`, `HTML/AttributeNames.h`, `idl_files.cmake`,
   `CMakeLists.txt`.
 
-They are two patches: `0021-web-touch-event-interfaces` (the interfaces and the lists) and `0022-web-touch-input`
-(the input path, the dispatch and the scroll decision). The front end sends touches in `ui/SFOS/main.cpp`;
+They are three patches: `0021-web-touch-event-interfaces` (the interfaces and the lists), `0022-web-touch-input`
+(the input path, the dispatch and the scroll decision) and `0023-web-touch-pointer-events` (the pointer events of a
+touch, and a tap's mouse events without their own). The front end sends touches in `ui/SFOS/main.cpp`;
 `PACIFIC_TOUCH_EVENTS=0` turns them off, which brings back the browser without touch events.
 
 ## Not yet
 
-- Pointer events for touches (`pointerType: "touch"`), and `touch-action`, which Ladybird parses.
+- `touch-action`, which Ladybird parses.
+- `setPointerCapture`, which Ladybird does not implement yet (a touch's pointer keeps its own element anyway).
+- The mouse boundary events of a tap (`mouseover` and the rest) still bring `pointerover`, `pointerenter`,
+  `pointerout` and `pointerleave` of type `"mouse"`: Ladybird fires those where it moves the hover, in
+  `Document.cpp`, and four more hooks there were not worth it yet.
 - More than one finger: a second finger cancels the touch and pinches, as before.
 - A page in fullscreen still gets the finger as a held mouse button, which Ladybird's own video controls need.
   Touches there wait on a bug of Ladybird's: hit testing does not go inside the fullscreen element.

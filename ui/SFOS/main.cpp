@@ -279,9 +279,13 @@ private:
 
     void send_tap(Gfx::IntPoint position)
     {
+        // NB: After touch events, these are the tap's compatibility mouse events, which fire no pointer events: the
+        //     touch's pointer events were the page's already (patches/0023).
+        m_sending_tap = true;
         send_mouse_event(Web::MouseEvent::Type::MouseMove, position);
         send_mouse_event(Web::MouseEvent::Type::MouseDown, position);
         send_mouse_event(Web::MouseEvent::Type::MouseUp, position);
+        m_sending_tap = false;
     }
 
     // Touch events are the engine's by our patches 0021 and 0022 (docs/TOUCH.md).
@@ -320,6 +324,7 @@ private:
         event.scroll_gesture_phase = phase;
         // NB: Every scroll this front end sends is a finger's.
         event.is_touch_scroll = s_touch_events && type == Web::MouseEvent::Type::MouseWheel;
+        event.is_touch_compatibility = s_touch_events && m_sending_tap;
         enqueue_input_event(move(event));
     }
 
@@ -342,6 +347,7 @@ private:
         MonotonicTime sent;
     };
     Vector<TouchEndAwaitingPage> m_touch_ends_awaiting_page;
+    bool m_sending_tap { false };
     // This touch is passed on as a mouse with its button held (see handle_touch).
     bool m_touch_is_mouse { false };
     bool m_mouse_held { false };

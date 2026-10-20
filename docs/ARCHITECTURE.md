@@ -172,6 +172,7 @@ Each patch in `patches/` does one thing:
 | 0020 | refuses a sandboxed process's unexpected `connect()` rather than killing the process |
 | 0021 | adds `Touch`, `TouchList`, `TouchEvent` and `ontouchstart` and the rest ([TOUCH.md](TOUCH.md)) |
 | 0022 | carries touches from the front end to the page, and lets touch listeners decide a finger's scroll ([TOUCH.md](TOUCH.md)) |
+| 0023 | fires a touch's pointer events, of type `"touch"` ([TOUCH.md](TOUCH.md)) |
 
 `patches/vcpkg-skia-gl-without-system-libraries.patch` builds Skia's OpenGL backend without linking a GL library,
 for the reason above.

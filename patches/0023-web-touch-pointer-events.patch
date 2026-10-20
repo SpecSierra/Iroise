@@ -1,0 +1,226 @@
+diff --git a/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp b/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp
+index a7bab01d..24730a3e 100644
+--- a/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp
++++ b/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp
+@@ -444,10 +444,12 @@ void EventLoop::process_input_events() const
+             auto const* handled_mouse_event = event.event.get_pointer<Web::MouseEvent>();
+             root->event_handler().set_handling_input_event_id(handled_mouse_event ? handled_mouse_event->id : 0);
+             page.set_handling_touch_scroll(handled_mouse_event && handled_mouse_event->is_touch_scroll);
++            page.set_handling_touch_compatibility(handled_mouse_event && handled_mouse_event->is_touch_compatibility);
+             ScopeGuard end_outdated_input = [&] {
+                 root->event_handler().set_handling_outdated_input(false);
+                 root->event_handler().set_handling_input_event_id(0);
+                 page.set_handling_touch_scroll(false);
++                page.set_handling_touch_compatibility(false);
+             };
+ 
+             Optional<RemoteInputEventTarget> remote_target;
+diff --git a/Libraries/LibWeb/Page/EventHandler.cpp b/Libraries/LibWeb/Page/EventHandler.cpp
+index 47e9df67..05449130 100644
+--- a/Libraries/LibWeb/Page/EventHandler.cpp
++++ b/Libraries/LibWeb/Page/EventHandler.cpp
+@@ -76,6 +76,7 @@
+ #include <LibWeb/UIEvents/KeyboardEvent.h>
+ #include <LibWeb/UIEvents/MouseEvent.h>
+ #include <LibWeb/UIEvents/PointerEvent.h>
++#include <LibWeb/UIEvents/PointerTypes.h>
+ #include <LibWeb/UIEvents/TextEvent.h>
+ #include <LibWeb/UIEvents/TouchEvent.h>
+ #include <LibWeb/UIEvents/WheelEvent.h>
+@@ -4287,7 +4288,12 @@ EventHandler::PointerEventDispatchResult EventHandler::dispatch_a_pointer_event_
+ 
+     // 3. Dispatch the pointer event.
+     m_last_dispatched_pointer_event_position = PointerEventPosition { coordinates, screen_position };
+-    bool pointer_event_cancelled = !node->dispatch_event(pointer_event);
++    // NB: The mouse events of a tap follow the pointer events of its touch, which the page has had already, and a
++    //     cancelled pointerdown of that touch keeps them from firing (Pacific, patches/0023).
++    auto& page = m_navigable->page();
++    bool pointer_event_cancelled = page.handling_touch_compatibility()
++        ? type == PointerEventType::PointerDown && page.touch_pointer_down_cancelled()
++        : !node->dispatch_event(pointer_event);
+ 
+     // 4. If the pointer event dispatched was pointerdown and event's canceled flag is set, then set the PREVENT MOUSE
+     //    EVENT flag for this pointerType.
+@@ -4642,6 +4648,44 @@ EventResult EventHandler::handle_touch(Web::MouseEvent::Type type, CSSPixelPoint
+     return dispatch_touch_event(type, visual_viewport_position, screen_position, modifiers);
+ }
+ 
++// https://w3c.github.io/pointerevents/
++// A pointer event of a touch (Pacific, patches/0023): a pointer of type "touch", captured by the element it went down on.
++static bool fire_touch_pointer_event(Utf16FlyString const& event_name, DOM::Node& target, GC::Ptr<HTML::WindowProxy> view, i32 identifier, CSSPixelPoint screen, CSSPixelPoint client, CSSPixelPoint page, unsigned modifiers, bool pressed)
++{
++    bool is_boundary_event = first_is_one_of(event_name, UIEvents::EventNames::pointerenter, UIEvents::EventNames::pointerleave);
++    UIEvents::PointerEventOptions options;
++    options.bubbles = !is_boundary_event;
++    options.cancelable = !is_boundary_event && event_name != UIEvents::EventNames::pointercancel;
++    options.composed = !is_boundary_event;
++    options.view = view;
++    options.ctrl_key = modifiers & UIEvents::Mod_Ctrl;
++    options.shift_key = modifiers & UIEvents::Mod_Shift;
++    options.alt_key = modifiers & UIEvents::Mod_Alt;
++    options.meta_key = modifiers & UIEvents::Mod_Super;
++    options.screen_x = screen.x().to_double();
++    options.screen_y = screen.y().to_double();
++    options.client_x = client.x().to_double();
++    options.client_y = client.y().to_double();
++    // https://w3c.github.io/pointerevents/#the-button-property
++    options.button = first_is_one_of(event_name, UIEvents::EventNames::pointerdown, UIEvents::EventNames::pointerup) ? 0 : -1;
++    options.buttons = pressed ? 1 : 0;
++    // NB: The mouse is pointer 0; a touch's pointer is its own.
++    options.pointer_id = 2 + identifier;
++    options.pointer_type = UIEvents::PointerTypes::Touch;
++    options.is_primary = true;
++    options.width = 24;
++    options.height = 24;
++    // https://w3c.github.io/pointerevents/#dom-pointerevent-pressure
++    // For hardware that does not support pressure, the value MUST be 0.5 when in the active buttons state and 0 otherwise.
++    options.pressure = pressed ? 0.5f : 0;
++    CSSPixelPoint offset;
++    if (auto* element = as_if<DOM::Element>(target))
++        offset = client - element->get_bounding_client_rect().location();
++    auto event = UIEvents::PointerEvent::create(event_name, move(options), page.x().to_double(), page.y().to_double(), offset.x().to_double(), offset.y().to_double(), HighResolutionTime::current_high_resolution_time(HTML::relevant_global_object(target)));
++    event->set_is_trusted(true);
++    return !target.dispatch_event(event);
++}
++
+ static bool has_touch_event_listener(DOM::EventTarget const& target)
+ {
+     return target.has_event_listener(UIEvents::EventNames::touchstart) || target.has_event_listener(UIEvents::EventNames::touchmove)
+@@ -4675,7 +4719,49 @@ EventResult EventHandler::dispatch_touch_event(Web::MouseEvent::Type type, CSSPi
+     bool cancelable = type == TouchStart || type == TouchEnd || (type == TouchMove && !page.touch_scrolls());
+ 
+     auto viewport_position = document->visual_viewport()->map_to_layout_viewport(visual_viewport_position);
+-    auto touch = UIEvents::Touch::create(m_touch.identifier, *target, screen_position, viewport_position, compute_mouse_event_page_offset(viewport_position), 12);
++    auto page_offset = compute_mouse_event_page_offset(viewport_position);
++
++    // The pointer events of the touch come first, as in other browsers. Once the finger scrolls, its pointer is
++    // cancelled, and fires no more.
++    // https://w3c.github.io/pointerevents/#the-pointercancel-event
++    auto fire_pointer_event = [&](Utf16FlyString const& name, bool pressed) {
++        return fire_touch_pointer_event(name, *target, m_navigable->active_window_proxy(), m_touch.identifier, screen_position, viewport_position, page_offset, modifiers, pressed);
++    };
++    Vector<GC::Ref<DOM::Node>> pointer_targets;
++    for (GC::Ptr<DOM::Node> node = target; node; node = node->flat_tree_parent()) {
++        if (is<DOM::Element>(*node))
++            pointer_targets.append(*node);
++    }
++    auto fire_pointer_boundary_events = [&](Utf16FlyString const& name, bool entering) {
++        // https://w3c.github.io/pointerevents/#the-pointerenter-event
++        // NB: Entering goes from the outermost element in, leaving from the target out.
++        for (size_t i = 0; i < pointer_targets.size(); ++i) {
++            auto& node = pointer_targets[entering ? pointer_targets.size() - 1 - i : i];
++            fire_touch_pointer_event(name, node, m_navigable->active_window_proxy(), m_touch.identifier, screen_position, viewport_position, page_offset, modifiers, entering);
++        }
++    };
++    auto end_pointer = [&](bool cancelled_by_scroll) {
++        m_touch.pointer_active = false;
++        fire_pointer_event(cancelled_by_scroll ? UIEvents::EventNames::pointercancel : UIEvents::EventNames::pointerup, false);
++        fire_pointer_event(UIEvents::EventNames::pointerout, false);
++        fire_pointer_boundary_events(UIEvents::EventNames::pointerleave, false);
++    };
++    if (type == TouchStart) {
++        m_touch.pointer_active = true;
++        fire_pointer_event(UIEvents::EventNames::pointerover, true);
++        fire_pointer_boundary_events(UIEvents::EventNames::pointerenter, true);
++        if (fire_pointer_event(UIEvents::EventNames::pointerdown, true))
++            page.touch_cancelled_pointer_down();
++    } else if (m_touch.pointer_active) {
++        if (type == TouchCancel || page.touch_scrolls())
++            end_pointer(true);
++        else if (type == TouchEnd)
++            end_pointer(false);
++        else
++            fire_pointer_event(UIEvents::EventNames::pointermove, true);
++    }
++
++    auto touch = UIEvents::Touch::create(m_touch.identifier, *target, screen_position, viewport_position, page_offset, 12);
+     Vector<GC::Ref<UIEvents::Touch>> touches;
+     if (type != TouchEnd && type != TouchCancel)
+         touches.append(touch);
+diff --git a/Libraries/LibWeb/Page/EventHandler.h b/Libraries/LibWeb/Page/EventHandler.h
+index 537dc22f..66cda492 100644
+--- a/Libraries/LibWeb/Page/EventHandler.h
++++ b/Libraries/LibWeb/Page/EventHandler.h
+@@ -250,6 +250,8 @@ private:
+         CSSPixelPoint nested_offset;
+         bool start_cancelled { false };
+         i32 identifier { 0 };
++        // Its pointer is down, and has not been cancelled by a scroll (patches/0023).
++        bool pointer_active { false };
+     };
+     TouchInProgress m_touch;
+     i32 m_next_touch_identifier { 0 };
+diff --git a/Libraries/LibWeb/Page/Page.h b/Libraries/LibWeb/Page/Page.h
+index f8408784..3ca25362 100644
+--- a/Libraries/LibWeb/Page/Page.h
++++ b/Libraries/LibWeb/Page/Page.h
+@@ -210,7 +210,15 @@ public:
+     {
+         m_touch_prevents_scrolling = false;
+         m_touch_scrolls = false;
++        m_touch_pointer_down_cancelled = false;
+     }
++    // The mouse event being handled is one of a tap's, which fire no pointer events (patches/0023).
++    void set_handling_touch_compatibility(bool handling) { m_handling_touch_compatibility = handling; }
++    bool handling_touch_compatibility() const { return m_handling_touch_compatibility; }
++    // https://w3c.github.io/pointerevents/#the-pointerdown-event
++    // A cancelled pointerdown of the touch keeps the mousedown and mouseup of its tap from firing.
++    void touch_cancelled_pointer_down() { m_touch_pointer_down_cancelled = true; }
++    bool touch_pointer_down_cancelled() const { return m_touch_pointer_down_cancelled; }
+     void touch_prevented_scrolling() { m_touch_prevents_scrolling = true; }
+     bool touch_scrolls() const { return m_touch_scrolls; }
+ 
+@@ -513,6 +521,8 @@ private:
+     bool m_handling_touch_scroll { false };
+     bool m_touch_prevents_scrolling { false };
+     bool m_touch_scrolls { false };
++    bool m_handling_touch_compatibility { false };
++    bool m_touch_pointer_down_cancelled { false };
+     // The navigable whose event handler reported the hovered link or tooltip the client shows, while it shows one. Only
+     // that handler ends the hover when its document is replaced; another navigable's replacement (an iframe the pointer
+     // once passed through, e.g.) leaves the report standing.
+diff --git a/Libraries/LibWebCommon/Page/InputEvent.cpp b/Libraries/LibWebCommon/Page/InputEvent.cpp
+index e8bf739d..00963a82 100644
+--- a/Libraries/LibWebCommon/Page/InputEvent.cpp
++++ b/Libraries/LibWebCommon/Page/InputEvent.cpp
+@@ -18,7 +18,7 @@ KeyEvent KeyEvent::clone_without_browser_data() const
+ 
+ MouseEvent MouseEvent::clone_without_browser_data() const
+ {
+-    return { type, position, screen_position, button, buttons, modifiers, wheel_delta_x, wheel_delta_y, wheel_tick_120ths_x, wheel_tick_120ths_y, wheel_delta_precision, scroll_gesture_phase, click_count, nullptr, async_scroll_performed_default_action, id, scrollbar_dragged_by_compositor, is_touch_scroll };
++    return { type, position, screen_position, button, buttons, modifiers, wheel_delta_x, wheel_delta_y, wheel_tick_120ths_x, wheel_tick_120ths_y, wheel_delta_precision, scroll_gesture_phase, click_count, nullptr, async_scroll_performed_default_action, id, scrollbar_dragged_by_compositor, is_touch_scroll, is_touch_compatibility };
+ }
+ 
+ }
+@@ -94,6 +94,7 @@ ErrorOr<void> IPC::encode(Encoder& encoder, Web::MouseEvent const& event)
+     TRY(encoder.encode(event.id));
+     TRY(encoder.encode(event.scrollbar_dragged_by_compositor));
+     TRY(encoder.encode(event.is_touch_scroll));
++    TRY(encoder.encode(event.is_touch_compatibility));
+     return {};
+ }
+ 
+@@ -117,8 +118,9 @@ ErrorOr<Web::MouseEvent> IPC::decode(Decoder& decoder)
+     auto id = TRY(decoder.decode<u64>());
+     auto scrollbar_dragged_by_compositor = TRY(decoder.decode<Optional<Web::ScrollbarDraggedByCompositor>>());
+     auto is_touch_scroll = TRY(decoder.decode<bool>());
++    auto is_touch_compatibility = TRY(decoder.decode<bool>());
+ 
+-    return Web::MouseEvent { type, position, screen_position, button, buttons, modifiers, wheel_delta_x, wheel_delta_y, wheel_tick_120ths_x, wheel_tick_120ths_y, wheel_delta_precision, scroll_gesture_phase, click_count, nullptr, async_scroll_performed_default_action, id, scrollbar_dragged_by_compositor, is_touch_scroll };
++    return Web::MouseEvent { type, position, screen_position, button, buttons, modifiers, wheel_delta_x, wheel_delta_y, wheel_tick_120ths_x, wheel_tick_120ths_y, wheel_delta_precision, scroll_gesture_phase, click_count, nullptr, async_scroll_performed_default_action, id, scrollbar_dragged_by_compositor, is_touch_scroll, is_touch_compatibility };
+ }
+ 
+ template<>
+diff --git a/Libraries/LibWebCommon/Page/InputEvent.h b/Libraries/LibWebCommon/Page/InputEvent.h
+index 9babea98..19b4fa1b 100644
+--- a/Libraries/LibWebCommon/Page/InputEvent.h
++++ b/Libraries/LibWebCommon/Page/InputEvent.h
+@@ -140,6 +140,8 @@ struct WEBCOMMON_API MouseEvent {
+     Optional<Web::ScrollbarDraggedByCompositor> scrollbar_dragged_by_compositor {};
+     // A wheel step that a finger scrolls: it fires no wheel event, and the page's touch events decide it.
+     bool is_touch_scroll { false };
++    // A mouse event of a tap, which follows its touch: the touch's pointer events were the page's already.
++    bool is_touch_compatibility { false };
+ };
+ 
+ struct WEBCOMMON_API PinchEvent {
