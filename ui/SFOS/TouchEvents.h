@@ -48,14 +48,12 @@ static constexpr auto touch_events_script = R"js((() => {
     let blocking = false;
     let blocker = "";
     const report = () => log(marker, "listening " + (blocking ? 1 : 0) + (blocker ? " " + blocker : ""));
+    const describeElement = element => element.localName + (element.id ? "#" + element.id : "")
+        + (typeof element.className === "string" && element.className ? "." + element.className.trim().split(/\s+/).slice(0, 3).join(".") : "");
     const describe = (target, type) => {
         if (target === window || target === document)
             return type + " on the " + (target === window ? "window" : "document");
-        const element = target instanceof Element ? target : null;
-        if (!element)
-            return type;
-        return type + " on " + element.localName + (element.id ? "#" + element.id : "")
-            + (typeof element.className === "string" && element.className ? "." + element.className.trim().split(/\s+/).slice(0, 3).join(".") : "");
+        return target instanceof Element ? type + " on " + describeElement(target) : type;
     };
     const listen = (mayBlock, target, type) => {
         if (listening && (blocking || !mayBlock))
@@ -203,7 +201,9 @@ static constexpr auto touch_events_script = R"js((() => {
         hide(event);
         active = { identifier: nextIdentifier++, target: event.composedPath()[0] || event.target, owned: false, moves: 0 };
         active.owned = fire("touchstart", true, event);
-        log(marker, "start " + number(event) + " " + (active.owned ? 1 : 0));
+        // NB: What it touched only goes into the front end's log.
+        const target = active.target instanceof Element ? describeElement(active.target) : "?";
+        log(marker, "start " + number(event) + " " + (active.owned ? 1 : 0) + " " + target);
     }, capture);
     add.call(window, "pointermove", event => {
         if (!isCarrier(event))
