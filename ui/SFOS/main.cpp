@@ -145,7 +145,11 @@ public:
                 m_awaiting_scroll = false;
                 m_cancelable_moves_sent = 0;
                 m_cancelable_moves_reported = 0;
+                // NB: Before the clock starts anew: the steps of a scroll still being replayed are timed by it.
+                flush_scroll_steps();
                 m_touch_clock.start();
+                m_touch_samples.clear();
+                m_touch_samples.append({ 0, position });
                 log_touch("down"sv);
                 send_carrier(Web::MouseEvent::Type::MouseDown, position);
                 m_carrier_held = true;
@@ -175,10 +179,9 @@ public:
         if (m_touch_mode == TouchMode::TouchEvents) {
             if (phase == Motion) {
                 m_touch_position = position;
+                m_touch_samples.append({ m_touch_clock.elapsed_milliseconds(), position });
                 if (m_is_scrolling) {
-                    // The content follows the finger, so it scrolls the opposite way.
-                    send_mouse_event(Web::MouseEvent::Type::MouseWheel, position, m_touch_last - position, Web::ScrollGesturePhase::Ongoing);
-                    m_touch_last = position;
+                    scroll_to(position);
                     return;
                 }
                 send_carrier(Web::MouseEvent::Type::MouseMove, position);
@@ -189,6 +192,7 @@ public:
                     // listeners could cancel it. Otherwise it scrolls at once.
                     m_awaiting_scroll = true;
                     m_cancelable_moves_needed = m_cancelable_moves_sent;
+                    m_slop_sample = m_touch_samples.size() - 1;
                     if (page_touches_may_block_scrolling) {
                         log_touch("waiting for the page to scroll"sv);
                         m_touch_answer_timer->restart();
@@ -204,6 +208,7 @@ public:
             // touchcancel, not a touchend it would take for a press.
             if (phase == Up && m_awaiting_scroll && !m_page_owns_touch) {
                 m_touch_position = position;
+                m_touch_samples.append({ m_touch_clock.elapsed_milliseconds(), position });
                 scroll_if_page_allows(true);
             }
             m_active_touch.clear();
@@ -212,7 +217,7 @@ public:
                 send_carrier(Web::MouseEvent::Type::MouseUp, position, phase == Cancel);
             }
             if (m_is_scrolling) {
-                send_mouse_event(Web::MouseEvent::Type::MouseWheel, position, {}, Web::ScrollGesturePhase::Ended);
+                end_scroll(position);
                 m_is_scrolling = false;
                 return;
             }
@@ -291,6 +296,7 @@ public:
         page_listens_for_touches = false;
         page_touches_may_block_scrolling = false;
         m_pending_tap.clear();
+        flush_scroll_steps();
     }
 
     // Every page that comes to host the tab, also after a cross-site navigation moved it to another process.
@@ -368,6 +374,17 @@ private:
         }
     }
 
+    // Where the finger was and when, since it came down.
+    struct TouchSample {
+        i64 time_ms { 0 };
+        Gfx::IntPoint position;
+    };
+    struct ScrollStep {
+        i64 due_ms { 0 };
+        Gfx::IntPoint position;
+        bool ends { false };
+    };
+
     void log_touch(StringView what)
     {
         if (s_log_touch)
@@ -428,8 +445,79 @@ private:
             m_carrier_held = false;
             send_carrier(Web::MouseEvent::Type::MouseUp, m_touch_position, true);
         }
-        send_mouse_event(Web::MouseEvent::Type::MouseWheel, m_touch_position, m_touch_last - m_touch_position, Web::ScrollGesturePhase::Ongoing);
-        m_touch_last = m_touch_position;
+        begin_scroll();
+    }
+
+    // Starts the scroll from where the finger crossed the slop. When it starts late, because the page took its time
+    // to answer, the finger's moves since then are replayed as they came, as much later: the compositor tells a
+    // fling's speed by when the steps reach it, and a late scroll sent in one go would not fling at all.
+    void begin_scroll()
+    {
+        auto now = m_touch_clock.elapsed_milliseconds();
+        auto first = min(m_slop_sample, m_touch_samples.size() - 1);
+        m_scroll_delay_ms = now - m_touch_samples[first].time_ms;
+        if (m_scroll_delay_ms < 8) {
+            m_scroll_delay_ms = 0;
+            step_scroll(m_touch_position);
+            return;
+        }
+        for (size_t i = first; i < m_touch_samples.size(); ++i)
+            m_scroll_steps.append({ m_touch_samples[i].time_ms + m_scroll_delay_ms, m_touch_samples[i].position, false });
+        pump_scroll_steps();
+    }
+
+    void scroll_to(Gfx::IntPoint position)
+    {
+        if (m_scroll_steps.is_empty() && m_scroll_delay_ms == 0) {
+            step_scroll(position);
+            return;
+        }
+        m_scroll_steps.append({ m_touch_clock.elapsed_milliseconds() + m_scroll_delay_ms, position, false });
+        pump_scroll_steps();
+    }
+
+    void end_scroll(Gfx::IntPoint position)
+    {
+        if (m_scroll_steps.is_empty() && m_scroll_delay_ms == 0) {
+            send_mouse_event(Web::MouseEvent::Type::MouseWheel, position, {}, Web::ScrollGesturePhase::Ended);
+            return;
+        }
+        m_scroll_steps.append({ m_touch_clock.elapsed_milliseconds() + m_scroll_delay_ms, position, true });
+        pump_scroll_steps();
+    }
+
+    void step_scroll(Gfx::IntPoint position)
+    {
+        // The content follows the finger, so it scrolls the opposite way.
+        send_mouse_event(Web::MouseEvent::Type::MouseWheel, position, m_touch_last - position, Web::ScrollGesturePhase::Ongoing);
+        m_touch_last = position;
+    }
+
+    void send_scroll_step(ScrollStep const& step)
+    {
+        if (!step.ends) {
+            step_scroll(step.position);
+            return;
+        }
+        send_mouse_event(Web::MouseEvent::Type::MouseWheel, step.position, {}, Web::ScrollGesturePhase::Ended);
+        m_scroll_delay_ms = 0;
+    }
+
+    void pump_scroll_steps()
+    {
+        auto now = m_touch_clock.elapsed_milliseconds();
+        while (!m_scroll_steps.is_empty() && m_scroll_steps.first().due_ms <= now)
+            send_scroll_step(m_scroll_steps.take_first());
+        if (!m_scroll_steps.is_empty())
+            m_scroll_step_timer->restart(static_cast<int>(max<i64>(1, m_scroll_steps.first().due_ms - now)));
+    }
+
+    void flush_scroll_steps()
+    {
+        m_scroll_step_timer->stop();
+        while (!m_scroll_steps.is_empty())
+            send_scroll_step(m_scroll_steps.take_first());
+        m_scroll_delay_ms = 0;
     }
 
     void touch_answer_timed_out()
@@ -494,6 +582,13 @@ private:
     unsigned m_cancelable_moves_reported { 0 };
     Optional<Gfx::IntPoint> m_pending_tap;
     Core::ElapsedTimer m_touch_clock;
+    // The finger's samples since it came down, and the one that crossed the slop.
+    Vector<TouchSample> m_touch_samples;
+    size_t m_slop_sample { 0 };
+    // A scroll that began late goes out this much later than the finger moved (see begin_scroll).
+    Vector<ScrollStep> m_scroll_steps;
+    i64 m_scroll_delay_ms { 0 };
+    RefPtr<Core::Timer> m_scroll_step_timer = Core::Timer::create_single_shot(1, [this] { pump_scroll_steps(); });
     // How long the page may take to say what became of a touch before the front end goes on without it.
     RefPtr<Core::Timer> m_touch_answer_timer = Core::Timer::create_single_shot(250, [this] { touch_answer_timed_out(); });
 
