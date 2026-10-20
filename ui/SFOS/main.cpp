@@ -145,6 +145,8 @@ public:
                 m_awaiting_scroll = false;
                 m_cancelable_moves_sent = 0;
                 m_cancelable_moves_reported = 0;
+                m_touch_clock.start();
+                log_touch("down"sv);
                 send_carrier(Web::MouseEvent::Type::MouseDown, position);
                 m_carrier_held = true;
             } else if (m_touch_mode == TouchMode::Mouse) {
@@ -183,13 +185,26 @@ public:
                 ++m_cancelable_moves_sent;
                 auto travelled = position - m_touch_start;
                 if (!m_is_scrolling && !m_awaiting_scroll && !m_page_owns_touch && max(abs(travelled.x()), abs(travelled.y())) > touch_slop) {
-                    // Whether it scrolls is the page's to say, by what it does with this touchmove.
+                    // Whether it scrolls is the page's to say, by what it does with this touchmove, if any of its
+                    // listeners could cancel it. Otherwise it scrolls at once.
                     m_awaiting_scroll = true;
                     m_cancelable_moves_needed = m_cancelable_moves_sent;
-                    m_touch_answer_timer->restart();
+                    if (page_touches_may_block_scrolling) {
+                        log_touch("waiting for the page to scroll"sv);
+                        m_touch_answer_timer->restart();
+                    } else {
+                        scroll_if_page_allows(true);
+                    }
                 }
                 scroll_if_page_allows();
                 return;
+            }
+            log_touch(phase == Cancel ? "cancel"sv : "up"sv);
+            // A finger that lifts before the page has had its say is a flick: it scrolls, and the page gets
+            // touchcancel, not a touchend it would take for a press.
+            if (phase == Up && m_awaiting_scroll && !m_page_owns_touch) {
+                m_touch_position = position;
+                scroll_if_page_allows(true);
             }
             m_active_touch.clear();
             if (m_carrier_held) {
@@ -243,8 +258,12 @@ public:
             return;
         if (parts[0] == "listening"sv) {
             page_listens_for_touches = true;
+            if (parts.size() >= 2 && parts[1] == "1"sv)
+                page_touches_may_block_scrolling = true;
             return;
         }
+        if (m_touch_mode == TouchMode::TouchEvents)
+            log_touch(report);
         if (m_touch_mode != TouchMode::TouchEvents || parts.size() < 2)
             return;
         bool cancelled = parts[1] == "1"sv;
@@ -255,8 +274,10 @@ public:
             m_page_owns_touch |= cancelled;
             m_cancelable_moves_reported = max(m_cancelable_moves_reported, parts[2].to_number<unsigned>().value_or(0));
         } else if (parts[0] == "end"sv) {
-            if (m_pending_tap.has_value() && !cancelled && !m_page_owns_touch)
+            if (m_pending_tap.has_value() && !cancelled && !m_page_owns_touch) {
+                log_touch("taps"sv);
                 send_tap(*m_pending_tap);
+            }
             m_pending_tap.clear();
         }
         if (m_page_owns_touch)
@@ -268,6 +289,7 @@ public:
     {
         // A new document listens for touches only once it says so.
         page_listens_for_touches = false;
+        page_touches_may_block_scrolling = false;
         m_pending_tap.clear();
     }
 
@@ -280,6 +302,7 @@ public:
     bool is_page_fullscreen { false };
     // Whether the page has said it listens for touch events (see TouchEvents.h).
     bool page_listens_for_touches { false };
+    bool page_touches_may_block_scrolling { false };
 
     void handle_pinch(Gfx::IntPoint position, double scale)
     {
@@ -345,6 +368,12 @@ private:
         }
     }
 
+    void log_touch(StringView what)
+    {
+        if (s_log_touch)
+            warnln("pacific: touch +{}ms {}", m_touch_clock.elapsed_milliseconds(), what);
+    }
+
     void send_tap(Gfx::IntPoint position)
     {
         send_mouse_event(Web::MouseEvent::Type::MouseMove, position);
@@ -392,9 +421,9 @@ private:
             return;
         m_awaiting_scroll = false;
         m_is_scrolling = true;
-        // NB: The page gets touchcancel once the scroll is the browser's, as it did in Chrome on Android. Touch
-        //     events for the rest of the touch would wait on the page's script, and the scroll steps behind them
-        //     (the engine takes input in turn), which leaves the scroll too slow at the end to fling.
+        log_touch(timed_out ? "scrolls without waiting for the page"sv : "scrolls"sv);
+        // NB: Once the scroll is the browser's, the page can no longer cancel the touch: it gets touchcancel, as in
+        //     Chrome on Android, and nothing more of this finger.
         if (m_carrier_held) {
             m_carrier_held = false;
             send_carrier(Web::MouseEvent::Type::MouseUp, m_touch_position, true);
@@ -433,6 +462,7 @@ private:
     }
 
     static inline bool s_log_frame_rate = Core::Environment::has("LADYBIRD_SFOS_LOG_FPS"sv);
+    static inline bool s_log_touch = Core::Environment::has("PACIFIC_LOG_TOUCH"sv);
     // The screen's refresh rate, as the app found it; the engine assumes 60 otherwise.
     static inline double s_refresh_rate = [] {
         auto rate = Core::Environment::get("LADYBIRD_SFOS_REFRESH_RATE"sv).value_or({}).to_number<double>();
@@ -463,6 +493,7 @@ private:
     unsigned m_cancelable_moves_needed { 0 };
     unsigned m_cancelable_moves_reported { 0 };
     Optional<Gfx::IntPoint> m_pending_tap;
+    Core::ElapsedTimer m_touch_clock;
     // How long the page may take to say what became of a touch before the front end goes on without it.
     RefPtr<Core::Timer> m_touch_answer_timer = Core::Timer::create_single_shot(250, [this] { touch_answer_timed_out(); });
 

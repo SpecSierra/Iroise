@@ -37,27 +37,42 @@ static constexpr auto touch_events_script = R"js((() => {
     const add = EventTarget.prototype.addEventListener;
     const types = ["touchstart", "touchmove", "touchend", "touchcancel"];
 
-    // The front end presses the mouse for touch events only once a page listens for them.
+    // The front end presses the mouse for touch events only once a page listens for them, and waits for the page
+    // before it scrolls only if one of its listeners could cancel the scroll: a touchstart or touchmove listener that
+    // is not passive. (Those on the window, the document and the body are passive unless they say otherwise, in the
+    // engine as in other browsers.)
     let listening = false;
-    const listen = () => {
-        if (!listening) {
-            listening = true;
-            log(marker, "listening");
-        }
+    let blocking = false;
+    const report = () => log(marker, "listening " + (blocking ? 1 : 0));
+    const listen = mayBlock => {
+        if (listening && (blocking || !mayBlock))
+            return;
+        listening = true;
+        blocking = blocking || mayBlock;
+        report();
     };
     const relisten = () => {
         if (listening)
-            log(marker, "listening");
+            report();
     };
     add.call(window, "DOMContentLoaded", relisten);
     add.call(window, "pageshow", relisten);
+    const passiveByDefault = target => target === window || target === document
+        || target === document.documentElement || target === document.body;
+    const mayBlock = (target, type, options) => {
+        if (type !== "touchstart" && type !== "touchmove")
+            return false;
+        if (typeof options === "object" && options !== null && options.passive !== undefined)
+            return !options.passive;
+        return !passiveByDefault(target);
+    };
 
     Object.defineProperty(EventTarget.prototype, "addEventListener", {
         configurable: true,
         writable: true,
         value: function addEventListener(type, listener, options) {
             if (listener && types.includes(String(type)))
-                listen();
+                listen(mayBlock(this, String(type), options));
             return add.call(this, type, listener, options);
         },
     });
@@ -90,7 +105,7 @@ static constexpr auto touch_events_script = R"js((() => {
                     }
                     own[name] = typeof value === "function" ? value : null;
                     if (own[name])
-                        listen();
+                        listen(mayBlock(this, type));
                 },
             });
         }
