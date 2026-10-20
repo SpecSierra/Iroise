@@ -173,6 +173,7 @@ Each patch in `patches/` does one thing:
 | 0021 | adds `Touch`, `TouchList`, `TouchEvent` and `ontouchstart` and the rest ([TOUCH.md](TOUCH.md)) |
 | 0022 | carries touches from the front end to the page, and lets touch listeners decide a finger's scroll ([TOUCH.md](TOUCH.md)) |
 | 0023 | fires a touch's pointer events, of type `"touch"`, and honours `touch-action` ([TOUCH.md](TOUCH.md)) |
+| 0024 | keeps the hover a tap moves from firing pointer events of type `"mouse"` ([TOUCH.md](TOUCH.md)) |
 
 `patches/vcpkg-skia-gl-without-system-libraries.patch` builds Skia's OpenGL backend without linking a GL library,
 for the reason above.

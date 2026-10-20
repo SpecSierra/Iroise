@@ -28,7 +28,8 @@ and the body are passive unless they say otherwise, so on most pages nothing eve
 Chrome: `pointerover`, `pointerenter` and `pointerdown`, then `pointermove`, then `pointerup`, `pointerout` and
 `pointerleave`. The pointer stays with the element it went down on (implicit capture), and once the finger scrolls
 it gets `pointercancel` and fires no more. The mouse events of a tap fire no pointer events of their own, and a
-cancelled `pointerdown` keeps its `mousedown` and `mouseup` from firing (its `click` still does). A pointer whose
+cancelled `pointerdown` keeps its `mousedown` and `mouseup` from firing (its `click` still does). Where a tap moves
+the hover, it fires `mouseover` and the rest, but no `pointerover` or its like of type `"mouse"`. A pointer whose
 element leaves the document goes on at the document, so that a page counting its pointers there (a map's) still hears
 it go up.
 
@@ -61,9 +62,10 @@ The rest are hooks of a few lines each in Ladybird's own files:
 - Lists: `UIEvents/EventNames.h`, `HTML/GlobalEventHandlers.h`, `HTML/AttributeNames.h`, `idl_files.cmake`,
   `CMakeLists.txt`.
 
-They are three patches: `0021-web-touch-event-interfaces` (the interfaces and the lists), `0022-web-touch-input`
+They are four patches: `0021-web-touch-event-interfaces` (the interfaces and the lists), `0022-web-touch-input`
 (the input path, the dispatch and the scroll decision) and `0023-web-touch-pointer-events` (the pointer events of a
-touch, and a tap's mouse events without their own). The front end sends touches in `ui/SFOS/main.cpp`;
+touch, and a tap's mouse events without their own), and `0024-web-no-mouse-pointer-boundary-events-for-a-tap` (the
+same for the hover a tap moves, in `Document.cpp`, kept apart as the one hook there). The front end sends touches in `ui/SFOS/main.cpp`;
 `PACIFIC_TOUCH_EVENTS=0` turns them off, which brings back the browser without touch events.
 
 ## Not yet
@@ -73,9 +75,6 @@ touch, and a tap's mouse events without their own). The front end sends touches 
   sideways still scrolls it sideways (its pointer goes on regardless). The compositor would need `touch-action`
   areas next to its blocking-listener areas.
 - `setPointerCapture`, which Ladybird does not implement yet (a touch's pointer keeps its own element anyway).
-- The mouse boundary events of a tap (`mouseover` and the rest) still bring `pointerover`, `pointerenter`,
-  `pointerout` and `pointerleave` of type `"mouse"`: Ladybird fires those where it moves the hover, in
-  `Document.cpp`, and four more hooks there were not worth it yet.
 - More than one finger: a second finger cancels the touch and pinches, as before.
 - A page in fullscreen still gets the finger as a held mouse button, which Ladybird's own video controls need.
   Touches there wait on a bug of Ladybird's: hit testing does not go inside the fullscreen element.
