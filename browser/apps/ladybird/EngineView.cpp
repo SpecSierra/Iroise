@@ -263,7 +263,8 @@ void EngineView::engineMessage(const lb_embed_header& header, const QString& tex
         faviconReceived(text);
         break;
     case LB_EMBED_FULLSCREEN:
-        pageFullscreenChanged(header.a != 0);
+        m_pageFullscreen = header.a != 0;
+        pageFullscreenChanged(m_pageFullscreen);
         break;
     case LB_EMBED_MEDIA:
         mediaStateChanged(header.a != 0, header.b != 0);
@@ -320,6 +321,11 @@ void EngineView::engineMessage(const lb_embed_header& header, const QString& tex
         m_crashed = true;
         m_awaitingCommit = false;
         setCovered(false);
+        // A page that crashed is not in fullscreen any more.
+        if (m_pageFullscreen) {
+            m_pageFullscreen = false;
+            pageFullscreenChanged(false);
+        }
         emit engineCrashed();
         break;
     default:
@@ -509,7 +515,10 @@ void EngineView::touchEvent(QTouchEvent* event)
             m_touchId = point.id();
             m_touchStart = point.pos();
             m_touchConsumed = false;
-            m_longPressTimer.start();
+            // NB: In fullscreen the engine passes a touch on as a held mouse button (a seek bar is held and
+            //     dragged), which a long press would cancel.
+            if (!m_pageFullscreen)
+                m_longPressTimer.start();
             sendToEngine(LB_EMBED_TOUCH, LB_EMBED_TOUCH_DOWN, point.id(), static_cast<int>(point.pos().x()), static_cast<int>(point.pos().y()));
             break;
         case Qt::TouchPointMoved:

@@ -129,10 +129,33 @@ public:
             m_active_touch = id;
             m_touch_start = m_touch_last = position;
             m_is_scrolling = false;
+            // NB: The engine has no touch events, so a page only ever sees a mouse. A page in fullscreen has nothing
+            //     to scroll, and its player's controls are pressed and dragged (a seek bar): there the finger is the
+            //     mouse, its button held from the moment it touches until it lifts.
+            m_touch_is_mouse = is_page_fullscreen;
+            if (m_touch_is_mouse) {
+                send_mouse_event(Web::MouseEvent::Type::MouseMove, position);
+                send_mouse_event(Web::MouseEvent::Type::MouseDown, position);
+                m_mouse_held = true;
+            }
             return;
         }
         if (m_active_touch != id)
             return;
+
+        if (m_touch_is_mouse) {
+            if (phase == Motion) {
+                m_touch_last = position;
+                send_mouse_event(Web::MouseEvent::Type::MouseMove, position);
+                return;
+            }
+            m_active_touch.clear();
+            m_touch_is_mouse = false;
+            m_mouse_held = false;
+            // A cancelled touch (a second finger came) lets go of the button where the finger last was.
+            send_mouse_event(Web::MouseEvent::Type::MouseUp, phase == Cancel ? m_touch_last : position);
+            return;
+        }
 
         if (phase == Motion) {
             auto travelled = position - m_touch_start;
@@ -164,6 +187,7 @@ public:
     bool desktop_mode { false };
     bool plays_audio { false };
     bool holds_wake_lock { false };
+    bool is_page_fullscreen { false };
 
     void handle_pinch(Gfx::IntPoint position, double scale)
     {
@@ -240,7 +264,7 @@ private:
             event.button = Web::UIEvents::MouseButton::Primary;
             event.click_count = 1;
         }
-        if (type == Web::MouseEvent::Type::MouseDown)
+        if (type == Web::MouseEvent::Type::MouseDown || (type == Web::MouseEvent::Type::MouseMove && m_mouse_held))
             event.buttons = Web::UIEvents::MouseButton::Primary;
         // NB: Wheel deltas are in CSS pixels; touches arrive in device pixels.
         event.wheel_delta_x = wheel_delta.x() / m_device_pixel_ratio;
@@ -261,6 +285,9 @@ private:
     Gfx::IntPoint m_touch_start;
     Gfx::IntPoint m_touch_last;
     bool m_is_scrolling { false };
+    // This touch is passed on as a mouse with its button held (see handle_touch).
+    bool m_touch_is_mouse { false };
+    bool m_mouse_held { false };
 
     Core::ElapsedTimer m_frame_timer;
     i64 m_frames_presented { 0 };
@@ -585,10 +612,12 @@ private:
         // The page goes fullscreen within the view it has; the app hides everything around it.
         view->on_fullscreen_window = [this, id, raw_view] {
             raw_view->set_is_fullscreen(Web::ViewportIsFullscreen::Yes);
+            raw_view->is_page_fullscreen = true;
             m_host.send_flags(id, LB_EMBED_FULLSCREEN, true);
         };
         view->on_exit_fullscreen_window = [this, id, raw_view] {
             raw_view->set_is_fullscreen(Web::ViewportIsFullscreen::No);
+            raw_view->is_page_fullscreen = false;
             m_host.send_flags(id, LB_EMBED_FULLSCREEN, false);
         };
         view->on_audio_play_state_changed = [this, id, raw_view](Web::HTML::AudioPlayState state) {

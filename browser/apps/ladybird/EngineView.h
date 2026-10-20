@@ -157,6 +157,7 @@ private:
     bool m_engineVisible = true;
     bool m_privateBrowsing = false;
     bool m_pageWantsTextInput = false;
+    bool m_pageFullscreen = false;
     qreal m_deviceScaleFactor = 2.5;
 
     LadybirdFrame m_frame;
