@@ -1,0 +1,19 @@
+<!doctype html><title>Tall</title><style>body{margin:0;height:20000px;background:linear-gradient(white,gray)}</style>
+<script>
+window.pointers = { move: 0, cancel: 0 };
+addEventListener("pointermove", () => pointers.move++);
+addEventListener("pointercancel", () => pointers.cancel++);
+// A map: it pans itself, and asks the browser not to.
+if (location.hash === "#touch-action-none")
+    document.documentElement.style.touchAction = "none";
+</script>
+<div id="pad" style="position:fixed;inset:0"></div>
+<script>
+// A carousel or a drawing: it takes the finger by cancelling its touchmoves, on the body or on an element of its own.
+if (location.hash === "#touchmove-cancelled")
+    document.body.addEventListener("touchmove", event => event.preventDefault(), { passive: false });
+if (location.hash === "#touchmove-cancelled-on-an-element")
+    pad.addEventListener("touchmove", event => event.preventDefault(), { passive: false });
+else
+    pad.remove();
+</script>

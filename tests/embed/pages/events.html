@@ -1,0 +1,10 @@
+<!doctype html><title>Events</title><style>body{margin:0} #target{width:100vw;height:100vh}</style>
+<div id="target"></div>
+<script>
+// What reached the page, by type, and in order.
+window.order = [];
+for (const type of ["pointerdown", "pointerup", "pointercancel", "touchstart", "touchend", "touchcancel", "mousedown", "mouseup", "click"])
+    target.addEventListener(type, event => order.push(event.pointerType ? `${type}:${event.pointerType}` : type));
+if (location.hash === "#cancel-touchend")
+    target.addEventListener("touchend", event => event.preventDefault());
+</script>

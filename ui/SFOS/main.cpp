@@ -144,7 +144,7 @@ public:
                 m_touch_may_scroll = true;
                 send_touch_event(Web::MouseEvent::Type::TouchStart, position);
                 if (s_touch_events)
-                    m_touch_starts_awaiting_page.append(m_touch_serial);
+                    m_touch_events_awaiting_page.append(m_touch_serial);
             }
             return;
         }
@@ -167,6 +167,8 @@ public:
 
         if (phase == Motion) {
             send_touch_event(Web::MouseEvent::Type::TouchMove, position);
+            if (s_touch_events)
+                m_touch_events_awaiting_page.append(m_touch_serial);
             auto travelled = position - m_touch_start;
             if (!m_is_scrolling && m_touch_may_scroll && max(abs(travelled.x()), abs(travelled.y())) > touch_slop)
                 m_is_scrolling = true;
@@ -182,8 +184,7 @@ public:
         m_active_touch.clear();
         if (phase == Cancel) {
             send_touch_event(Web::MouseEvent::Type::TouchCancel, position);
-            if (m_is_scrolling)
-                send_mouse_event(Web::MouseEvent::Type::MouseWheel, position, {}, Web::ScrollGesturePhase::Ended);
+            end_scroll(position);
             return;
         }
         // NB: The mouse events of a tap follow only once the page has handled its touchend, and only if the page
@@ -193,19 +194,30 @@ public:
         if (s_touch_events)
             m_touch_ends_awaiting_page.append({ is_tap ? Optional<Gfx::IntPoint> { position } : Optional<Gfx::IntPoint> {}, MonotonicTime::now() });
         if (m_is_scrolling) {
-            send_mouse_event(Web::MouseEvent::Type::MouseWheel, position, {}, Web::ScrollGesturePhase::Ended);
+            end_scroll(position);
             return;
         }
         if (!s_touch_events)
             send_tap(position);
     }
 
+    // NB: The compositor flings a gesture by the speed of its steps when it ends, whether or not they scrolled. A
+    //     finger the page kept (it cancelled a touchstart or a touchmove, or touch-action keeps it) scrolled nothing,
+    //     and its gesture ends without the step that would fling it.
+    void end_scroll(Gfx::IntPoint position)
+    {
+        if (m_is_scrolling && m_touch_may_scroll)
+            send_mouse_event(Web::MouseEvent::Type::MouseWheel, position, {}, Web::ScrollGesturePhase::Ended);
+        m_is_scrolling = false;
+    }
+
     // The page has handled an input event. Its touchend decides whether a tap is one.
     void touch_event_finished(Web::MouseEvent const& event, Web::EventResult result)
     {
-        // A touchstart the page cancelled, or whose touch-action allows no panning (a map's), scrolls nothing.
-        if (event.type == Web::MouseEvent::Type::TouchStart && !m_touch_starts_awaiting_page.is_empty()) {
-            auto serial = m_touch_starts_awaiting_page.take_first();
+        // A touchstart or touchmove the page cancelled, or a touchstart whose touch-action allows no panning (a
+        // map's), keeps the finger from scrolling from then on.
+        if ((event.type == Web::MouseEvent::Type::TouchStart || event.type == Web::MouseEvent::Type::TouchMove) && !m_touch_events_awaiting_page.is_empty()) {
+            auto serial = m_touch_events_awaiting_page.take_first();
             if (serial == m_touch_serial && result == Web::EventResult::Cancelled)
                 m_touch_may_scroll = false;
             return;
@@ -360,10 +372,10 @@ private:
     };
     Vector<TouchEndAwaitingPage> m_touch_ends_awaiting_page;
     bool m_sending_tap { false };
-    // Which touch this is, and the touchstarts the page has yet to finish. A touch scrolls unless its touchstart says
-    // otherwise.
+    // Which touch this is, and the touchstarts and touchmoves the page has yet to finish. A touch scrolls unless one of
+    // them says otherwise.
     u64 m_touch_serial { 0 };
-    Vector<u64> m_touch_starts_awaiting_page;
+    Vector<u64> m_touch_events_awaiting_page;
     bool m_touch_may_scroll { true };
     // This touch is passed on as a mouse with its button held (see handle_touch).
     bool m_touch_is_mouse { false };

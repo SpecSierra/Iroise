@@ -78,9 +78,12 @@ code changed. The package is kept with the run for a week, for testing; it is no
 
 Each run then checks the package against the store's rules (`scripts/validate-rpm.sh`) and runs the engine's tests
 (`scripts/test-engine.sh`): Ladybird's own tests of input, pointer, wheel and DOM events, which our patches change,
-and our tests of the touch patches, with Ladybird's headless test runner on the runner itself. Their results are
-kept with the run too. The same script runs them on the build host, or a few of them:
-`scripts/test-engine.sh -f 'Text/input/UIEvents/touch-*'`.
+and our tests of the touch patches, with Ladybird's headless test runner on the runner itself. Then it runs the
+engine with our front end as the interface runs it, over the embedding protocol (`scripts/test-front-end.sh`,
+`tests/embed`): loads and history, taps, drags and flicks, touch-action, dialogs, downloads, fullscreen, text
+input and a crashed page, on small pages of its own. Their results are kept with the run too. The same scripts run
+them on the build host, or a few of them: `scripts/test-engine.sh -f 'Text/input/UIEvents/touch-*'`,
+`scripts/test-front-end.sh test_engine.Scrolling`.
 
 Nothing runs on pull requests. A self-hosted runner would otherwise run whatever code a fork sends it.
 

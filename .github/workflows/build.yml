@@ -54,11 +54,17 @@ jobs:
         if: ${{ !cancelled() && steps.build.outcome == 'success' }}
         run: scripts/test-engine.sh
 
+      - name: Test the front end
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: scripts/test-front-end.sh
+
       - name: Keep the test results
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ github.run_number }}
-          path: dist/test-results
+          path: |
+            dist/test-results
+            dist/front-end-test-logs
           retention-days: 7
           if-no-files-found: ignore
