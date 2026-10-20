@@ -57,6 +57,6 @@ fpm -s dir -t rpm -n harbour-pacific -v "$VERSION" --iteration "$RELEASE" --arch
     --depends sailfishsilica-qt5 --depends qt5-qtpositioning --depends qt5-qtgraphicaleffects --depends libkeepalive \
     --depends nemo-qml-plugin-configuration-qt5 --depends nemo-qml-plugin-dbus-qt5 \
     --depends nemo-qml-plugin-notifications-qt5 \
-    --depends sailfish-components-webview-qt5-popups --depends sailfish-components-pickers-qt5 \
+    --depends sailfish-components-webview-qt5-popups \
     --force -p "$OUT/harbour-pacific-$VERSION-$RELEASE.aarch64.rpm" -C "$S" .
 ls -la "$OUT"

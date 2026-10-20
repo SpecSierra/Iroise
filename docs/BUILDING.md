@@ -60,10 +60,14 @@ scripts/package-rpm.sh "$(cat VERSION)" 1    # dist/rpm/harbour-pacific-<version
 ```
 
 The package is laid out the way the Jolla Store wants it: the one executable in `/usr/bin`, everything else under
-`/usr/share/harbour-pacific`, plus the launcher entry and its icons, and nothing else. It passes the store's
-validator with a single warning, because the launcher entry starts the app without the booster (see
-[ARCHITECTURE.md](ARCHITECTURE.md#one-executable)). Sailjail confines the app with the permissions the entry asks
-for: internet, audio, microphone, location and the Downloads folder.
+`/usr/share/harbour-pacific`, plus the launcher entry and its icons, and nothing else. It depends only on packages
+the store allows (the pickers come with `Sailfish.Pickers`, an import the store allows, so the package names none),
+and its release is a plain number, as the store wants. It passes the store's validator
+([sdk-harbour-rpmvalidator](https://github.com/sailfishos/sdk-harbour-rpmvalidator),
+`rpmvalidation.sh -g <validator> <package>`) with one warning, given twice: the launcher entry starts the app
+without the booster (see [ARCHITECTURE.md](ARCHITECTURE.md#one-executable)). Sailjail confines the app with the
+permissions the entry asks for: internet, audio, microphone, location, the Downloads, Documents, Pictures, Videos
+and Music folders, removable media, and the media index the file picker reads.
 
 ## CI
 
