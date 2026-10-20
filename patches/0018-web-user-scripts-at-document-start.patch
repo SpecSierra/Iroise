@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibWeb/DOM/Document.cpp b/Libraries/LibWeb/DOM/Document.cpp
-index 9a7b02fe..388e1737 100644
+index e00017e6..0181be97 100644
 --- a/Libraries/LibWeb/DOM/Document.cpp
 +++ b/Libraries/LibWeb/DOM/Document.cpp
-@@ -7857,12 +7857,31 @@ void Document::update_for_history_step_application(NonnullRefPtr<HTML::SessionHi
+@@ -7885,12 +7885,31 @@ void Document::update_for_history_step_application(NonnullRefPtr<HTML::SessionHi
  void Document::set_ready_to_run_scripts()
  {
      m_ready_to_run_scripts = true;
@@ -35,10 +35,10 @@ index 9a7b02fe..388e1737 100644
  {
      VERIFY(!m_deferred_parser_start);
 diff --git a/Libraries/LibWeb/DOM/Document.h b/Libraries/LibWeb/DOM/Document.h
-index b2b4bf39..72c5c9a2 100644
+index abe99455..e1139246 100644
 --- a/Libraries/LibWeb/DOM/Document.h
 +++ b/Libraries/LibWeb/DOM/Document.h
-@@ -1211,6 +1211,7 @@ public:
+@@ -1217,6 +1217,7 @@ public:
      bool ready_to_run_scripts() const { return m_ready_to_run_scripts; }
      void set_ready_to_run_scripts();
      void set_deferred_parser_start(GC::Ref<GC::Function<void()>>);
@@ -47,7 +47,7 @@ index b2b4bf39..72c5c9a2 100644
  
      RefPtr<HTML::SessionHistoryEntry> latest_entry() const { return m_latest_entry; }
 diff --git a/Libraries/LibWeb/Page/Page.h b/Libraries/LibWeb/Page/Page.h
-index 5bf1a864..88a1010a 100644
+index 7f98884d..05fd2f3f 100644
 --- a/Libraries/LibWeb/Page/Page.h
 +++ b/Libraries/LibWeb/Page/Page.h
 @@ -231,6 +231,12 @@ public:
@@ -63,7 +63,7 @@ index 5bf1a864..88a1010a 100644
      bool should_block_pop_ups() const { return m_should_block_pop_ups; }
      void set_should_block_pop_ups(bool b) { m_should_block_pop_ups = b; }
  
-@@ -506,6 +512,7 @@ private:
+@@ -507,6 +513,7 @@ private:
      Queue<ScreenshotTask> m_screenshot_tasks;
  
      bool m_is_scripting_enabled { true };
@@ -72,10 +72,10 @@ index 5bf1a864..88a1010a 100644
      bool m_enable_autoscroll { true };
      bool m_enable_primary_paste { true };
 diff --git a/Libraries/LibWebView/Application.cpp b/Libraries/LibWebView/Application.cpp
-index 9169b05a..240cff3f 100644
+index 716e7002..eb2d2495 100644
 --- a/Libraries/LibWebView/Application.cpp
 +++ b/Libraries/LibWebView/Application.cpp
-@@ -2863,6 +2863,28 @@ void Application::apply_content_blocking_policy(WebContentPage& page)
+@@ -2867,6 +2867,28 @@ void Application::apply_content_blocking_policy(WebContentPage& page)
  {
      auto disabled_sites = m_web_content_options.is_test_mode == IsTestMode::Yes ? Vector<String> {} : m_settings->content_blocker_disabled_sites().values();
      page.async_set_content_blocking_policy(content_blocking_enabled(), disabled_sites);
@@ -105,10 +105,10 @@ index 9169b05a..240cff3f 100644
  
  void Application::content_blocker_settings_changed(Badge<ApplicationSettingsObserver>)
 diff --git a/Libraries/LibWebView/Application.h b/Libraries/LibWebView/Application.h
-index 0bfc466c..36f63d0a 100644
+index 4200d6e3..60dd23c2 100644
 --- a/Libraries/LibWebView/Application.h
 +++ b/Libraries/LibWebView/Application.h
-@@ -163,6 +163,11 @@ public:
+@@ -161,6 +161,11 @@ public:
      bool content_blocking_enabled() const;
      bool has_content_blocking_rules() const;
      void apply_content_blocking_policy(WebContentPage&);
@@ -120,7 +120,7 @@ index 0bfc466c..36f63d0a 100644
      void content_blocker_settings_changed(Badge<ApplicationSettingsObserver>);
  
      bool content_blocker_list_update_in_progress() const;
-@@ -590,6 +595,7 @@ private:
+@@ -589,6 +594,7 @@ private:
      OwnPtr<FontServiceHost> m_font_service_host;
      JsonValue m_site_compatibility_data;
      Optional<Core::AnonymousBuffer> m_content_blocker_list_buffer;
@@ -129,10 +129,10 @@ index 0bfc466c..36f63d0a 100644
      struct PendingContentBlockerListUpdate {
          String identifier;
 diff --git a/Services/WebContent/ConnectionFromClient.cpp b/Services/WebContent/ConnectionFromClient.cpp
-index 341971f1..53aede16 100644
+index c7a29b40..d53a6b81 100644
 --- a/Services/WebContent/ConnectionFromClient.cpp
 +++ b/Services/WebContent/ConnectionFromClient.cpp
-@@ -1125,6 +1125,16 @@ void ConnectionFromClient::debug_request(Web::PageId page_id, ByteString request
+@@ -1128,6 +1128,16 @@ void ConnectionFromClient::debug_request(Web::PageId page_id, ByteString request
          return;
      }
  

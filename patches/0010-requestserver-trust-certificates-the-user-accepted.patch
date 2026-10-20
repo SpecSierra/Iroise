@@ -43,7 +43,7 @@ index 9cd54d85..467261ad 100644
  WEBVIEW_API ErrorOr<NonnullRefPtr<WasmCompilerClient::Client>> launch_wasm_compiler_process();
  #endif
 diff --git a/Services/RequestServer/ControlConnectionFromClient.cpp b/Services/RequestServer/ControlConnectionFromClient.cpp
-index 5dbc5f33..1ccba140 100644
+index e4415a4e..5d77a636 100644
 --- a/Services/RequestServer/ControlConnectionFromClient.cpp
 +++ b/Services/RequestServer/ControlConnectionFromClient.cpp
 @@ -160,6 +160,11 @@ void ControlConnectionFromClient::set_proxy_configuration(HTTP::ProxyConfigurati
@@ -71,7 +71,7 @@ index 60af7871..4b17916c 100644
      virtual void set_performance_monitor_enabled(bool) override;
  
 diff --git a/Services/RequestServer/Request.cpp b/Services/RequestServer/Request.cpp
-index 34dc3323..3684544b 100644
+index c8d0ad7c..ae3c4feb 100644
 --- a/Services/RequestServer/Request.cpp
 +++ b/Services/RequestServer/Request.cpp
 @@ -40,6 +40,20 @@ static AK::Duration s_maximum_wait_for_cache = AK::Duration::from_seconds(30);

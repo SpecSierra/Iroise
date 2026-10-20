@@ -199,7 +199,7 @@ public:
                     m_slop_sample = m_touch_samples.size() - 1;
                     if (page_touches_may_block_scrolling) {
                         log_touch("waiting for the page to scroll"sv);
-                        m_touch_answer_timer->restart(scroll_answer_timeout_ms);
+                        m_touch_answer_timer->restart(AK::Duration::from_milliseconds(scroll_answer_timeout_ms));
                     } else {
                         scroll_if_page_allows(true);
                     }
@@ -231,7 +231,7 @@ public:
                 return;
             }
             m_pending_tap = position;
-            m_touch_answer_timer->restart(tap_answer_timeout_ms);
+            m_touch_answer_timer->restart(AK::Duration::from_milliseconds(tap_answer_timeout_ms));
             return;
         }
 
@@ -529,7 +529,7 @@ private:
         while (!m_scroll_steps.is_empty() && m_scroll_steps.first().due_ms <= now)
             send_scroll_step(m_scroll_steps.take_first());
         if (!m_scroll_steps.is_empty())
-            m_scroll_step_timer->restart(static_cast<int>(max<i64>(1, m_scroll_steps.first().due_ms - now)));
+            m_scroll_step_timer->restart(AK::Duration::from_milliseconds(max<i64>(1, m_scroll_steps.first().due_ms - now)));
     }
 
     void flush_scroll_steps()
@@ -608,14 +608,14 @@ private:
     // A scroll that began late goes out this much later than the finger moved (see begin_scroll).
     Vector<ScrollStep> m_scroll_steps;
     i64 m_scroll_delay_ms { 0 };
-    RefPtr<Core::Timer> m_scroll_step_timer = Core::Timer::create_single_shot(1, [this] { pump_scroll_steps(); });
+    RefPtr<Core::Timer> m_scroll_step_timer = Core::Timer::create_single_shot(AK::Duration::from_milliseconds(1), [this] { pump_scroll_steps(); });
     // The touch's number, which the page's reports carry back.
     unsigned m_touch_number { 0 };
     // How long the page may take to say what became of a touch before the front end goes on without it: whether
     // a finger that travels scrolls (as long as Chrome on Android waits), and whether a tap is one.
     static constexpr int scroll_answer_timeout_ms = 100;
     static constexpr int tap_answer_timeout_ms = 250;
-    RefPtr<Core::Timer> m_touch_answer_timer = Core::Timer::create_single_shot(tap_answer_timeout_ms, [this] { touch_answer_timed_out(); });
+    RefPtr<Core::Timer> m_touch_answer_timer = Core::Timer::create_single_shot(AK::Duration::from_milliseconds(tap_answer_timeout_ms), [this] { touch_answer_timed_out(); });
 
     Core::ElapsedTimer m_frame_timer;
     i64 m_frames_presented { 0 };
@@ -1284,11 +1284,11 @@ private:
         //     again would be dropped. So the two halves are spread over two timers, which also folds the app's
         //     two switches arriving together into one round of downloads.
         if (!m_restart_list_updates_timer) {
-            m_restart_list_updates_timer = Core::Timer::create_single_shot(500, [this] {
+            m_restart_list_updates_timer = Core::Timer::create_single_shot(AK::Duration::from_milliseconds(500), [this] {
                 WebView::Application::settings().set_filter_list_updates_enabled(false);
                 m_resume_list_updates_timer->restart();
             });
-            m_resume_list_updates_timer = Core::Timer::create_single_shot(500, [this] {
+            m_resume_list_updates_timer = Core::Timer::create_single_shot(AK::Duration::from_milliseconds(500), [this] {
                 if (m_block_ads || m_block_cookie_banners)
                     WebView::Application::settings().set_filter_list_updates_enabled(true);
             });
