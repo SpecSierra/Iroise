@@ -168,6 +168,10 @@ Each patch in `patches/` does one thing:
 | 0016 | maps read-only files privately, which older kernels (the Xperia 10 II's) need |
 | 0017 | accepts Sailfish OS's FFmpeg 5.1 for H.264 and AAC |
 | 0018 | runs the embedder's scripts in every document, frames included, before the document's own (autoconsent) |
+| 0019 | leaves the volume of an audio stream to the system |
+| 0020 | refuses a sandboxed process's unexpected `connect()` rather than killing the process |
+| 0021 | adds `Touch`, `TouchList`, `TouchEvent` and `ontouchstart` and the rest ([TOUCH.md](TOUCH.md)) |
+| 0022 | carries touches from the front end to the page, and lets touch listeners decide a finger's scroll ([TOUCH.md](TOUCH.md)) |
 
 `patches/vcpkg-skia-gl-without-system-libraries.patch` builds Skia's OpenGL backend without linking a GL library,
 for the reason above.

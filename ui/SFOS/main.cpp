@@ -13,6 +13,7 @@
 #include <AK/JsonValue.h>
 #include <AK/LexicalPath.h>
 #include <AK/StringBuilder.h>
+#include <AK/Time.h>
 #include <LibCore/ElapsedTimer.h>
 #include <LibCore/File.h>
 #include <LibCore/Environment.h>
@@ -31,6 +32,7 @@
 #include <LibWebCommon/HTML/FileFilter.h>
 #include <LibWebCommon/HTML/SelectItem.h>
 #include <LibWebCommon/HTML/SelectedFile.h>
+#include <LibWebCommon/Page/EventResult.h>
 #include <LibWebCommon/Page/InputEvent.h>
 #include <LibWebCommon/Page/ScreenWakeLockState.h>
 #include <LibWebCommon/WebView/ConsoleOutput.h>
@@ -137,6 +139,8 @@ public:
                 send_mouse_event(Web::MouseEvent::Type::MouseMove, position);
                 send_mouse_event(Web::MouseEvent::Type::MouseDown, position);
                 m_mouse_held = true;
+            } else {
+                send_touch_event(Web::MouseEvent::Type::TouchStart, position);
             }
             return;
         }
@@ -158,6 +162,7 @@ public:
         }
 
         if (phase == Motion) {
+            send_touch_event(Web::MouseEvent::Type::TouchMove, position);
             auto travelled = position - m_touch_start;
             if (!m_is_scrolling && max(abs(travelled.x()), abs(travelled.y())) > touch_slop)
                 m_is_scrolling = true;
@@ -170,15 +175,34 @@ public:
         }
 
         m_active_touch.clear();
+        if (phase == Cancel) {
+            send_touch_event(Web::MouseEvent::Type::TouchCancel, position);
+            if (m_is_scrolling)
+                send_mouse_event(Web::MouseEvent::Type::MouseWheel, position, {}, Web::ScrollGesturePhase::Ended);
+            return;
+        }
+        // NB: The mouse events of a tap follow only once the page has handled its touchend, and only if the page
+        //     cancelled neither that nor the touchstart (see touch_event_finished).
+        bool is_tap = !m_is_scrolling;
+        send_touch_event(Web::MouseEvent::Type::TouchEnd, position);
+        if (s_touch_events)
+            m_touch_ends_awaiting_page.append({ is_tap ? Optional<Gfx::IntPoint> { position } : Optional<Gfx::IntPoint> {}, MonotonicTime::now() });
         if (m_is_scrolling) {
             send_mouse_event(Web::MouseEvent::Type::MouseWheel, position, {}, Web::ScrollGesturePhase::Ended);
             return;
         }
-        if (phase == Cancel)
+        if (!s_touch_events)
+            send_tap(position);
+    }
+
+    // The page has handled an input event. Its touchend decides whether a tap is one.
+    void touch_event_finished(Web::MouseEvent const& event, Web::EventResult result)
+    {
+        if (event.type != Web::MouseEvent::Type::TouchEnd || m_touch_ends_awaiting_page.is_empty())
             return;
-        send_mouse_event(Web::MouseEvent::Type::MouseMove, position);
-        send_mouse_event(Web::MouseEvent::Type::MouseDown, position);
-        send_mouse_event(Web::MouseEvent::Type::MouseUp, position);
+        auto touch_end = m_touch_ends_awaiting_page.take_first();
+        if (touch_end.tap.has_value() && result != Web::EventResult::Cancelled)
+            send_tap(*touch_end.tap);
     }
 
     // Every page that comes to host the tab, also after a cross-site navigation moved it to another process.
@@ -253,6 +277,29 @@ private:
         }
     }
 
+    void send_tap(Gfx::IntPoint position)
+    {
+        send_mouse_event(Web::MouseEvent::Type::MouseMove, position);
+        send_mouse_event(Web::MouseEvent::Type::MouseDown, position);
+        send_mouse_event(Web::MouseEvent::Type::MouseUp, position);
+    }
+
+    // Touch events are the engine's by our patches 0021 and 0022 (docs/TOUCH.md).
+    void send_touch_event(Web::MouseEvent::Type type, Gfx::IntPoint position)
+    {
+        if (!s_touch_events)
+            return;
+        // A touchend the page never answered (its process went away) holds up no later tap.
+        auto now = MonotonicTime::now();
+        while (!m_touch_ends_awaiting_page.is_empty() && now - m_touch_ends_awaiting_page.first().sent > AK::Duration::from_seconds(2))
+            m_touch_ends_awaiting_page.take_first();
+        Web::MouseEvent event {};
+        event.type = type;
+        event.position = position.to_type<Web::DevicePixels>();
+        event.screen_position = position.to_type<Web::DevicePixels>();
+        enqueue_input_event(move(event));
+    }
+
     void send_mouse_event(Web::MouseEvent::Type type, Gfx::IntPoint position, Gfx::IntPoint wheel_delta = {}, Web::ScrollGesturePhase phase = Web::ScrollGesturePhase::None)
     {
         auto is_button_event = type == Web::MouseEvent::Type::MouseDown || type == Web::MouseEvent::Type::MouseUp;
@@ -271,10 +318,14 @@ private:
         event.wheel_delta_y = wheel_delta.y() / m_device_pixel_ratio;
         event.wheel_delta_precision = Web::WheelDeltaPrecision::Precise;
         event.scroll_gesture_phase = phase;
+        // NB: Every scroll this front end sends is a finger's.
+        event.is_touch_scroll = s_touch_events && type == Web::MouseEvent::Type::MouseWheel;
         enqueue_input_event(move(event));
     }
 
     static inline bool s_log_frame_rate = Core::Environment::has("LADYBIRD_SFOS_LOG_FPS"sv);
+    // PACIFIC_TOUCH_EVENTS=0 leaves pages without touch events, as Pacific was before them.
+    static inline bool s_touch_events = Core::Environment::get("PACIFIC_TOUCH_EVENTS"sv).value_or({}) != "0"sv;
     // The screen's refresh rate, as the app found it; the engine assumes 60 otherwise.
     static inline double s_refresh_rate = [] {
         auto rate = Core::Environment::get("LADYBIRD_SFOS_REFRESH_RATE"sv).value_or({}).to_number<double>();
@@ -285,6 +336,12 @@ private:
     Gfx::IntPoint m_touch_start;
     Gfx::IntPoint m_touch_last;
     bool m_is_scrolling { false };
+    // The touchends sent that the page has yet to finish, in order, with the tap each would make.
+    struct TouchEndAwaitingPage {
+        Optional<Gfx::IntPoint> tap;
+        MonotonicTime sent;
+    };
+    Vector<TouchEndAwaitingPage> m_touch_ends_awaiting_page;
     // This touch is passed on as a mouse with its button held (see handle_touch).
     bool m_touch_is_mouse { false };
     bool m_mouse_held { false };
@@ -529,6 +586,9 @@ private:
             if (log->arguments[0].as_string() != LB_EMBED_PAGE_MESSAGE_MARKER ""sv)
                 return;
             m_host.send_text(id, LB_EMBED_PAGE_MESSAGE, log->arguments[1].as_string().bytes_as_string_view());
+        };
+        view->on_finish_handling_mouse_event = [raw_view](Web::MouseEvent const& event, Web::EventResult result) {
+            raw_view->touch_event_finished(event, result);
         };
         view->on_received_js_console_result = [this, id](JsonValue result) {
             if (result.is_string())

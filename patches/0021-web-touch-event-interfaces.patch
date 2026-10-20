@@ -1,0 +1,518 @@
+diff --git a/Libraries/LibWeb/CMakeLists.txt b/Libraries/LibWeb/CMakeLists.txt
+index 61e3a66e..f6b01f61 100644
+--- a/Libraries/LibWeb/CMakeLists.txt
++++ b/Libraries/LibWeb/CMakeLists.txt
+@@ -982,6 +982,9 @@ set(SOURCES
+     UIEvents/PointerEvent.cpp
+     UIEvents/PointerTypes.cpp
+     UIEvents/TextEvent.cpp
++    UIEvents/Touch.cpp
++    UIEvents/TouchEvent.cpp
++    UIEvents/TouchList.cpp
+     UIEvents/UIEvent.cpp
+     UIEvents/WheelEvent.cpp
+     UserTiming/PerformanceMark.cpp
+diff --git a/Libraries/LibWeb/Forward.h b/Libraries/LibWeb/Forward.h
+index 2947a732..676ed643 100644
+--- a/Libraries/LibWeb/Forward.h
++++ b/Libraries/LibWeb/Forward.h
+@@ -1204,6 +1204,9 @@ class KeyboardEvent;
+ class MouseEvent;
+ class PointerEvent;
+ class TextEvent;
++class Touch;
++class TouchEvent;
++class TouchList;
+ class UIEvent;
+ 
+ }
+diff --git a/Libraries/LibWeb/HTML/AttributeNames.h b/Libraries/LibWeb/HTML/AttributeNames.h
+index 0d86d5fe..2d824dc1 100644
+--- a/Libraries/LibWeb/HTML/AttributeNames.h
++++ b/Libraries/LibWeb/HTML/AttributeNames.h
+@@ -250,6 +250,10 @@ namespace AttributeNames {
+     __ENUMERATE_HTML_ATTRIBUTE(onsuspend, "onsuspend")                                             \
+     __ENUMERATE_HTML_ATTRIBUTE(ontimeupdate, "ontimeupdate")                                       \
+     __ENUMERATE_HTML_ATTRIBUTE(ontoggle, "ontoggle")                                               \
++    __ENUMERATE_HTML_ATTRIBUTE(ontouchcancel, "ontouchcancel")                                     \
++    __ENUMERATE_HTML_ATTRIBUTE(ontouchend, "ontouchend")                                           \
++    __ENUMERATE_HTML_ATTRIBUTE(ontouchmove, "ontouchmove")                                         \
++    __ENUMERATE_HTML_ATTRIBUTE(ontouchstart, "ontouchstart")                                       \
+     __ENUMERATE_HTML_ATTRIBUTE(ontransitioncancel, "ontransitioncancel")                           \
+     __ENUMERATE_HTML_ATTRIBUTE(ontransitionend, "ontransitionend")                                 \
+     __ENUMERATE_HTML_ATTRIBUTE(ontransitionrun, "ontransitionrun")                                 \
+diff --git a/Libraries/LibWeb/HTML/GlobalEventHandlers.h b/Libraries/LibWeb/HTML/GlobalEventHandlers.h
+index 1fd6279f..242c7558 100644
+--- a/Libraries/LibWeb/HTML/GlobalEventHandlers.h
++++ b/Libraries/LibWeb/HTML/GlobalEventHandlers.h
+@@ -99,6 +99,10 @@
+     E(onsuspend, HTML::EventNames::suspend)                                   \
+     E(ontimeupdate, HTML::EventNames::timeupdate)                             \
+     E(ontoggle, HTML::EventNames::toggle)                                     \
++    E(ontouchcancel, UIEvents::EventNames::touchcancel)                       \
++    E(ontouchend, UIEvents::EventNames::touchend)                             \
++    E(ontouchmove, UIEvents::EventNames::touchmove)                           \
++    E(ontouchstart, UIEvents::EventNames::touchstart)                         \
+     E(ontransitioncancel, HTML::EventNames::transitioncancel)                 \
+     E(ontransitionend, HTML::EventNames::transitionend)                       \
+     E(ontransitionrun, HTML::EventNames::transitionrun)                       \
+diff --git a/Libraries/LibWeb/UIEvents/EventNames.h b/Libraries/LibWeb/UIEvents/EventNames.h
+index ba800490..01cbe99e 100644
+--- a/Libraries/LibWeb/UIEvents/EventNames.h
++++ b/Libraries/LibWeb/UIEvents/EventNames.h
+@@ -46,6 +46,10 @@ namespace Web::UIEvents::EventNames {
+     __ENUMERATE_UI_EVENT(pointerup)          \
+     __ENUMERATE_UI_EVENT(resize)             \
+     __ENUMERATE_UI_EVENT(textInput)          \
++    __ENUMERATE_UI_EVENT(touchcancel)        \
++    __ENUMERATE_UI_EVENT(touchend)           \
++    __ENUMERATE_UI_EVENT(touchmove)          \
++    __ENUMERATE_UI_EVENT(touchstart)         \
+     __ENUMERATE_UI_EVENT(wheel)
+ 
+ #define __ENUMERATE_UI_EVENT(name) extern WEB_API Utf16FlyString const& name;
+diff --git a/Libraries/LibWeb/UIEvents/Touch.cpp b/Libraries/LibWeb/UIEvents/Touch.cpp
+new file mode 100644
+index 00000000..0c1ce454
+--- /dev/null
++++ b/Libraries/LibWeb/UIEvents/Touch.cpp
+@@ -0,0 +1,37 @@
++/*
++ * Copyright (c) 2026, the Pacific developers.
++ *
++ * SPDX-License-Identifier: BSD-2-Clause
++ */
++
++#include <LibGC/Heap.h>
++#include <LibWeb/UIEvents/Touch.h>
++
++namespace Web::UIEvents {
++
++GC_DEFINE_ALLOCATOR(Touch);
++
++GC::Ref<Touch> Touch::create(i32 identifier, GC::Ref<DOM::EventTarget> target, CSSPixelPoint screen, CSSPixelPoint client, CSSPixelPoint page, float radius)
++{
++    return GC::Heap::the().allocate<Touch>(identifier, target, screen, client, page, radius);
++}
++
++Touch::Touch(i32 identifier, GC::Ref<DOM::EventTarget> target, CSSPixelPoint screen, CSSPixelPoint client, CSSPixelPoint page, float radius)
++    : m_identifier(identifier)
++    , m_target(target)
++    , m_screen(screen)
++    , m_client(client)
++    , m_page(page)
++    , m_radius(radius)
++{
++}
++
++Touch::~Touch() = default;
++
++void Touch::visit_edges(GC::Cell::Visitor& visitor)
++{
++    Base::visit_edges(visitor);
++    visitor.visit(m_target);
++}
++
++}
+diff --git a/Libraries/LibWeb/UIEvents/Touch.h b/Libraries/LibWeb/UIEvents/Touch.h
+new file mode 100644
+index 00000000..2be69280
+--- /dev/null
++++ b/Libraries/LibWeb/UIEvents/Touch.h
+@@ -0,0 +1,52 @@
++/*
++ * Copyright (c) 2026, the Pacific developers.
++ *
++ * SPDX-License-Identifier: BSD-2-Clause
++ */
++
++#pragma once
++
++#include <LibWeb/Bindings/Wrappable.h>
++#include <LibWeb/DOM/EventTarget.h>
++#include <LibWebCommon/PixelUnits.h>
++
++namespace Web::UIEvents {
++
++// https://w3c.github.io/touch-events/#touch-interface
++class Touch final : public Bindings::GCAllocatedWrappable {
++    WEB_WRAPPABLE(Touch, Bindings::GCAllocatedWrappable);
++    GC_DECLARE_ALLOCATOR(Touch);
++
++public:
++    // `client` is relative to the viewport, `page` to the initial containing block.
++    [[nodiscard]] static GC::Ref<Touch> create(i32 identifier, GC::Ref<DOM::EventTarget>, CSSPixelPoint screen, CSSPixelPoint client, CSSPixelPoint page, float radius);
++    virtual ~Touch() override;
++
++    i32 identifier() const { return m_identifier; }
++    GC::Ref<DOM::EventTarget> target() const { return m_target; }
++    double screen_x() const { return m_screen.x().to_double(); }
++    double screen_y() const { return m_screen.y().to_double(); }
++    double client_x() const { return m_client.x().to_double(); }
++    double client_y() const { return m_client.y().to_double(); }
++    double page_x() const { return m_page.x().to_double(); }
++    double page_y() const { return m_page.y().to_double(); }
++    float radius_x() const { return m_radius; }
++    float radius_y() const { return m_radius; }
++    float rotation_angle() const { return 0; }
++    // NB: The screen does not tell how hard a finger presses.
++    float force() const { return 0; }
++
++private:
++    Touch(i32 identifier, GC::Ref<DOM::EventTarget>, CSSPixelPoint screen, CSSPixelPoint client, CSSPixelPoint page, float radius);
++
++    virtual void visit_edges(GC::Cell::Visitor&) override;
++
++    i32 m_identifier { 0 };
++    GC::Ref<DOM::EventTarget> m_target;
++    CSSPixelPoint m_screen;
++    CSSPixelPoint m_client;
++    CSSPixelPoint m_page;
++    float m_radius { 0 };
++};
++
++}
+diff --git a/Libraries/LibWeb/UIEvents/Touch.idl b/Libraries/LibWeb/UIEvents/Touch.idl
+new file mode 100644
+index 00000000..4f21cfb3
+--- /dev/null
++++ b/Libraries/LibWeb/UIEvents/Touch.idl
+@@ -0,0 +1,17 @@
++// https://w3c.github.io/touch-events/#touch-interface
++// FIXME: The constructor, and altitudeAngle, azimuthAngle and touchType.
++[Exposed=Window]
++interface Touch {
++    readonly attribute long identifier;
++    readonly attribute EventTarget target;
++    readonly attribute double screenX;
++    readonly attribute double screenY;
++    readonly attribute double clientX;
++    readonly attribute double clientY;
++    readonly attribute double pageX;
++    readonly attribute double pageY;
++    readonly attribute float radiusX;
++    readonly attribute float radiusY;
++    readonly attribute float rotationAngle;
++    readonly attribute float force;
++};
+diff --git a/Libraries/LibWeb/UIEvents/TouchEvent.cpp b/Libraries/LibWeb/UIEvents/TouchEvent.cpp
+new file mode 100644
+index 00000000..4b6076fb
+--- /dev/null
++++ b/Libraries/LibWeb/UIEvents/TouchEvent.cpp
+@@ -0,0 +1,98 @@
++/*
++ * Copyright (c) 2026, the Pacific developers.
++ *
++ * SPDX-License-Identifier: BSD-2-Clause
++ */
++
++#include <LibGC/Heap.h>
++#include <LibWeb/UIEvents/TouchEvent.h>
++#include <LibWebCommon/UIEvents/KeyCode.h>
++
++namespace Web::UIEvents {
++
++GC_DEFINE_ALLOCATOR(TouchEvent);
++
++GC::Ref<TouchEvent> TouchEvent::create_from_platform_event(Utf16FlyString const& event_name, GC::Ptr<HTML::WindowProxy> view, GC::Ref<TouchList> touches, GC::Ref<TouchList> target_touches, GC::Ref<TouchList> changed_touches, unsigned modifiers, bool cancelable, HighResolutionTime::DOMHighResTimeStamp time_stamp)
++{
++    TouchEventInit event_init;
++    event_init.view = view;
++    event_init.ctrl_key = modifiers & Mod_Ctrl;
++    event_init.shift_key = modifiers & Mod_Shift;
++    event_init.alt_key = modifiers & Mod_Alt;
++    event_init.meta_key = modifiers & Mod_Super;
++    auto event = GC::Heap::the().allocate<TouchEvent>(event_name, event_init, time_stamp);
++    event->m_touches = touches;
++    event->m_target_touches = target_touches;
++    event->m_changed_touches = changed_touches;
++    event->set_is_trusted(true);
++    event->set_bubbles(true);
++    event->set_cancelable(cancelable);
++    event->set_composed(true);
++    return event;
++}
++
++GC::Ref<TouchEvent> TouchEvent::create_for_constructor(FlyString const& event_name, TouchEventInit const& event_init, HighResolutionTime::DOMHighResTimeStamp time_stamp)
++{
++    return GC::Heap::the().allocate<TouchEvent>(event_name, event_init, time_stamp);
++}
++
++GC::Ref<TouchEvent> TouchEvent::create_for_constructor(Utf16String const& event_name, TouchEventInit const& event_init, HighResolutionTime::DOMHighResTimeStamp time_stamp)
++{
++    return GC::Heap::the().allocate<TouchEvent>(Utf16FlyString::from_utf16(event_name.utf16_view()), event_init, time_stamp);
++}
++
++TouchEvent::TouchEvent(FlyString const& event_name, TouchEventInit const& event_init, HighResolutionTime::DOMHighResTimeStamp time_stamp)
++    : UIEvent(event_name, event_init, time_stamp)
++{
++    initialize_from(event_init);
++}
++
++TouchEvent::TouchEvent(Utf16FlyString const& event_name, TouchEventInit const& event_init, HighResolutionTime::DOMHighResTimeStamp time_stamp)
++    : UIEvent(event_name, event_init, time_stamp)
++{
++    initialize_from(event_init);
++}
++
++TouchEvent::~TouchEvent() = default;
++
++void TouchEvent::initialize_from(TouchEventInit const& event_init)
++{
++    auto list = [](auto const& touches) {
++        Vector<GC::Ref<Touch>> list;
++        list.ensure_capacity(touches.size());
++        for (auto const& touch : touches)
++            list.unchecked_append(touch);
++        return TouchList::create(move(list));
++    };
++    m_touches = list(event_init.touches);
++    m_target_touches = list(event_init.target_touches);
++    m_changed_touches = list(event_init.changed_touches);
++    m_alt_key = event_init.alt_key;
++    m_meta_key = event_init.meta_key;
++    m_ctrl_key = event_init.ctrl_key;
++    m_shift_key = event_init.shift_key;
++}
++
++void TouchEvent::visit_edges(GC::Cell::Visitor& visitor)
++{
++    Base::visit_edges(visitor);
++    visitor.visit(m_touches);
++    visitor.visit(m_target_touches);
++    visitor.visit(m_changed_touches);
++}
++
++// https://w3c.github.io/uievents/#dom-mouseevent-getmodifierstate
++bool TouchEvent::get_modifier_state(Utf16FlyString const& key_arg) const
++{
++    if (key_arg == "Control"_utf16_fly_string)
++        return m_ctrl_key;
++    if (key_arg == "Shift"_utf16_fly_string)
++        return m_shift_key;
++    if (key_arg == "Alt"_utf16_fly_string)
++        return m_alt_key;
++    if (key_arg == "Meta"_utf16_fly_string)
++        return m_meta_key;
++    return false;
++}
++
++}
+diff --git a/Libraries/LibWeb/UIEvents/TouchEvent.h b/Libraries/LibWeb/UIEvents/TouchEvent.h
+new file mode 100644
+index 00000000..9b0fc34d
+--- /dev/null
++++ b/Libraries/LibWeb/UIEvents/TouchEvent.h
+@@ -0,0 +1,58 @@
++/*
++ * Copyright (c) 2026, the Pacific developers.
++ *
++ * SPDX-License-Identifier: BSD-2-Clause
++ */
++
++#pragma once
++
++#include <AK/FlyString.h>
++#include <AK/Utf16FlyString.h>
++#include <AK/Utf16String.h>
++#include <LibWeb/Bindings/TouchEvent.h>
++#include <LibWeb/UIEvents/TouchList.h>
++#include <LibWeb/UIEvents/UIEvent.h>
++#include <LibWebCommon/HighResolutionTime/DOMHighResTimeStamp.h>
++
++namespace Web::UIEvents {
++
++using TouchEventInit = Bindings::TouchEventInit;
++
++// https://w3c.github.io/touch-events/#touchevent-interface
++class TouchEvent final : public UIEvent {
++    WEB_WRAPPABLE(TouchEvent, UIEvent);
++    GC_DECLARE_ALLOCATOR(TouchEvent);
++
++public:
++    // A touch event of the user's: trusted, bubbling and composed. It can be cancelled if `cancelable`.
++    [[nodiscard]] static GC::Ref<TouchEvent> create_from_platform_event(Utf16FlyString const& event_name, GC::Ptr<HTML::WindowProxy>, GC::Ref<TouchList> touches, GC::Ref<TouchList> target_touches, GC::Ref<TouchList> changed_touches, unsigned modifiers, bool cancelable, HighResolutionTime::DOMHighResTimeStamp);
++    [[nodiscard]] static GC::Ref<TouchEvent> create_for_constructor(FlyString const& event_name, TouchEventInit const&, HighResolutionTime::DOMHighResTimeStamp);
++    [[nodiscard]] static GC::Ref<TouchEvent> create_for_constructor(Utf16String const& event_name, TouchEventInit const&, HighResolutionTime::DOMHighResTimeStamp);
++    virtual ~TouchEvent() override;
++
++    GC::Ref<TouchList> touches() const { return *m_touches; }
++    GC::Ref<TouchList> target_touches() const { return *m_target_touches; }
++    GC::Ref<TouchList> changed_touches() const { return *m_changed_touches; }
++    bool alt_key() const { return m_alt_key; }
++    bool meta_key() const { return m_meta_key; }
++    bool ctrl_key() const { return m_ctrl_key; }
++    bool shift_key() const { return m_shift_key; }
++    bool get_modifier_state(Utf16FlyString const& key_arg) const;
++
++private:
++    TouchEvent(FlyString const& event_name, TouchEventInit const&, HighResolutionTime::DOMHighResTimeStamp);
++    TouchEvent(Utf16FlyString const& event_name, TouchEventInit const&, HighResolutionTime::DOMHighResTimeStamp);
++
++    void initialize_from(TouchEventInit const&);
++    virtual void visit_edges(GC::Cell::Visitor&) override;
++
++    GC::Ptr<TouchList> m_touches;
++    GC::Ptr<TouchList> m_target_touches;
++    GC::Ptr<TouchList> m_changed_touches;
++    bool m_alt_key { false };
++    bool m_meta_key { false };
++    bool m_ctrl_key { false };
++    bool m_shift_key { false };
++};
++
++}
+diff --git a/Libraries/LibWeb/UIEvents/TouchEvent.idl b/Libraries/LibWeb/UIEvents/TouchEvent.idl
+new file mode 100644
+index 00000000..db27728c
+--- /dev/null
++++ b/Libraries/LibWeb/UIEvents/TouchEvent.idl
+@@ -0,0 +1,20 @@
++// https://w3c.github.io/touch-events/#touchevent-interface
++[Exposed=Window]
++interface TouchEvent : UIEvent {
++    constructor(DOMString type, optional TouchEventInit eventInitDict = {});
++    readonly attribute TouchList touches;
++    readonly attribute TouchList targetTouches;
++    readonly attribute TouchList changedTouches;
++    readonly attribute boolean altKey;
++    readonly attribute boolean metaKey;
++    readonly attribute boolean ctrlKey;
++    readonly attribute boolean shiftKey;
++    boolean getModifierState([FlyString] DOMString keyArg);
++};
++
++// https://w3c.github.io/touch-events/#touchevent-interface
++dictionary TouchEventInit : EventModifierInit {
++    sequence<Touch> touches = [];
++    sequence<Touch> targetTouches = [];
++    sequence<Touch> changedTouches = [];
++};
+diff --git a/Libraries/LibWeb/UIEvents/TouchEventHandlers.idl b/Libraries/LibWeb/UIEvents/TouchEventHandlers.idl
+new file mode 100644
+index 00000000..467c9fcc
+--- /dev/null
++++ b/Libraries/LibWeb/UIEvents/TouchEventHandlers.idl
+@@ -0,0 +1,7 @@
++// https://w3c.github.io/touch-events/#extensions-to-the-globaleventhandlers-mixin
++partial interface mixin GlobalEventHandlers {
++    attribute EventHandler ontouchstart;
++    attribute EventHandler ontouchend;
++    attribute EventHandler ontouchmove;
++    attribute EventHandler ontouchcancel;
++};
+diff --git a/Libraries/LibWeb/UIEvents/TouchList.cpp b/Libraries/LibWeb/UIEvents/TouchList.cpp
+new file mode 100644
+index 00000000..67bf089a
+--- /dev/null
++++ b/Libraries/LibWeb/UIEvents/TouchList.cpp
+@@ -0,0 +1,40 @@
++/*
++ * Copyright (c) 2026, the Pacific developers.
++ *
++ * SPDX-License-Identifier: BSD-2-Clause
++ */
++
++#include <LibGC/Heap.h>
++#include <LibWeb/UIEvents/TouchList.h>
++
++namespace Web::UIEvents {
++
++GC_DEFINE_ALLOCATOR(TouchList);
++
++GC::Ref<TouchList> TouchList::create(Vector<GC::Ref<Touch>> touches)
++{
++    return GC::Heap::the().allocate<TouchList>(move(touches));
++}
++
++TouchList::TouchList(Vector<GC::Ref<Touch>> touches)
++    : m_touches(move(touches))
++{
++}
++
++TouchList::~TouchList() = default;
++
++void TouchList::visit_edges(GC::Cell::Visitor& visitor)
++{
++    Base::visit_edges(visitor);
++    visitor.visit(m_touches);
++}
++
++// https://w3c.github.io/touch-events/#dom-touchlist-item
++Touch const* TouchList::item(u32 index) const
++{
++    if (index >= m_touches.size())
++        return nullptr;
++    return m_touches[index].ptr();
++}
++
++}
+diff --git a/Libraries/LibWeb/UIEvents/TouchList.h b/Libraries/LibWeb/UIEvents/TouchList.h
+new file mode 100644
+index 00000000..51e7070c
+--- /dev/null
++++ b/Libraries/LibWeb/UIEvents/TouchList.h
+@@ -0,0 +1,35 @@
++/*
++ * Copyright (c) 2026, the Pacific developers.
++ *
++ * SPDX-License-Identifier: BSD-2-Clause
++ */
++
++#pragma once
++
++#include <AK/Vector.h>
++#include <LibWeb/Bindings/Wrappable.h>
++#include <LibWeb/UIEvents/Touch.h>
++
++namespace Web::UIEvents {
++
++// https://w3c.github.io/touch-events/#touchlist-interface
++class TouchList final : public Bindings::GCAllocatedWrappable {
++    WEB_WRAPPABLE(TouchList, Bindings::GCAllocatedWrappable);
++    GC_DECLARE_ALLOCATOR(TouchList);
++
++public:
++    [[nodiscard]] static GC::Ref<TouchList> create(Vector<GC::Ref<Touch>>);
++    virtual ~TouchList() override;
++
++    u32 length() const { return m_touches.size(); }
++    Touch const* item(u32 index) const;
++
++private:
++    explicit TouchList(Vector<GC::Ref<Touch>>);
++
++    virtual void visit_edges(GC::Cell::Visitor&) override;
++
++    Vector<GC::Ref<Touch>> m_touches;
++};
++
++}
+diff --git a/Libraries/LibWeb/UIEvents/TouchList.idl b/Libraries/LibWeb/UIEvents/TouchList.idl
+new file mode 100644
+index 00000000..f8a4c237
+--- /dev/null
++++ b/Libraries/LibWeb/UIEvents/TouchList.idl
+@@ -0,0 +1,6 @@
++// https://w3c.github.io/touch-events/#touchlist-interface
++[Exposed=Window]
++interface TouchList {
++    readonly attribute unsigned long length;
++    getter Touch? item(unsigned long index);
++};
+diff --git a/Libraries/LibWeb/idl_files.cmake b/Libraries/LibWeb/idl_files.cmake
+index 43e85bfe..e77cfa8c 100644
+--- a/Libraries/LibWeb/idl_files.cmake
++++ b/Libraries/LibWeb/idl_files.cmake
+@@ -579,6 +579,10 @@ libweb_js_bindings(UIEvents/MouseEvent)
+ libweb_js_bindings(UIEvents/PointerEvent)
+ libweb_js_bindings(UIEvents/PointerEventHandlers)
+ libweb_js_bindings(UIEvents/TextEvent)
++libweb_js_bindings(UIEvents/Touch)
++libweb_js_bindings(UIEvents/TouchEvent)
++libweb_js_bindings(UIEvents/TouchEventHandlers)
++libweb_js_bindings(UIEvents/TouchList)
+ libweb_js_bindings(UIEvents/UIEvent)
+ libweb_js_bindings(UIEvents/WheelEvent)
+ libweb_js_bindings(URLPattern/URLPattern)
