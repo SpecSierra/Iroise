@@ -188,6 +188,9 @@ public:
                 send_carrier(Web::MouseEvent::Type::MouseMove, position);
                 ++m_cancelable_moves_sent;
                 auto travelled = position - m_touch_start;
+                // NB: A page in fullscreen has nothing to scroll: the finger stays the page's (a seek bar's).
+                if (is_page_fullscreen && max(abs(travelled.x()), abs(travelled.y())) > touch_slop)
+                    m_page_owns_touch = true;
                 if (!m_is_scrolling && !m_awaiting_scroll && !m_page_owns_touch && max(abs(travelled.x()), abs(travelled.y())) > touch_slop) {
                     // Whether it scrolls is the page's to say, by what it does with this touchmove, if any of its
                     // listeners could cancel it. Otherwise it scrolls at once.
@@ -299,9 +302,16 @@ public:
         scroll_if_page_allows();
     }
 
+    // A load began: the document it commits listens for touches only once it says so.
+    void page_load_started() { m_loading_document = true; }
+
     void page_committed()
     {
-        // A new document listens for touches only once it says so.
+        // NB: A history entry of the same document (history.pushState, which a video player may do for fullscreen)
+        //     commits too, with no load; its document keeps its listeners.
+        if (!m_loading_document)
+            return;
+        m_loading_document = false;
         page_listens_for_touches = false;
         page_touches_may_block_scrolling = false;
         m_pending_tap.clear();
@@ -318,6 +328,7 @@ public:
     // Whether the page has said it listens for touch events (see TouchEvents.h).
     bool page_listens_for_touches { false };
     bool page_touches_may_block_scrolling { false };
+    bool m_loading_document { false };
 
     void handle_pinch(Gfx::IntPoint position, double scale)
     {
@@ -830,7 +841,10 @@ private:
             auto text = title.to_utf8();
             m_host.send_text(id, LB_EMBED_TITLE, text.bytes_as_string_view());
         };
-        view->on_load_start = [this, id] { m_host.send_flags(id, LB_EMBED_LOADING, true); };
+        view->on_load_start = [this, id, raw_view] {
+            raw_view->page_load_started();
+            m_host.send_flags(id, LB_EMBED_LOADING, true);
+        };
         view->on_load_finish = [this, id](URL::URL const&) { m_host.send_flags(id, LB_EMBED_LOADING, false); };
         view->on_top_level_navigation_commit = [this, id, raw_view] {
             raw_view->page_committed();
