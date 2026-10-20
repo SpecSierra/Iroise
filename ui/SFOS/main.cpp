@@ -174,8 +174,13 @@ public:
                 m_touch_position = position;
                 // NB: Once the page scrolls, it may no longer cancel the touch, as in other browsers.
                 send_carrier(Web::MouseEvent::Type::MouseMove, position, m_is_scrolling);
-                if (!m_is_scrolling)
-                    ++m_cancelable_moves_sent;
+                if (m_is_scrolling) {
+                    // The content follows the finger, so it scrolls the opposite way.
+                    send_mouse_event(Web::MouseEvent::Type::MouseWheel, position, m_touch_last - position, Web::ScrollGesturePhase::Ongoing);
+                    m_touch_last = position;
+                    return;
+                }
+                ++m_cancelable_moves_sent;
                 auto travelled = position - m_touch_start;
                 if (!m_is_scrolling && !m_awaiting_scroll && !m_page_owns_touch && max(abs(travelled.x()), abs(travelled.y())) > touch_slop) {
                     // Whether it scrolls is the page's to say, by what it does with this touchmove.
