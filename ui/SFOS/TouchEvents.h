@@ -203,7 +203,12 @@ static constexpr auto touch_events_script = R"js((() => {
         active.owned = fire("touchstart", true, event);
         // NB: What it touched only goes into the front end's log.
         const target = active.target instanceof Element ? describeElement(active.target) : "?";
-        log(marker, "start " + number(event) + " " + (active.owned ? 1 : 0) + " " + target);
+        let stack = "";
+        try {
+            stack = document.elementsFromPoint(event.clientX, event.clientY).slice(0, 5).map(describeElement).join(">");
+        } catch (e) { }
+        log(marker, "start " + number(event) + " " + (active.owned ? 1 : 0) + " " + target + " @" + Math.round(event.clientX)
+            + "," + Math.round(event.clientY) + " in " + innerWidth + "x" + innerHeight + " under " + stack);
     }, capture);
     add.call(window, "pointermove", event => {
         if (!isCarrier(event))
