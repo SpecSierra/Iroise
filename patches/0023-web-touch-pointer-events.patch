@@ -16,7 +16,7 @@ index a7bab01d..24730a3e 100644
  
              Optional<RemoteInputEventTarget> remote_target;
 diff --git a/Libraries/LibWeb/Page/EventHandler.cpp b/Libraries/LibWeb/Page/EventHandler.cpp
-index 47e9df67..be621386 100644
+index 47e9df67..a676252c 100644
 --- a/Libraries/LibWeb/Page/EventHandler.cpp
 +++ b/Libraries/LibWeb/Page/EventHandler.cpp
 @@ -16,11 +16,14 @@
@@ -42,16 +42,35 @@ index 47e9df67..be621386 100644
  #include <LibWeb/UIEvents/TextEvent.h>
  #include <LibWeb/UIEvents/TouchEvent.h>
  #include <LibWeb/UIEvents/WheelEvent.h>
-@@ -1250,7 +1254,7 @@ EventResult EventHandler::handle_mousewheel(CSSPixelPoint visual_viewport_positi
-         // NB: A step of a finger's scroll fires no wheel event; the page's touch events decide it (Pacific,
-         //     patches/0022).
+@@ -1066,6 +1070,14 @@ EventResult EventHandler::handle_mousewheel(CSSPixelPoint visual_viewport_positi
+ 
+     auto device_pixels_per_css_pixel = static_cast<float>(m_navigable->page().client().device_pixels_per_css_pixel());
+     auto async_scroll_delta_in_device_pixels = Gfx::FloatPoint { static_cast<float>(wheel_delta_x), static_cast<float>(wheel_delta_y) }.scaled(device_pixels_per_css_pixel);
++    // NB: A step of a finger's scroll fires no wheel event: the page's touch events and touch-action decide it, before
++    //     it goes on to the compositor, which would scroll it whatever they say (Pacific, patches/0022 and 0023).
++    if (m_navigable->page().handling_touch_scroll()
++        && m_navigable->page().touch_scroll_step_result(!async_scroll_performed_default_action, wheel_delta_x, wheel_delta_y) == EventResult::Cancelled) {
++        record_input_routing(InputRoutingDecision::PageCanceledWheelEvent);
++        m_wheel_scroll_latch.clear();
++        return EventResult::Cancelled;
++    }
+     if (can_attempt_async_scroll && async_scroll_performed_default_action) {
+         dbgln_if(COMPOSITOR_DEBUG, "[Compositor] Not attempting wheel async scroll: default action already performed");
+         record_input_routing(InputRoutingDecision::DefaultActionPerformedByCompositor);
+@@ -1247,10 +1259,9 @@ EventResult EventHandler::handle_mousewheel(CSSPixelPoint visual_viewport_positi
+         }
+ 
+         auto is_cancelable = async_scroll_performed_default_action ? UIEvents::WheelEventIsCancelable::No : UIEvents::WheelEventIsCancelable::Yes;
+-        // NB: A step of a finger's scroll fires no wheel event; the page's touch events decide it (Pacific,
+-        //     patches/0022).
++        // NB: A step of a finger's scroll fires no wheel event, and was decided above.
          auto dispatch_result = m_navigable->page().handling_touch_scroll()
 -            ? m_navigable->page().touch_scroll_step_result(is_cancelable == UIEvents::WheelEventIsCancelable::Yes)
-+            ? m_navigable->page().touch_scroll_step_result(is_cancelable == UIEvents::WheelEventIsCancelable::Yes, wheel_delta_x, wheel_delta_y)
++            ? EventResult::Accepted
              : dispatch_wheel_event(read, *wheel_event_target_layout_node, visual_viewport_position, screen_position, button, buttons, modifiers, wheel_delta_x, wheel_delta_y, wheel_tick_120ths_x, wheel_tick_120ths_y, is_cancelable == UIEvents::WheelEventIsCancelable::Yes);
          if (dispatch_result == EventResult::Accepted)
              record_input_routing(InputRoutingDecision::DispatchedWheelEvent, {}, wheel_event_target_node);
-@@ -4287,7 +4291,12 @@ EventHandler::PointerEventDispatchResult EventHandler::dispatch_a_pointer_event_
+@@ -4287,7 +4298,12 @@ EventHandler::PointerEventDispatchResult EventHandler::dispatch_a_pointer_event_
  
      // 3. Dispatch the pointer event.
      m_last_dispatched_pointer_event_position = PointerEventPosition { coordinates, screen_position };
@@ -65,7 +84,7 @@ index 47e9df67..be621386 100644
  
      // 4. If the pointer event dispatched was pointerdown and event's canceled flag is set, then set the PREVENT MOUSE
      //    EVENT flag for this pointerType.
-@@ -4590,11 +4599,15 @@ EventResult EventHandler::handle_touch(Web::MouseEvent::Type type, CSSPixelPoint
+@@ -4590,11 +4606,15 @@ EventResult EventHandler::handle_touch(Web::MouseEvent::Type type, CSSPixelPoint
              *remote_target = RemoteInputEventTarget { *touch.remote_navigable_id, visual_viewport_position.translated(touch.nested_offset) };
              return EventResult::Handled;
          }
@@ -82,7 +101,7 @@ index 47e9df67..be621386 100644
      m_touch = {};
  
      Layout::ForcedReadScope read { *document };
-@@ -4642,6 +4655,76 @@ EventResult EventHandler::handle_touch(Web::MouseEvent::Type type, CSSPixelPoint
+@@ -4642,6 +4662,76 @@ EventResult EventHandler::handle_touch(Web::MouseEvent::Type type, CSSPixelPoint
      return dispatch_touch_event(type, visual_viewport_position, screen_position, modifiers);
  }
  
@@ -159,7 +178,7 @@ index 47e9df67..be621386 100644
  static bool has_touch_event_listener(DOM::EventTarget const& target)
  {
      return target.has_event_listener(UIEvents::EventNames::touchstart) || target.has_event_listener(UIEvents::EventNames::touchmove)
-@@ -4653,9 +4736,15 @@ EventResult EventHandler::dispatch_touch_event(Web::MouseEvent::Type type, CSSPi
+@@ -4653,9 +4743,15 @@ EventResult EventHandler::dispatch_touch_event(Web::MouseEvent::Type type, CSSPi
      using enum Web::MouseEvent::Type;
  
      auto document = m_navigable->active_document();
@@ -177,7 +196,7 @@ index 47e9df67..be621386 100644
      auto& page = m_navigable->page();
  
      auto event_name = [&]() -> Utf16FlyString const& {
-@@ -4675,7 +4764,51 @@ EventResult EventHandler::dispatch_touch_event(Web::MouseEvent::Type type, CSSPi
+@@ -4675,7 +4771,51 @@ EventResult EventHandler::dispatch_touch_event(Web::MouseEvent::Type type, CSSPi
      bool cancelable = type == TouchStart || type == TouchEnd || (type == TouchMove && !page.touch_scrolls());
  
      auto viewport_position = document->visual_viewport()->map_to_layout_viewport(visual_viewport_position);
@@ -230,7 +249,7 @@ index 47e9df67..be621386 100644
      Vector<GC::Ref<UIEvents::Touch>> touches;
      if (type != TouchEnd && type != TouchCancel)
          touches.append(touch);
-@@ -4692,6 +4825,10 @@ EventResult EventHandler::dispatch_touch_event(Web::MouseEvent::Type type, CSSPi
+@@ -4692,6 +4832,10 @@ EventResult EventHandler::dispatch_touch_event(Web::MouseEvent::Type type, CSSPi
          m_touch.start_cancelled = true;
      if (cancelled || (type == TouchEnd && m_touch.start_cancelled))
          return EventResult::Cancelled;
