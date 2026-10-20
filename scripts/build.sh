@@ -62,8 +62,10 @@ if [ ! -f "$BUILD/build.ninja" ]; then
     cmake --preset Release -S "$UP" -B "$BUILD" \
         -DCMAKE_C_COMPILER=gcc-14 -DCMAKE_CXX_COMPILER=g++-14 \
         -DPKG_CONFIG_EXECUTABLE="$(command -v pkg-config)" \
-        -DBUILD_TESTING=OFF
+        -DBUILD_TESTING=ON
 fi
+# The tests' targets (test-web, for scripts/test-engine.sh); the default target builds none of them.
+grep -q '^BUILD_TESTING:BOOL=ON' "$BUILD/CMakeCache.txt" || cmake -B "$BUILD" -DBUILD_TESTING=ON
 # Plain ARMv8.0, not the build host's CPU: the Xperia 10 II's Cortex-A73/A53 have none of the host's ARMv8.2 extras.
 grep -q '^ENABLE_ARMV8_BASELINE_CPU:BOOL=ON' "$BUILD/CMakeCache.txt" || cmake -B "$BUILD" -DENABLE_ARMV8_BASELINE_CPU=ON
 exec ninja -C "$BUILD" -j "$JOBS" "${1:-ladybird}"

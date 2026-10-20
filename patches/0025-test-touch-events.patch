@@ -1,0 +1,411 @@
+diff --git a/Libraries/LibWeb/Internals/Internals.cpp b/Libraries/LibWeb/Internals/Internals.cpp
+index e8aa9ca7..2b348312 100644
+--- a/Libraries/LibWeb/Internals/Internals.cpp
++++ b/Libraries/LibWeb/Internals/Internals.cpp
+@@ -834,6 +834,55 @@ void Internals::mouse_cancel()
+     this->page().handle_mousecancel();
+ }
+ 
++static Utf16String touch_event_result(EventResult result)
++{
++    switch (result) {
++    case EventResult::Accepted:
++        return "accepted"_utf16;
++    case EventResult::Handled:
++        return "handled"_utf16;
++    case EventResult::Cancelled:
++        return "cancelled"_utf16;
++    default:
++        return "dropped"_utf16;
++    }
++}
++
++static EventResult send_touch(Page& page, Web::MouseEvent::Type type, double x, double y)
++{
++    auto position = page.css_to_device_point({ x, y });
++    return page.handle_touch(page.local_traversable(), type, position, position, 0, nullptr);
++}
++
++Utf16String Internals::touch_start(double x, double y) { return touch_event_result(send_touch(page(), Web::MouseEvent::Type::TouchStart, x, y)); }
++Utf16String Internals::touch_move(double x, double y) { return touch_event_result(send_touch(page(), Web::MouseEvent::Type::TouchMove, x, y)); }
++Utf16String Internals::touch_end(double x, double y) { return touch_event_result(send_touch(page(), Web::MouseEvent::Type::TouchEnd, x, y)); }
++Utf16String Internals::touch_cancel(double x, double y) { return touch_event_result(send_touch(page(), Web::MouseEvent::Type::TouchCancel, x, y)); }
++
++Utf16String Internals::touch_scroll(double x, double y, double delta_x, double delta_y)
++{
++    auto& page = this->page();
++    auto position = page.css_to_device_point({ x, y });
++    page.set_handling_touch_scroll(true);
++    auto result = page.handle_mousewheel(page.local_traversable(), position, position, 0, 0, 0, delta_x, delta_y, 0, 0, Web::WheelDeltaPrecision::Precise, Web::ScrollGesturePhase::Ongoing, false, nullptr, nullptr);
++    page.set_handling_touch_scroll(false);
++    return touch_event_result(result);
++}
++
++void Internals::tap(double x, double y)
++{
++    auto& page = this->page();
++    send_touch(page, Web::MouseEvent::Type::TouchStart, x, y);
++    if (send_touch(page, Web::MouseEvent::Type::TouchEnd, x, y) == EventResult::Cancelled)
++        return;
++    auto position = page.css_to_device_point({ x, y });
++    page.set_handling_touch_compatibility(true);
++    page.handle_mousemove(position, position, 0, 0);
++    page.handle_mousedown(position, position, UIEvents::MouseButton::Primary, 0, 0, 1);
++    page.handle_mouseup(position, position, UIEvents::MouseButton::Primary, 0, 0);
++    page.set_handling_touch_compatibility(false);
++}
++
+ void Internals::click(double x, double y, WebIDL::UnsignedShort click_count, WebIDL::UnsignedShort button, WebIDL::UnsignedShort modifiers)
+ {
+     click_and_hold(x, y, click_count, button, modifiers);
+diff --git a/Libraries/LibWeb/Internals/Internals.h b/Libraries/LibWeb/Internals/Internals.h
+index 9d1a0871..e73dfa1f 100644
+--- a/Libraries/LibWeb/Internals/Internals.h
++++ b/Libraries/LibWeb/Internals/Internals.h
+@@ -112,6 +112,13 @@ public:
+ 
+     // High-level mouse conveniences
+     void click(double x, double y, WebIDL::UnsignedShort click_count, WebIDL::UnsignedShort button, WebIDL::UnsignedShort modifiers);
++
++    Utf16String touch_start(double x, double y);
++    Utf16String touch_move(double x, double y);
++    Utf16String touch_end(double x, double y);
++    Utf16String touch_cancel(double x, double y);
++    Utf16String touch_scroll(double x, double y, double delta_x, double delta_y);
++    void tap(double x, double y);
+     void click_and_hold(double x, double y, WebIDL::UnsignedShort click_count, WebIDL::UnsignedShort button, WebIDL::UnsignedShort modifiers);
+     void wheel(GC::Ref<WebIDL::Promise>, double x, double y, double delta_x, double delta_y, bool precise, Bindings::ScrollGesturePhase, Bindings::WheelTicks const&);
+     void wheel(double x, double y, double delta_x, double delta_y, bool precise, Bindings::ScrollGesturePhase, Bindings::WheelTicks const&, GC::Ref<WebIDL::Promise>);
+diff --git a/Libraries/LibWeb/Internals/Internals.idl b/Libraries/LibWeb/Internals/Internals.idl
+index aaecdc3a..77b9d7a6 100644
+--- a/Libraries/LibWeb/Internals/Internals.idl
++++ b/Libraries/LibWeb/Internals/Internals.idl
+@@ -96,6 +96,17 @@ interface Internals {
+     // viewport if none is given.
+     object compositorScrollState(optional Element? scroller = null);
+     undefined pinch(double x, double y, double scaleDelta, optional unsigned short modifiers = 0);
++
++    // A finger, as Pacific's front end sends it (patches/0025). Each returns what became of the event: "accepted",
++    // "handled", "cancelled" or "dropped".
++    DOMString touchStart(double x, double y);
++    DOMString touchMove(double x, double y);
++    DOMString touchEnd(double x, double y);
++    DOMString touchCancel(double x, double y);
++    // A step of the finger's scroll, which the page's touch events decide.
++    DOMString touchScroll(double x, double y, double deltaX, double deltaY);
++    // A tap: touchstart, touchend, and the mouse events of a tap unless the page cancelled the touch.
++    undefined tap(double x, double y);
+     undefined resetZoom();
+ 
+     DOMString currentCursor();
+diff --git a/Tests/LibWeb/Text/expected/UIEvents/touch-action.txt b/Tests/LibWeb/Text/expected/UIEvents/touch-action.txt
+new file mode 100644
+index 00000000..19d5d292
+--- /dev/null
++++ b/Tests/LibWeb/Text/expected/UIEvents/touch-action.txt
+@@ -0,0 +1,17 @@
++none:
++  touchstart cancelled: true
++  scroll step cancelled: true
++  none: pointermove
++pan-y, sideways:
++  touchstart cancelled: false
++  scroll step cancelled: true
++  pan-y: pointermove
++pan-y, down:
++  touchstart cancelled: false
++  scroll step cancelled: false
++  pan-y-down: pointercancel
++none on an ancestor:
++  touchstart cancelled: true
++  scroll step cancelled: true
++  inner: pointermove
++  outer: pointermove
+diff --git a/Tests/LibWeb/Text/expected/UIEvents/touch-cancelled-touch-has-no-mouse-events.txt b/Tests/LibWeb/Text/expected/UIEvents/touch-cancelled-touch-has-no-mouse-events.txt
+new file mode 100644
+index 00000000..4aa4f43b
+--- /dev/null
++++ b/Tests/LibWeb/Text/expected/UIEvents/touch-cancelled-touch-has-no-mouse-events.txt
+@@ -0,0 +1,4 @@
++touchstart cancelled:
++touchend cancelled:
++pointerdown cancelled:
++  down: click
+diff --git a/Tests/LibWeb/Text/expected/UIEvents/touch-event-interfaces.txt b/Tests/LibWeb/Text/expected/UIEvents/touch-event-interfaces.txt
+new file mode 100644
+index 00000000..8ed04395
+--- /dev/null
++++ b/Tests/LibWeb/Text/expected/UIEvents/touch-event-interfaces.txt
+@@ -0,0 +1,8 @@
++ontouchstart in window: true
++ontouchend in an element: true
++constructed: touchstart, bubbles true, ctrlKey true, touches 0
++pointerdown: touch, primary true, pressure 0.5, buttons 1, id over 1 true
++touchstart: trusted true, cancelable true, touches 1, changed 1
++touch: target target, client 30,40, item(0) is it true
++touchend: touches 0, changed 1
++attribute handler ran: true
+diff --git a/Tests/LibWeb/Text/expected/UIEvents/touch-pointer-target-removed.txt b/Tests/LibWeb/Text/expected/UIEvents/touch-pointer-target-removed.txt
+new file mode 100644
+index 00000000..4b4f36c3
+--- /dev/null
++++ b/Tests/LibWeb/Text/expected/UIEvents/touch-pointer-target-removed.txt
+@@ -0,0 +1,3 @@
++pointerdown at tile
++pointerup at document
++touchend at tile
+diff --git a/Tests/LibWeb/Text/expected/UIEvents/touch-scroll-decided-by-touchmove.txt b/Tests/LibWeb/Text/expected/UIEvents/touch-scroll-decided-by-touchmove.txt
+new file mode 100644
+index 00000000..9200a092
+--- /dev/null
++++ b/Tests/LibWeb/Text/expected/UIEvents/touch-scroll-decided-by-touchmove.txt
+@@ -0,0 +1,13 @@
++cancelled touchmove:
++  holds: pointermove
++  holds: touchmove, cancelable true
++  scroll step cancelled: true
++  holds: pointermove
++  holds: touchmove, cancelable true
++  holds: pointerup
++touchmove not cancelled:
++  lets: pointermove
++  lets: touchmove, cancelable true
++  scroll step cancelled: false
++  lets: pointercancel
++  lets: touchmove, cancelable false
+diff --git a/Tests/LibWeb/Text/expected/UIEvents/touch-tap-event-order.txt b/Tests/LibWeb/Text/expected/UIEvents/touch-tap-event-order.txt
+new file mode 100644
+index 00000000..6e835233
+--- /dev/null
++++ b/Tests/LibWeb/Text/expected/UIEvents/touch-tap-event-order.txt
+@@ -0,0 +1,14 @@
++pointerover (touch)
++pointerenter (touch)
++pointerdown (touch)
++touchstart
++pointerup (touch)
++pointerout (touch)
++pointerleave (touch)
++touchend
++mouseover
++mouseenter
++mousemove
++mousedown
++mouseup
++click
+diff --git a/Tests/LibWeb/Text/input/UIEvents/touch-action.html b/Tests/LibWeb/Text/input/UIEvents/touch-action.html
+new file mode 100644
+index 00000000..99166889
+--- /dev/null
++++ b/Tests/LibWeb/Text/input/UIEvents/touch-action.html
+@@ -0,0 +1,35 @@
++<!DOCTYPE html>
++<style>
++body { margin: 0; height: 3000px; width: 3000px; }
++div { width: 100px; height: 100px; }
++#none { touch-action: none; }
++#pan-y, #pan-y-down { touch-action: pan-y; }
++#outer { touch-action: none; height: auto; }
++</style>
++<div id="none"></div>
++<div id="pan-y"></div>
++<div id="pan-y-down"></div>
++<div id="outer"><div id="inner"></div></div>
++<script src="../include.js"></script>
++<script>
++    // https://w3c.github.io/pointerevents/#the-touch-action-css-property
++    // touch-action decides whether a finger pans: the touchstart tells a UI when no panning is allowed, a direction the
++    // page keeps does not scroll, and a pointer the page keeps is not cancelled (Pacific, patches/0023).
++    test(() => {
++        for (const element of document.querySelectorAll("div")) {
++            for (const type of ["pointermove", "pointercancel"])
++                element.addEventListener(type, () => println(`  ${element.id}: ${type}`));
++        }
++        function finger(name, x, y, deltaX, deltaY) {
++            println(`${name}:`);
++            println(`  touchstart cancelled: ${internals.touchStart(x, y) === "cancelled"}`);
++            println(`  scroll step cancelled: ${internals.touchScroll(x, y, deltaX, deltaY) === "cancelled"}`);
++            internals.touchMove(x + 1, y + 1);
++            internals.touchEnd(x + 1, y + 1);
++        }
++        finger("none", 50, 50, 0, 10);
++        finger("pan-y, sideways", 50, 150, 10, 0);
++        finger("pan-y, down", 50, 250, 0, 10);
++        finger("none on an ancestor", 50, 350, 0, 10);
++    });
++</script>
+diff --git a/Tests/LibWeb/Text/input/UIEvents/touch-cancelled-touch-has-no-mouse-events.html b/Tests/LibWeb/Text/input/UIEvents/touch-cancelled-touch-has-no-mouse-events.html
+new file mode 100644
+index 00000000..0ff9d555
+--- /dev/null
++++ b/Tests/LibWeb/Text/input/UIEvents/touch-cancelled-touch-has-no-mouse-events.html
+@@ -0,0 +1,33 @@
++<!DOCTYPE html>
++<style>
++body { margin: 0; }
++div { width: 100px; height: 100px; }
++</style>
++<div id="start"></div>
++<div id="end"></div>
++<div id="down"></div>
++<script src="../include.js"></script>
++<script>
++    // https://w3c.github.io/touch-events/#mouse-events
++    // A cancelled touchstart or touchend keeps a tap from becoming mouse events. A cancelled pointerdown keeps only its
++    // mousedown and mouseup from firing: its click still does.
++    test(() => {
++        function listen(element) {
++            for (const type of ["mousedown", "mouseup", "click"])
++                element.addEventListener(type, () => println(`  ${element.id}: ${type}`));
++        }
++        listen(start);
++        listen(end);
++        listen(down);
++        start.addEventListener("touchstart", event => event.preventDefault());
++        end.addEventListener("touchend", event => event.preventDefault());
++        down.addEventListener("pointerdown", event => event.preventDefault());
++
++        println("touchstart cancelled:");
++        internals.tap(50, 50);
++        println("touchend cancelled:");
++        internals.tap(50, 150);
++        println("pointerdown cancelled:");
++        internals.tap(50, 250);
++    });
++</script>
+diff --git a/Tests/LibWeb/Text/input/UIEvents/touch-event-interfaces.html b/Tests/LibWeb/Text/input/UIEvents/touch-event-interfaces.html
+new file mode 100644
+index 00000000..ef162d98
+--- /dev/null
++++ b/Tests/LibWeb/Text/input/UIEvents/touch-event-interfaces.html
+@@ -0,0 +1,34 @@
++<!DOCTYPE html>
++<style>
++body { margin: 0; }
++#target { width: 100px; height: 100px; margin-left: 20px; }
++</style>
++<div id="target"></div>
++<script src="../include.js"></script>
++<script>
++    // Touch, TouchList and TouchEvent, ontouchstart and the rest, and what a touch's events carry (Pacific,
++    // patches/0021 to 0023).
++    test(() => {
++        println(`ontouchstart in window: ${"ontouchstart" in window}`);
++        println(`ontouchend in an element: ${"ontouchend" in document.createElement("div")}`);
++        const constructed = new TouchEvent("touchstart", { bubbles: true, ctrlKey: true });
++        println(`constructed: ${constructed.type}, bubbles ${constructed.bubbles}, ctrlKey ${constructed.ctrlKey}, touches ${constructed.touches.length}`);
++
++        window.attributeHandlerRan = false;
++        target.setAttribute("ontouchstart", "window.attributeHandlerRan = true");
++        target.addEventListener("pointerdown", event => {
++            println(`pointerdown: ${event.pointerType}, primary ${event.isPrimary}, pressure ${event.pressure}, buttons ${event.buttons}, id over 1 ${event.pointerId > 1}`);
++        });
++        target.addEventListener("touchstart", event => {
++            const touch = event.changedTouches[0];
++            println(`touchstart: trusted ${event.isTrusted}, cancelable ${event.cancelable}, touches ${event.touches.length}, changed ${event.changedTouches.length}`);
++            println(`touch: target ${touch.target.id}, client ${touch.clientX},${touch.clientY}, item(0) is it ${event.touches.item(0) === touch}`);
++        });
++        target.addEventListener("touchend", event => {
++            println(`touchend: touches ${event.touches.length}, changed ${event.changedTouches.length}`);
++        });
++        internals.touchStart(30, 40);
++        internals.touchEnd(30, 40);
++        println(`attribute handler ran: ${window.attributeHandlerRan}`);
++    });
++</script>
+diff --git a/Tests/LibWeb/Text/input/UIEvents/touch-pointer-target-removed.html b/Tests/LibWeb/Text/input/UIEvents/touch-pointer-target-removed.html
+new file mode 100644
+index 00000000..22258d21
+--- /dev/null
++++ b/Tests/LibWeb/Text/input/UIEvents/touch-pointer-target-removed.html
+@@ -0,0 +1,22 @@
++<!DOCTYPE html>
++<style>
++body { margin: 0; }
++#tile { width: 100px; height: 100px; }
++</style>
++<div id="tile"></div>
++<script src="../include.js"></script>
++<script>
++    // The pointer of a touch whose element left the document goes on at the document, so that a page counting the
++    // pointers that are down there (a map's) still hears it go up. The touch's own events stay with the element
++    // (Pacific, patches/0023).
++    test(() => {
++        const name = target => target === document ? "document" : target.id;
++        document.addEventListener("pointerdown", event => println(`pointerdown at ${name(event.target)}`));
++        document.addEventListener("pointerup", event => println(`pointerup at ${name(event.target)}`));
++        tile.addEventListener("touchend", event => println(`touchend at ${name(event.target)}`));
++
++        internals.touchStart(50, 50);
++        tile.remove();
++        internals.touchEnd(50, 50);
++    });
++</script>
+diff --git a/Tests/LibWeb/Text/input/UIEvents/touch-scroll-decided-by-touchmove.html b/Tests/LibWeb/Text/input/UIEvents/touch-scroll-decided-by-touchmove.html
+new file mode 100644
+index 00000000..96ea5718
+--- /dev/null
++++ b/Tests/LibWeb/Text/input/UIEvents/touch-scroll-decided-by-touchmove.html
+@@ -0,0 +1,34 @@
++<!DOCTYPE html>
++<style>
++body { margin: 0; height: 3000px; }
++div { width: 100px; height: 100px; }
++</style>
++<div id="holds"></div>
++<div id="lets"></div>
++<script src="../include.js"></script>
++<script>
++    // A cancelled touchmove keeps the finger from scrolling. A step the page lets through scrolls: the touch's pointer
++    // is cancelled, and its touchmoves can no longer be cancelled (Pacific, patches/0022 and 0023).
++    test(() => {
++        holds.addEventListener("touchmove", event => event.preventDefault());
++        for (const element of [holds, lets]) {
++            for (const type of ["pointermove", "pointercancel", "pointerup"])
++                element.addEventListener(type, () => println(`  ${element.id}: ${type}`));
++            element.addEventListener("touchmove", event => println(`  ${element.id}: touchmove, cancelable ${event.cancelable}`));
++        }
++
++        println("cancelled touchmove:");
++        internals.touchStart(50, 50);
++        internals.touchMove(50, 40);
++        println(`  scroll step cancelled: ${internals.touchScroll(50, 40, 0, 10) === "cancelled"}`);
++        internals.touchMove(50, 30);
++        internals.touchEnd(50, 30);
++
++        println("touchmove not cancelled:");
++        internals.touchStart(50, 150);
++        internals.touchMove(50, 140);
++        println(`  scroll step cancelled: ${internals.touchScroll(50, 140, 0, 10) === "cancelled"}`);
++        internals.touchMove(50, 130);
++        internals.touchEnd(50, 130);
++    });
++</script>
+diff --git a/Tests/LibWeb/Text/input/UIEvents/touch-tap-event-order.html b/Tests/LibWeb/Text/input/UIEvents/touch-tap-event-order.html
+new file mode 100644
+index 00000000..481e749f
+--- /dev/null
++++ b/Tests/LibWeb/Text/input/UIEvents/touch-tap-event-order.html
+@@ -0,0 +1,22 @@
++<!DOCTYPE html>
++<style>
++body { margin: 0; }
++#target { width: 100px; height: 100px; }
++</style>
++<div id="target"></div>
++<script src="../include.js"></script>
++<script>
++    // A tap fires the pointer events of its touch, its touch events, then the mouse events of a tap, with no mouse
++    // pointer events of their own (Pacific, patches/0021 to 0024).
++    test(() => {
++        const types = ["pointerover", "pointerenter", "pointerdown", "pointermove", "pointerup", "pointercancel",
++            "pointerout", "pointerleave", "touchstart", "touchmove", "touchend", "touchcancel", "mouseover",
++            "mouseenter", "mousemove", "mousedown", "mouseup", "click"];
++        for (const type of types) {
++            target.addEventListener(type, event => {
++                println(event.pointerType !== undefined && type.startsWith("pointer") ? `${type} (${event.pointerType})` : type);
++            });
++        }
++        internals.tap(50, 50);
++    });
++</script>

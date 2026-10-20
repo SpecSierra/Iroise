@@ -76,6 +76,12 @@ Every push to `main` builds the engine, the interface and the package on our sel
 directory and a compiler cache between runs, so a run only rebuilds what the engine pin, the patches or our own
 code changed. The package is kept with the run for a week, for testing; it is not published.
 
+Each run then checks the package against the store's rules (`scripts/validate-rpm.sh`) and runs the engine's tests
+(`scripts/test-engine.sh`): Ladybird's own tests of input, pointer, wheel and DOM events, which our patches change,
+and our tests of the touch patches, with Ladybird's headless test runner on the runner itself. Their results are
+kept with the run too. The same script runs them on the build host, or a few of them:
+`scripts/test-engine.sh -f 'Text/input/UIEvents/touch-*'`.
+
 Nothing runs on pull requests. A self-hosted runner would otherwise run whatever code a fork sends it.
 
 ## Updating Ladybird

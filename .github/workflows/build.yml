@@ -34,6 +34,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Build
+        id: build
         run: scripts/ci-build.sh "${{ github.run_number }}"
 
       - name: Keep the RPM
@@ -47,3 +48,17 @@ jobs:
       # After keeping it, so that a package the store would refuse can still be looked at.
       - name: Check against the store's rules
         run: scripts/validate-rpm.sh dist/rpm/harbour-pacific-*-${{ github.run_number }}.aarch64.rpm
+
+      # Whatever the store makes of it.
+      - name: Test the engine
+        if: ${{ !cancelled() && steps.build.outcome == 'success' }}
+        run: scripts/test-engine.sh
+
+      - name: Keep the test results
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ github.run_number }}
+          path: dist/test-results
+          retention-days: 7
+          if-no-files-found: ignore

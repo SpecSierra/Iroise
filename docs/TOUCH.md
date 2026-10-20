@@ -62,10 +62,12 @@ The rest are hooks of a few lines each in Ladybird's own files:
 - Lists: `UIEvents/EventNames.h`, `HTML/GlobalEventHandlers.h`, `HTML/AttributeNames.h`, `idl_files.cmake`,
   `CMakeLists.txt`.
 
-They are four patches: `0021-web-touch-event-interfaces` (the interfaces and the lists), `0022-web-touch-input`
+They are five patches: `0021-web-touch-event-interfaces` (the interfaces and the lists), `0022-web-touch-input`
 (the input path, the dispatch and the scroll decision) and `0023-web-touch-pointer-events` (the pointer events of a
 touch, and a tap's mouse events without their own), and `0024-web-no-mouse-pointer-boundary-events-for-a-tap` (the
-same for the hover a tap moves, in `Document.cpp`, kept apart as the one hook there). The front end sends touches in `ui/SFOS/main.cpp`;
+same for the hover a tap moves, in `Document.cpp`, kept apart as the one hook there), and `0025-test-touch-events` (tests of them all, with `internals.touchStart()` and
+the rest to drive a finger, which `scripts/test-engine.sh` runs with Ladybird's own tests of input, pointer and wheel
+events on every CI build). The front end sends touches in `ui/SFOS/main.cpp`;
 `PACIFIC_TOUCH_EVENTS=0` turns them off, which brings back the browser without touch events.
 
 ## Not yet
