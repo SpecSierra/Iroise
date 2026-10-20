@@ -26,6 +26,9 @@ filters=(
 
 rm -rf "$RESULTS"
 mkdir -p "$RESULTS"
-cd "$UP"
-LADYBIRD_SOURCE_DIR="$UP" "$BUILD/bin/test-web" --test-path "$UP/Tests/LibWeb" --results-dir "$RESULTS" \
+# NB: Real paths: the runner names tests, their results and the URLs its HTTP server serves them at by their paths
+#     from the source directory, and a symlinked upstream/ (CI's) gave it two ways to spell each.
+SOURCE="$(readlink -f "$UP")"
+cd "$SOURCE"
+LADYBIRD_SOURCE_DIR="$SOURCE" "$BUILD/bin/test-web" --test-path "$SOURCE/Tests/LibWeb" --results-dir "$(readlink -f "$RESULTS")" \
     --test-concurrency "$JOBS" --per-test-timeout 60 --python-executable "$(command -v python3)" "${filters[@]}"
