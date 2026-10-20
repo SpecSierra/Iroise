@@ -4,3 +4,4 @@
 /.venv
 /build.log
 /build-browser.log
+__pycache__/
