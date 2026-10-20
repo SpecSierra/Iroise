@@ -109,7 +109,9 @@ every document before the document's own (`ui/SFOS/TouchEvents.h`), gives pages 
 says so once a page listens for them. From then on the front end presses the mouse in a way no real mouse does,
 with the Forward button held as well; the script hides that press from the page and fires the touch event in its
 place, and tells the front end whether the page cancelled it. Only then does the finger scroll, or end in the mouse
-events of a tap, as in other browsers. The press being a real one is what lets a page go fullscreen or start a
+events of a tap, as in other browsers. Once it scrolls, the page gets `touchcancel` and no more touch events for
+that finger, as in Chrome on Android: the engine takes input in turn, and touch events, which wait on the page's
+script, would hold up the scroll steps behind them. The press being a real one is what lets a page go fullscreen or start a
 video from `touchend`. Pages that do not listen for touches get a scroll or a tap straight away, and a page in
 fullscreen without touch listeners gets the finger as a mouse with its button held, so a seek bar can be dragged.
 

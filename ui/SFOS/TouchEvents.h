@@ -22,7 +22,7 @@ namespace Pacific {
 
 static constexpr auto touch_message_marker = "\001pacific-touch"sv;
 static constexpr unsigned touch_carrier_button = 16; // Forward
-static constexpr unsigned touch_flag_button = 8;     // Backward: a touchmove that cannot be cancelled, or touchcancel
+static constexpr unsigned touch_flag_button = 8;     // Backward: on the release, touchcancel instead of touchend
 
 static constexpr auto touch_events_script = R"js((() => {
     "use strict";

@@ -146,6 +146,7 @@ public:
                 m_cancelable_moves_sent = 0;
                 m_cancelable_moves_reported = 0;
                 send_carrier(Web::MouseEvent::Type::MouseDown, position);
+                m_carrier_held = true;
             } else if (m_touch_mode == TouchMode::Mouse) {
                 send_mouse_event(Web::MouseEvent::Type::MouseMove, position);
                 send_mouse_event(Web::MouseEvent::Type::MouseDown, position);
@@ -172,14 +173,13 @@ public:
         if (m_touch_mode == TouchMode::TouchEvents) {
             if (phase == Motion) {
                 m_touch_position = position;
-                // NB: Once the page scrolls, it may no longer cancel the touch, as in other browsers.
-                send_carrier(Web::MouseEvent::Type::MouseMove, position, m_is_scrolling);
                 if (m_is_scrolling) {
                     // The content follows the finger, so it scrolls the opposite way.
                     send_mouse_event(Web::MouseEvent::Type::MouseWheel, position, m_touch_last - position, Web::ScrollGesturePhase::Ongoing);
                     m_touch_last = position;
                     return;
                 }
+                send_carrier(Web::MouseEvent::Type::MouseMove, position);
                 ++m_cancelable_moves_sent;
                 auto travelled = position - m_touch_start;
                 if (!m_is_scrolling && !m_awaiting_scroll && !m_page_owns_touch && max(abs(travelled.x()), abs(travelled.y())) > touch_slop) {
@@ -192,7 +192,10 @@ public:
                 return;
             }
             m_active_touch.clear();
-            send_carrier(Web::MouseEvent::Type::MouseUp, position, phase == Cancel);
+            if (m_carrier_held) {
+                m_carrier_held = false;
+                send_carrier(Web::MouseEvent::Type::MouseUp, position, phase == Cancel);
+            }
             if (m_is_scrolling) {
                 send_mouse_event(Web::MouseEvent::Type::MouseWheel, position, {}, Web::ScrollGesturePhase::Ended);
                 m_is_scrolling = false;
@@ -357,8 +360,8 @@ private:
         }
     }
 
-    // A press of the mouse that the page never sees as one: TouchEvents.h makes a touch event of it. Flagged, a move
-    // makes a touchmove the page cannot cancel and a release makes touchcancel.
+    // A press of the mouse that the page never sees as one: TouchEvents.h makes a touch event of it. Flagged, a
+    // release makes touchcancel.
     void send_carrier(Web::MouseEvent::Type type, Gfx::IntPoint position, bool flagged = false)
     {
         Web::MouseEvent event {};
@@ -389,6 +392,13 @@ private:
             return;
         m_awaiting_scroll = false;
         m_is_scrolling = true;
+        // NB: The page gets touchcancel once the scroll is the browser's, as it did in Chrome on Android. Touch
+        //     events for the rest of the touch would wait on the page's script, and the scroll steps behind them
+        //     (the engine takes input in turn), which leaves the scroll too slow at the end to fling.
+        if (m_carrier_held) {
+            m_carrier_held = false;
+            send_carrier(Web::MouseEvent::Type::MouseUp, m_touch_position, true);
+        }
         send_mouse_event(Web::MouseEvent::Type::MouseWheel, m_touch_position, m_touch_last - m_touch_position, Web::ScrollGesturePhase::Ongoing);
         m_touch_last = m_touch_position;
     }
@@ -444,6 +454,8 @@ private:
     // A mouse button held for a touch in fullscreen.
     bool m_mouse_held { false };
     // Touch events: what the page has said about this touch so far.
+    // The press of the mouse that carries the touch events is down (see send_carrier).
+    bool m_carrier_held { false };
     bool m_page_reported_start { false };
     bool m_page_owns_touch { false };
     bool m_awaiting_scroll { false };
