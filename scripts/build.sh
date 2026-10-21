@@ -95,9 +95,15 @@ grep -q '^ENABLE_ARMV8_BASELINE_CPU:BOOL=ON' "$BUILD/CMakeCache.txt" || cmake -B
 # runtime). Configured again only when they change, which builds everything again.
 pgo_generate=OFF
 [ "$PGO" = generate ] && pgo_generate=ON
+launcher="$(command -v ccache)"
+[ "$PGO" = use ] && launcher="$ROOT/scripts/pgo-compile.sh"
+cached() { grep -qxF -e "$1:STRING=$2" -e "$1:FILEPATH=$2" "$BUILD/CMakeCache.txt"; }
 pgo_settings=()
 for variable in CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_EXE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS CMAKE_MODULE_LINKER_FLAGS; do
-    grep -qxF "$variable:STRING=$PGO_FLAGS" "$BUILD/CMakeCache.txt" || pgo_settings+=("-D$variable=$PGO_FLAGS")
+    cached "$variable" "$PGO_FLAGS" || pgo_settings+=("-D$variable=$PGO_FLAGS")
+done
+for variable in CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER; do
+    cached "$variable" "$launcher" || pgo_settings+=("-D$variable=$launcher")
 done
 grep -qxF "PACIFIC_PGO_GENERATE:BOOL=$pgo_generate" "$BUILD/CMakeCache.txt" || pgo_settings+=("-DPACIFIC_PGO_GENERATE=$pgo_generate")
 [ ${#pgo_settings[@]} -eq 0 ] || cmake -B "$BUILD" "${pgo_settings[@]}"
