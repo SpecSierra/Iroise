@@ -62,7 +62,10 @@ case "$PGO" in
         # %c in LLVM_PROFILE_FILE, see scripts/pgo-profile.sh), so a process that ends with _exit loses nothing.
         # LLVM's profile runtime, which Cargo's static libraries leave out: ui/SFOS/CMakeLists.txt links it into the
         # libraries with Rust code.
+        # NB: Without value profiling (which call an indirect call makes): continuous mode cannot keep it, and files
+        #     that say they have it are refused as truncated.
         RUST_PGO_FLAGS="-Cprofile-generate=$PACIFIC_PGO_DIR/rust -Cllvm-args=-runtime-counter-relocation"
+        RUST_PGO_FLAGS="$RUST_PGO_FLAGS -Cllvm-args=-disable-vp=true"
         PGO_PROFILER_RUNTIME="$(ls "$(cd "$UP" && rustc --print sysroot)"/lib/rustlib/*/lib/libprofiler_builtins-*.rlib)" ;;
     use)
         # NB: The profile's own stamp is in the flags so that ccache, which does not follow -fprofile-prefix-path to
