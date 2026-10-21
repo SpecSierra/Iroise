@@ -50,7 +50,7 @@ BUILD="$UP/Build/release"
 # never ran as it would without one.
 PGO="${PACIFIC_PGO:-}"
 PGO_FLAGS=""
-PGO_LINK_FLAGS=""
+PGO_PROFILER_RUNTIME=""
 RUST_PGO_FLAGS=""
 # NB: gcc compares the prefix with the object files' real paths; upstream/ is a symlink on CI.
 case "$PGO" in
@@ -60,12 +60,10 @@ case "$PGO" in
         PGO_FLAGS="-fprofile-generate=${PACIFIC_PGO_DIR:?} -fprofile-prefix-path=$(realpath -m "$BUILD") -fprofile-update=prefer-atomic"
         # The Rust crates count in LLVM's way, into files that hold the counts as they change ("continuous mode",
         # %c in LLVM_PROFILE_FILE, see scripts/pgo-profile.sh), so a process that ends with _exit loses nothing.
-        # Cargo's static libraries leave out LLVM's profile runtime, so every library links it in itself, at the end
-        # of its link: the counted code defines the counters' offset (__llvm_profile_counter_bias) that the runtime
-        # only stands in for, and the first definition the linker sees wins.
+        # LLVM's profile runtime, which Cargo's static libraries leave out: ui/SFOS/CMakeLists.txt links it into the
+        # libraries with Rust code.
         RUST_PGO_FLAGS="-Cprofile-generate=$PACIFIC_PGO_DIR/rust -Cllvm-args=-runtime-counter-relocation"
-        profiler_runtime="$(ls "$(cd "$UP" && rustc --print sysroot)"/lib/rustlib/*/lib/libprofiler_builtins-*.rlib)"
-        PGO_LINK_FLAGS="-Wl,--whole-archive $profiler_runtime -Wl,--no-whole-archive" ;;
+        PGO_PROFILER_RUNTIME="$(ls "$(cd "$UP" && rustc --print sysroot)"/lib/rustlib/*/lib/libprofiler_builtins-*.rlib)" ;;
     use)
         # NB: The profile's own stamp is in the flags so that ccache, which does not follow -fprofile-prefix-path to
         #     the profile, compiles again when the profile changes.
@@ -120,9 +118,11 @@ done
 for variable in CMAKE_EXE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS CMAKE_MODULE_LINKER_FLAGS; do
     cached "$variable" "$PGO_FLAGS" || pgo_settings+=("-D$variable=$PGO_FLAGS")
 done
+# NB: Empty again: an earlier build linked the runtime into everything this way.
 for variable in CMAKE_C_STANDARD_LIBRARIES CMAKE_CXX_STANDARD_LIBRARIES; do
-    cached "$variable" "$PGO_LINK_FLAGS" || pgo_settings+=("-D$variable=$PGO_LINK_FLAGS")
+    cached "$variable" "" || pgo_settings+=("-D$variable=")
 done
+cached PACIFIC_PGO_PROFILER_RUNTIME "$PGO_PROFILER_RUNTIME" || pgo_settings+=("-DPACIFIC_PGO_PROFILER_RUNTIME=$PGO_PROFILER_RUNTIME")
 for variable in CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER; do
     cached "$variable" "$launcher" || pgo_settings+=("-D$variable=$launcher")
 done
