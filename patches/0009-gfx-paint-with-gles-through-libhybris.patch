@@ -874,10 +874,23 @@ index 4a2cd467..52eedc07 100644
          Vector<Gfx::SharedImage> shared_images;
          shared_images.ensure_capacity(buffer_count);
 diff --git a/vcpkg.json b/vcpkg.json
-index 59783e69..1752adf0 100644
+index 59783e69..0e3952d9 100644
 --- a/vcpkg.json
 +++ b/vcpkg.json
-@@ -214,6 +214,7 @@
+@@ -47,11 +47,7 @@
+         "swresample",
+         "dav1d",
+         "zlib",
+-        "ladybird-components",
+-        {
+-          "name": "vulkan",
+-          "platform": "linux"
+-        }
++        "ladybird-components"
+       ]
+     },
+     {
+@@ -214,6 +210,7 @@
          "fontconfig",
          "harfbuzz",
          "icu",
