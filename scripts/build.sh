@@ -130,6 +130,12 @@ grep -qxF "PACIFIC_PGO_GENERATE:BOOL=$pgo_generate" "$BUILD/CMakeCache.txt" || p
 # The profile's flags reach the engine's own crates through a rustc wrapper (scripts/pgo-rustc.sh). Cargo does not see
 # a wrapper's flags change, so then its build directory goes.
 export CARGO_PROFILE_RELEASE_LTO=true CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+# NB: Not in the instrumented build: there each crate's one object holds the standard library and the profile's
+#     constructor, which two crates in a library then both define. Its counts still fit the optimised build, as
+#     rustc counts before link-time optimisation.
+if [ "$PGO" = generate ]; then
+    export CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
+fi
 if [ -n "$RUST_PGO_FLAGS" ]; then
     export RUSTC_WORKSPACE_WRAPPER="$ROOT/scripts/pgo-rustc.sh" PACIFIC_PGO_RUSTFLAGS="$RUST_PGO_FLAGS"
 else
