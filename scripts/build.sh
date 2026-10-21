@@ -50,15 +50,16 @@ BUILD="$UP/Build/release"
 # never ran as it would without one.
 PGO="${PACIFIC_PGO:-}"
 PGO_FLAGS=""
+# NB: gcc compares the prefix with the object files' real paths; upstream/ is a symlink on CI.
 case "$PGO" in
     "") ;;
     generate)
         BUILD="$UP/Build/pgo-generate"
-        PGO_FLAGS="-fprofile-generate=${PACIFIC_PGO_DIR:?} -fprofile-prefix-path=$BUILD -fprofile-update=prefer-atomic" ;;
+        PGO_FLAGS="-fprofile-generate=${PACIFIC_PGO_DIR:?} -fprofile-prefix-path=$(realpath -m "$BUILD") -fprofile-update=prefer-atomic" ;;
     use)
         # NB: The profile's own stamp is in the flags so that ccache, which does not follow -fprofile-prefix-path to
         #     the profile, compiles again when the profile changes.
-        PGO_FLAGS="-fprofile-use=${PACIFIC_PGO_DIR:?} -fprofile-prefix-path=$BUILD -fprofile-partial-training"
+        PGO_FLAGS="-fprofile-use=${PACIFIC_PGO_DIR:?} -fprofile-prefix-path=$(realpath -m "$BUILD") -fprofile-partial-training"
         PGO_FLAGS="$PGO_FLAGS -Wno-missing-profile -Wno-coverage-mismatch -DPACIFIC_PGO_PROFILE=$(cat "$PACIFIC_PGO_DIR/stamp")" ;;
     *) echo "PACIFIC_PGO must be generate or use, not $PGO" >&2; exit 1 ;;
 esac
