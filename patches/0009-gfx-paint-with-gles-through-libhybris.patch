@@ -1,9 +1,9 @@
 diff --git a/Libraries/LibGfx/CMakeLists.txt b/Libraries/LibGfx/CMakeLists.txt
-index 1373f954..4a92e6b6 100644
+index 28bf16d9..8e861a02 100644
 --- a/Libraries/LibGfx/CMakeLists.txt
 +++ b/Libraries/LibGfx/CMakeLists.txt
-@@ -70,6 +70,10 @@ if (HAS_VULKAN)
-     list(APPEND SOURCES SkiaVulkanMemoryAllocator.cpp VulkanContext.cpp VulkanImage.cpp)
+@@ -72,6 +72,10 @@ if (HAS_VULKAN)
+     list(APPEND SOURCES ImportedYCbCrVulkanImage.cpp SkiaVulkanMemoryAllocator.cpp VulkanContext.cpp VulkanImage.cpp)
  endif()
  
 +if (USE_GLES_HYBRIS)
@@ -13,7 +13,7 @@ index 1373f954..4a92e6b6 100644
  if (HAS_FONTCONFIG)
      list(APPEND SOURCES Font/GlobalFontConfig.cpp)
  endif()
-@@ -111,6 +115,12 @@ if (HAS_DIRECTX)
+@@ -113,6 +117,12 @@ if (HAS_DIRECTX)
      target_link_libraries(LibGfx PRIVATE d3d12 dxgi d3dcompiler)
  endif()
  
@@ -28,10 +28,10 @@ index 1373f954..4a92e6b6 100644
      target_link_libraries(LibGfx PUBLIC Vulkan::Headers)
 diff --git a/Libraries/LibGfx/GLESContext.cpp b/Libraries/LibGfx/GLESContext.cpp
 new file mode 100644
-index 00000000..84d8317f
+index 00000000..6e3e6647
 --- /dev/null
 +++ b/Libraries/LibGfx/GLESContext.cpp
-@@ -0,0 +1,359 @@
+@@ -0,0 +1,357 @@
 +/*
 + * Pacific: the Sailfish OS front end for the Ladybird engine.
 + *
@@ -373,16 +373,14 @@ index 00000000..84d8317f
 +{
 +    auto fd = dup(image.dmabuf_fd);
 +    VERIFY(fd >= 0);
-+    return LinuxDmaBufHandle {
-+        .bitmap_format = BitmapFormat::BGRA8888,
-+        .alpha_type = AlphaType::Premultiplied,
-+        .size = image.size,
-+        .drm_format = DRM_FORMAT_ARGB8888,
-+        .pitch = image.pitch,
-+        .modifier = DRM_FORMAT_MOD_LINEAR,
-+        .file = IPC::File::adopt_fd(fd),
-+        .identity = image.identity,
-+    };
++    LinuxDmaBufHandle dma_buf;
++    dma_buf.size = image.size;
++    dma_buf.drm_format = DRM_FORMAT_ARGB8888;
++    dma_buf.modifier = DRM_FORMAT_MOD_LINEAR;
++    dma_buf.objects.append(IPC::File::adopt_fd(fd));
++    dma_buf.planes.append({ .object_index = 0, .offset = 0, .pitch = static_cast<u32>(image.pitch) });
++    dma_buf.identity = image.identity;
++    return dma_buf;
 +}
 +
 +SharedImage duplicate_shared_image(GLESImage const& image)
@@ -459,6 +457,39 @@ index 00000000..bcc57698
 +SharedImage duplicate_shared_image(GLESImage const&);
 +
 +}
+diff --git a/Libraries/LibGfx/LinuxDmaBufHandle.cpp b/Libraries/LibGfx/LinuxDmaBufHandle.cpp
+index 64ddc9a1..ba44019d 100644
+--- a/Libraries/LibGfx/LinuxDmaBufHandle.cpp
++++ b/Libraries/LibGfx/LinuxDmaBufHandle.cpp
+@@ -25,6 +25,7 @@ ErrorOr<void> encode(Encoder& encoder, Gfx::LinuxDmaBufHandle const& dma_buf)
+     TRY(encoder.encode(dma_buf.objects.size()));
+     for (auto const& object : dma_buf.objects)
+         TRY(encoder.encode(TRY(IPC::File::clone_fd(object.fd()))));
++    TRY(encoder.encode(dma_buf.identity));
+     return {};
+ }
+ 
+@@ -52,6 +53,7 @@ ErrorOr<Gfx::LinuxDmaBufHandle> decode(Decoder& decoder)
+         return Error::from_string_literal("dma-buf image has an unusable number of objects");
+     for (size_t object_index = 0; object_index < object_count; object_index++)
+         dma_buf.objects.unchecked_append(TRY(decoder.decode<IPC::File>()));
++    dma_buf.identity = TRY(decoder.decode<u64>());
+ 
+     for (auto const& plane : dma_buf.planes) {
+         if (plane.object_index >= dma_buf.objects.size())
+diff --git a/Libraries/LibGfx/LinuxDmaBufHandle.h b/Libraries/LibGfx/LinuxDmaBufHandle.h
+index db366ed9..d3660bf9 100644
+--- a/Libraries/LibGfx/LinuxDmaBufHandle.h
++++ b/Libraries/LibGfx/LinuxDmaBufHandle.h
+@@ -29,6 +29,8 @@ struct LinuxDmaBufHandle {
+     u64 modifier { 0 };
+     Vector<IPC::File, MAXIMUM_PLANE_COUNT> objects;
+     Vector<LinuxDmaBufPlane, MAXIMUM_PLANE_COUNT> planes;
++    // Names the buffer for as long as it lives, unlike the file's inode: before Linux 5.3 every dma-buf has the same one.
++    u64 identity { 0 };
+ };
+ 
+ }
 diff --git a/Libraries/LibGfx/PaintingSurface.cpp b/Libraries/LibGfx/PaintingSurface.cpp
 index c4c70ebf..d53b5b11 100644
 --- a/Libraries/LibGfx/PaintingSurface.cpp
@@ -540,40 +571,11 @@ index 96fa13b9..a1323012 100644
  #ifdef USE_DIRECTX
      static ErrorOr<NonnullRefPtr<PaintingSurface>> create_from_d3d_texture(NonnullRefPtr<SkiaBackendContext>, NonnullRefPtr<D3DSharedTexture>, Origin = Origin::TopLeft);
  #endif
-diff --git a/Libraries/LibGfx/SharedImage.cpp b/Libraries/LibGfx/SharedImage.cpp
-index ef8ddc7b..1207c1d0 100644
---- a/Libraries/LibGfx/SharedImage.cpp
-+++ b/Libraries/LibGfx/SharedImage.cpp
-@@ -101,6 +101,7 @@ ErrorOr<void> encode(Encoder& encoder, Gfx::LinuxDmaBufHandle const& dmabuf)
-     TRY(encoder.encode(dmabuf.pitch));
-     TRY(encoder.encode(dmabuf.modifier));
-     TRY(encoder.encode(TRY(IPC::File::clone_fd(dmabuf.file.fd()))));
-+    TRY(encoder.encode(dmabuf.identity));
-     return {};
- }
- 
-@@ -115,6 +116,7 @@ ErrorOr<Gfx::LinuxDmaBufHandle> decode(Decoder& decoder)
-         .pitch = TRY(decoder.decode<size_t>()),
-         .modifier = TRY(decoder.decode<u64>()),
-         .file = TRY(decoder.decode<IPC::File>()),
-+        .identity = TRY(decoder.decode<u64>()),
-     };
- }
- 
 diff --git a/Libraries/LibGfx/SharedImage.h b/Libraries/LibGfx/SharedImage.h
-index d05e33ae..67fa0430 100644
+index bead7845..a0a0d81b 100644
 --- a/Libraries/LibGfx/SharedImage.h
 +++ b/Libraries/LibGfx/SharedImage.h
-@@ -32,6 +32,8 @@ struct LinuxDmaBufHandle {
-     size_t pitch;
-     u64 modifier;
-     IPC::File file;
-+    // Names the buffer for as long as it lives, unlike the file's inode: before Linux 5.3 every dma-buf has the same one.
-+    u64 identity { 0 };
- };
- 
- // NOTE: The texture behind the handle is always DXGI_FORMAT_R8G8B8A8_UNORM with premultiplied alpha.
-@@ -41,6 +43,11 @@ struct WindowsD3DHandle {
+@@ -32,6 +32,11 @@ struct WindowsD3DHandle {
  };
  #endif
  
@@ -586,7 +588,7 @@ index d05e33ae..67fa0430 100644
  struct VulkanImage;
  SharedImage duplicate_shared_image(VulkanImage const&);
 diff --git a/Libraries/LibGfx/SharedImageBuffer.cpp b/Libraries/LibGfx/SharedImageBuffer.cpp
-index 222159de..f9c01ec1 100644
+index 78cffc63..86a79925 100644
 --- a/Libraries/LibGfx/SharedImageBuffer.cpp
 +++ b/Libraries/LibGfx/SharedImageBuffer.cpp
 @@ -7,7 +7,7 @@
@@ -607,7 +609,7 @@ index 222159de..f9c01ec1 100644
  static constexpr auto shared_image_buffer_drm_format = DRM_FORMAT_ARGB8888;
  
  static NonnullRefPtr<Bitmap> create_bitmap_from_linux_dmabuf(LinuxDmaBufHandle const& dmabuf)
-@@ -56,7 +56,7 @@ SharedImageBuffer::SharedImageBuffer(NonnullRefPtr<Bitmap> bitmap)
+@@ -59,7 +59,7 @@ SharedImageBuffer::SharedImageBuffer(NonnullRefPtr<Bitmap> bitmap)
  {
  }
  
@@ -616,7 +618,7 @@ index 222159de..f9c01ec1 100644
  SharedImageBuffer::SharedImageBuffer(NonnullRefPtr<Bitmap> bitmap, LinuxDmaBufHandle&& dmabuf)
      : m_linux_dmabuf_handle(move(dmabuf))
      , m_bitmap(move(bitmap))
-@@ -95,7 +95,7 @@ SharedImageBuffer SharedImageBuffer::import_from_shared_image(SharedImage shared
+@@ -98,7 +98,7 @@ SharedImageBuffer SharedImageBuffer::import_from_shared_image(SharedImage shared
              return SharedImageBuffer(*shareable_bitmap.bitmap());
          },
          [](LinuxDmaBufHandle& dmabuf) -> SharedImageBuffer {
@@ -648,7 +650,7 @@ index 6e3fe63a..fa6baad3 100644
      Optional<LinuxDmaBufHandle> m_linux_dmabuf_handle;
  #    endif
 diff --git a/Libraries/LibGfx/SkiaBackendContext.cpp b/Libraries/LibGfx/SkiaBackendContext.cpp
-index 1907c0eb..c62203f6 100644
+index 46be8d07..858aa048 100644
 --- a/Libraries/LibGfx/SkiaBackendContext.cpp
 +++ b/Libraries/LibGfx/SkiaBackendContext.cpp
 @@ -35,6 +35,12 @@ template<>
@@ -687,7 +689,7 @@ index 1907c0eb..c62203f6 100644
  #else
      return {};
  #endif
-@@ -332,4 +345,59 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_metal_context(NonnullRefPt
+@@ -342,4 +355,59 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_metal_context(NonnullRefPt
  }
  #endif
  
@@ -784,10 +786,10 @@ index 76b38884..7c6ab2de 100644
  private:
      void perform_post_flush_cleanup();
 diff --git a/Meta/CMake/check_for_dependencies.cmake b/Meta/CMake/check_for_dependencies.cmake
-index fb13aa74..00f01ef1 100644
+index 208c0e73..7c181363 100644
 --- a/Meta/CMake/check_for_dependencies.cmake
 +++ b/Meta/CMake/check_for_dependencies.cmake
-@@ -41,7 +41,16 @@ if (NOT APPLE AND NOT ANDROID AND NOT WIN32)
+@@ -40,7 +40,16 @@ if (NOT APPLE AND NOT ANDROID AND NOT WIN32)
      add_cxx_compile_definitions(USE_FONTCONFIG=1)
  endif()
  
@@ -872,10 +874,10 @@ index 4a2cd467..52eedc07 100644
          Vector<Gfx::SharedImage> shared_images;
          shared_images.ensure_capacity(buffer_count);
 diff --git a/vcpkg.json b/vcpkg.json
-index c30fe015..e4f86f35 100644
+index 59783e69..1752adf0 100644
 --- a/vcpkg.json
 +++ b/vcpkg.json
-@@ -211,6 +211,7 @@
+@@ -214,6 +214,7 @@
          "fontconfig",
          "harfbuzz",
          "icu",

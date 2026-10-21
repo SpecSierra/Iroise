@@ -117,10 +117,12 @@ void EmbeddedHost::send_frame(u32 view, Gfx::LinuxDmaBufHandle const& dmabuf, Gf
     header.b = painted_size.height();
     header.c = dmabuf.size.width();
     header.d = dmabuf.size.height();
-    header.e = static_cast<u32>(dmabuf.pitch);
+    // Our GLES buffers are single-plane BGRA in one dma-buf object (GLESContext.cpp).
+    VERIFY(dmabuf.planes.size() == 1 && dmabuf.objects.size() == 1);
+    header.e = dmabuf.planes.first().pitch;
     auto identity = ByteString::number(dmabuf.identity);
     header.text_length = static_cast<u32>(identity.length());
-    send(header, identity, dmabuf.file.fd());
+    send(header, identity, dmabuf.objects.first().fd());
 }
 
 void EmbeddedHost::send_numbers(u32 view, lb_embed_message_type type, i32 a, i32 b)

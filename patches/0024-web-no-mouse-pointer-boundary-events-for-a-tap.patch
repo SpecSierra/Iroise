@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibWeb/DOM/Document.cpp b/Libraries/LibWeb/DOM/Document.cpp
-index 0181be97..4f031d7e 100644
+index e38d2239..58bec396 100644
 --- a/Libraries/LibWeb/DOM/Document.cpp
 +++ b/Libraries/LibWeb/DOM/Document.cpp
-@@ -3288,6 +3288,9 @@ void Document::set_hovered_node(GC::Ptr<Node> node, Optional<HoverEventData> hov
+@@ -3294,6 +3294,9 @@ void Document::set_hovered_node(GC::Ptr<Node> node, Optional<HoverEventData> hov
      if (auto navigable = this->navigable())
          window_proxy = navigable->active_window_proxy();
      auto page_offset = hover_event_page_offset(hover_event_data);
@@ -12,7 +12,7 @@ index 0181be97..4f031d7e 100644
  
      struct HoverEventTarget {
          GC::Ref<Node> node;
-@@ -3339,7 +3342,7 @@ void Document::set_hovered_node(GC::Ptr<Node> node, Optional<HoverEventData> hov
+@@ -3345,7 +3348,7 @@ void Document::set_hovered_node(GC::Ptr<Node> node, Optional<HoverEventData> hov
      };
  
      // https://w3c.github.io/pointerevents/#the-pointerout-event
@@ -21,7 +21,7 @@ index 0181be97..4f031d7e 100644
          UIEvents::PointerEventOptions pointer_event_options;
          pointer_event_options.bubbles = true;
          pointer_event_options.cancelable = true;
-@@ -3373,7 +3376,7 @@ void Document::set_hovered_node(GC::Ptr<Node> node, Optional<HoverEventData> hov
+@@ -3379,7 +3382,7 @@ void Document::set_hovered_node(GC::Ptr<Node> node, Optional<HoverEventData> hov
      }
  
      // https://w3c.github.io/pointerevents/#the-pointerleave-event
@@ -30,7 +30,7 @@ index 0181be97..4f031d7e 100644
          for (auto const& target : left_ancestors) {
              UIEvents::PointerEventOptions pointer_event_options;
              pointer_event_options.related_target = m_hovered_node;
-@@ -3404,7 +3407,7 @@ void Document::set_hovered_node(GC::Ptr<Node> node, Optional<HoverEventData> hov
+@@ -3410,7 +3413,7 @@ void Document::set_hovered_node(GC::Ptr<Node> node, Optional<HoverEventData> hov
      }
  
      // https://w3c.github.io/pointerevents/#the-pointerover-event
@@ -39,7 +39,7 @@ index 0181be97..4f031d7e 100644
          UIEvents::PointerEventOptions pointer_event_options;
          pointer_event_options.bubbles = true;
          pointer_event_options.cancelable = true;
-@@ -3453,7 +3456,8 @@ void Document::set_hovered_node(GC::Ptr<Node> node, Optional<HoverEventData> hov
+@@ -3459,7 +3462,8 @@ void Document::set_hovered_node(GC::Ptr<Node> node, Optional<HoverEventData> hov
              auto offset = target.offset;
              auto pointer_event = create_pointer_event(UIEvents::EventNames::pointerenter, move(pointer_event_options), offset);
              mark_mouse_transition_event_as_trusted_if_needed(pointer_event, hover_event_data);

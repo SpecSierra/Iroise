@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibWebView/HelperProcess.cpp b/Libraries/LibWebView/HelperProcess.cpp
-index b65a90c4..6a21c41a 100644
+index 455c47c2..95ffab54 100644
 --- a/Libraries/LibWebView/HelperProcess.cpp
 +++ b/Libraries/LibWebView/HelperProcess.cpp
-@@ -556,6 +556,17 @@ ErrorOr<NonnullRefPtr<WebWorkerClient>> launch_web_worker_process(Web::HTML::Age
+@@ -593,6 +593,17 @@ ErrorOr<NonnullRefPtr<WebWorkerClient>> launch_web_worker_process(Web::HTML::Age
      return client;
  }
  
@@ -20,7 +20,7 @@ index b65a90c4..6a21c41a 100644
  void apply_dns_settings(Requests::RequestControlClient& client)
  {
      Application::settings().dns_settings().visit(
-@@ -619,6 +630,8 @@ ErrorOr<NonnullRefPtr<Requests::RequestControlClient>> launch_request_server_pro
+@@ -656,6 +667,8 @@ ErrorOr<NonnullRefPtr<Requests::RequestControlClient>> launch_request_server_pro
      auto const& browsing_data_settings = Application::settings().browsing_data_settings();
      client->async_set_disk_cache_settings(browsing_data_settings.disk_cache_settings);
      client->async_set_proxy_configuration(request_server_options.proxy_configuration);
@@ -30,10 +30,10 @@ index b65a90c4..6a21c41a 100644
          apply_dns_settings(*client);
  
 diff --git a/Libraries/LibWebView/HelperProcess.h b/Libraries/LibWebView/HelperProcess.h
-index 9cd54d85..467261ad 100644
+index 92933390..cfc5c843 100644
 --- a/Libraries/LibWebView/HelperProcess.h
 +++ b/Libraries/LibWebView/HelperProcess.h
-@@ -34,6 +34,8 @@ WEBVIEW_API ErrorOr<NonnullRefPtr<WebView::CompositorClient>> launch_compositor_
+@@ -37,6 +37,8 @@ WEBVIEW_API ErrorOr<NonnullRefPtr<WebView::CompositorClient>> launch_compositor_
  WEBVIEW_API ErrorOr<NonnullRefPtr<WebView::WebWorkerClient>> launch_web_worker_process(Web::HTML::AgentType, IsPrivate, Web::HTML::WorkerAgentId);
  WEBVIEW_API ErrorOr<NonnullRefPtr<Requests::RequestControlClient>> launch_request_server_process(ByteString const& cache_path, Optional<Utf16String> const& site, HTTPDiskCacheMode);
  WEBVIEW_API void apply_dns_settings(Requests::RequestControlClient&);
