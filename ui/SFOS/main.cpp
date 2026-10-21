@@ -48,6 +48,7 @@
 #include <LibWebView/Utilities.h>
 #include <LibWebView/WebContentPage.h>
 #include <UI/SFOS/EmbeddedHost.h>
+#include <UI/SFOS/MemoryGuard.h>
 
 namespace Ladybird {
 
@@ -1376,5 +1377,6 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
     //     gains little, and the last range sometimes never completes, which leaves the file unfinished for good.
     WebView::Application::settings().set_config_variable(WebView::ConfigVariableID::MaximumConnectionsPerDownload, 1);
     Ladybird::EmbeddedViews views { *host, TRY(Ladybird::load_theme()) };
+    auto memory_guard = Ladybird::start_memory_guard();
     return app->execute();
 }

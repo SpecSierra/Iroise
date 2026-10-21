@@ -20,6 +20,7 @@
 #include <string.h>
 #include <time.h>
 #include <UI/SFOS/EngineMain.h>
+#include <UI/SFOS/MemoryGuard.h>
 
 // The helpers come from CMakeLists.txt (PACIFIC_HELPERS), which compiles their main.cpp in.
 #include <EngineHelperRoles.h>
@@ -73,6 +74,8 @@ int pacific_engine_main(char const* role, int argc, char** argv)
     Main::Arguments arguments { .argc = argc, .argv = argv, .strings = strings.span() };
 
     auto role_name = StringView { role, strlen(role) };
+    // NB: Before the role's sandbox, which may keep it from /proc/self.
+    Ladybird::raise_out_of_memory_priority(role_name);
     ErrorOr<int> result = Error::from_string_literal("Unknown engine role");
 #define RUN_ROLE(name)              \
     if (role_name == #name##sv)     \

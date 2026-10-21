@@ -9,7 +9,7 @@ endif()
 # calls pacific_engine_main() with the role to play (see EngineMain.cpp). Each process's main.cpp is compiled in
 # with its ladybird_main() renamed after the role.
 set(PACIFIC_HELPERS AudioServer Compositor ImageDecoder MediaServer RequestServer VideoDecoderServer WasmCompiler WebContent WebWorker)
-add_library(pacificengine SHARED EngineMain.cpp main.cpp EmbeddedHost.cpp)
+add_library(pacificengine SHARED EngineMain.cpp main.cpp EmbeddedHost.cpp MemoryGuard.cpp)
 # EngineMain.cpp picks a role from this list; it is written from the one above so that the two cannot differ.
 set(pacific_helper_roles "")
 foreach (helper IN LISTS PACIFIC_HELPERS)
