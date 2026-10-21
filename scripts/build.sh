@@ -50,17 +50,30 @@ BUILD="$UP/Build/release"
 # never ran as it would without one.
 PGO="${PACIFIC_PGO:-}"
 PGO_FLAGS=""
+PGO_LINK_FLAGS=""
+RUST_PGO_FLAGS=""
 # NB: gcc compares the prefix with the object files' real paths; upstream/ is a symlink on CI.
 case "$PGO" in
     "") ;;
     generate)
         BUILD="$UP/Build/pgo-generate"
-        PGO_FLAGS="-fprofile-generate=${PACIFIC_PGO_DIR:?} -fprofile-prefix-path=$(realpath -m "$BUILD") -fprofile-update=prefer-atomic" ;;
+        PGO_FLAGS="-fprofile-generate=${PACIFIC_PGO_DIR:?} -fprofile-prefix-path=$(realpath -m "$BUILD") -fprofile-update=prefer-atomic"
+        # The Rust crates count in LLVM's way, into files that hold the counts as they change ("continuous mode",
+        # %c in LLVM_PROFILE_FILE, see scripts/pgo-profile.sh), so a process that ends with _exit loses nothing.
+        # Cargo's static libraries leave out LLVM's profile runtime, so every library links it in itself.
+        RUST_PGO_FLAGS="-Cprofile-generate=$PACIFIC_PGO_DIR/rust -Cllvm-args=-runtime-counter-relocation"
+        profiler_runtime="$(ls "$(cd "$UP" && rustc --print sysroot)"/lib/rustlib/*/lib/libprofiler_builtins-*.rlib)"
+        PGO_LINK_FLAGS="-Wl,--whole-archive $profiler_runtime -Wl,--no-whole-archive" ;;
     use)
         # NB: The profile's own stamp is in the flags so that ccache, which does not follow -fprofile-prefix-path to
         #     the profile, compiles again when the profile changes.
         PGO_FLAGS="-fprofile-use=${PACIFIC_PGO_DIR:?} -fprofile-prefix-path=$(realpath -m "$BUILD") -fprofile-partial-training"
-        PGO_FLAGS="$PGO_FLAGS -Wno-missing-profile -Wno-coverage-mismatch -DPACIFIC_PGO_PROFILE=$(cat "$PACIFIC_PGO_DIR/stamp")" ;;
+        PGO_FLAGS="$PGO_FLAGS -Wno-missing-profile -Wno-coverage-mismatch -DPACIFIC_PGO_PROFILE=$(cat "$PACIFIC_PGO_DIR/stamp")"
+        # A profile from before the Rust crates were profiled has no rust.profdata.
+        if [ -f "$PACIFIC_PGO_DIR/rust.profdata" ]; then
+            RUST_PGO_FLAGS="-Cprofile-use=$PACIFIC_PGO_DIR/rust.profdata -Cllvm-args=-pgo-warn-mismatch=false"
+            RUST_PGO_FLAGS="$RUST_PGO_FLAGS -Cllvm-args=-pgo-warn-missing-function=false"
+        fi ;;
     *) echo "PACIFIC_PGO must be generate or use, not $PGO" >&2; exit 1 ;;
 esac
 
@@ -99,8 +112,12 @@ launcher="$(command -v ccache)"
 [ "$PGO" = use ] && launcher="$ROOT/scripts/pgo-compile.sh"
 cached() { grep -qxF -e "$1:STRING=$2" -e "$1:FILEPATH=$2" "$BUILD/CMakeCache.txt"; }
 pgo_settings=()
-for variable in CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_EXE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS CMAKE_MODULE_LINKER_FLAGS; do
+for variable in CMAKE_C_FLAGS CMAKE_CXX_FLAGS; do
     cached "$variable" "$PGO_FLAGS" || pgo_settings+=("-D$variable=$PGO_FLAGS")
+done
+pgo_link="$(echo "$PGO_FLAGS $PGO_LINK_FLAGS" | xargs)"
+for variable in CMAKE_EXE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS CMAKE_MODULE_LINKER_FLAGS; do
+    cached "$variable" "$pgo_link" || pgo_settings+=("-D$variable=$pgo_link")
 done
 for variable in CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER; do
     cached "$variable" "$launcher" || pgo_settings+=("-D$variable=$launcher")
@@ -110,9 +127,22 @@ grep -qxF "PACIFIC_PGO_GENERATE:BOOL=$pgo_generate" "$BUILD/CMakeCache.txt" || p
 # The Rust crates (style, layout, JavaScript) as Ladybird's own distribution profile builds them (Cargo.toml
 # [profile.distribution]): link-time optimisation in one codegen unit. CMake asks cargo for --release, which has
 # neither. Cargo is run again only when a crate's files change, so a change here touches the manifests.
+# The profile's flags reach the engine's own crates through a rustc wrapper (scripts/pgo-rustc.sh). Cargo does not see
+# a wrapper's flags change, so then its build directory goes.
 export CARGO_PROFILE_RELEASE_LTO=true CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+if [ -n "$RUST_PGO_FLAGS" ]; then
+    export RUSTC_WORKSPACE_WRAPPER="$ROOT/scripts/pgo-rustc.sh" PACIFIC_PGO_RUSTFLAGS="$RUST_PGO_FLAGS"
+else
+    unset RUSTC_WORKSPACE_WRAPPER PACIFIC_PGO_RUSTFLAGS
+fi
+rust_profile_stamp=""
+[ "$PGO" = use ] && [ -n "$RUST_PGO_FLAGS" ] && rust_profile_stamp="$(cat "$PACIFIC_PGO_DIR/stamp")"
 rust_settings="lto=$CARGO_PROFILE_RELEASE_LTO codegen-units=$CARGO_PROFILE_RELEASE_CODEGEN_UNITS"
-if [ "$(cat "$BUILD/.pacific-rust-settings" 2>/dev/null)" != "$rust_settings" ]; then
+rust_settings="$rust_settings pgo=$RUST_PGO_FLAGS $rust_profile_stamp"
+old_rust_settings="$(cat "$BUILD/.pacific-rust-settings" 2>/dev/null || true)"
+if [ "$old_rust_settings" != "$rust_settings" ]; then
+    # Profile flags before or now: build every crate again.
+    case "$old_rust_settings $rust_settings" in *"pgo=-C"*) rm -rf "$BUILD/cargo/build" ;; esac
     find "$UP" -name Cargo.toml -not -path "$UP/Build/*" -exec touch {} +
     echo "$rust_settings" > "$BUILD/.pacific-rust-settings"
 fi
