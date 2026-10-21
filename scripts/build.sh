@@ -60,7 +60,9 @@ case "$PGO" in
         PGO_FLAGS="-fprofile-generate=${PACIFIC_PGO_DIR:?} -fprofile-prefix-path=$(realpath -m "$BUILD") -fprofile-update=prefer-atomic"
         # The Rust crates count in LLVM's way, into files that hold the counts as they change ("continuous mode",
         # %c in LLVM_PROFILE_FILE, see scripts/pgo-profile.sh), so a process that ends with _exit loses nothing.
-        # Cargo's static libraries leave out LLVM's profile runtime, so every library links it in itself.
+        # Cargo's static libraries leave out LLVM's profile runtime, so every library links it in itself, at the end
+        # of its link: the counted code defines the counters' offset (__llvm_profile_counter_bias) that the runtime
+        # only stands in for, and the first definition the linker sees wins.
         RUST_PGO_FLAGS="-Cprofile-generate=$PACIFIC_PGO_DIR/rust -Cllvm-args=-runtime-counter-relocation"
         profiler_runtime="$(ls "$(cd "$UP" && rustc --print sysroot)"/lib/rustlib/*/lib/libprofiler_builtins-*.rlib)"
         PGO_LINK_FLAGS="-Wl,--whole-archive $profiler_runtime -Wl,--no-whole-archive" ;;
@@ -115,9 +117,11 @@ pgo_settings=()
 for variable in CMAKE_C_FLAGS CMAKE_CXX_FLAGS; do
     cached "$variable" "$PGO_FLAGS" || pgo_settings+=("-D$variable=$PGO_FLAGS")
 done
-pgo_link="$(echo "$PGO_FLAGS $PGO_LINK_FLAGS" | xargs)"
 for variable in CMAKE_EXE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS CMAKE_MODULE_LINKER_FLAGS; do
-    cached "$variable" "$pgo_link" || pgo_settings+=("-D$variable=$pgo_link")
+    cached "$variable" "$PGO_FLAGS" || pgo_settings+=("-D$variable=$PGO_FLAGS")
+done
+for variable in CMAKE_C_STANDARD_LIBRARIES CMAKE_CXX_STANDARD_LIBRARIES; do
+    cached "$variable" "$PGO_LINK_FLAGS" || pgo_settings+=("-D$variable=$PGO_LINK_FLAGS")
 done
 for variable in CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER; do
     cached "$variable" "$launcher" || pgo_settings+=("-D$variable=$launcher")
