@@ -1,0 +1,40 @@
+name: Profile for optimisation
+
+# Makes the profile that the build (build.yml) optimises the engine with: run it by hand after a Ladybird bump.
+# The runner takes one job at a time, so this never shares the cache with a build.
+on:
+  workflow_dispatch:
+    inputs:
+      speedometer_seconds:
+        description: How long Speedometer runs in the training
+        default: "420"
+
+permissions:
+  contents: read
+
+jobs:
+  profile:
+    name: Instrumented engine, training and profile
+    runs-on:
+      - self-hosted
+      - Linux
+      - ARM64
+      - pacific
+    timeout-minutes: 360
+    env:
+      CI_CACHE: /opt/pacific-ci/cache
+      JOBS: "12"
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Build, train and keep the profile
+        run: scripts/pgo-profile.sh "${{ inputs.speedometer_seconds }}"
+
+      - name: Keep the profile
+        uses: actions/upload-artifact@v4
+        with:
+          name: pgo-profile-${{ github.run_number }}
+          path: dist/pgo-profile.tar.gz
+          retention-days: 30
+          if-no-files-found: error

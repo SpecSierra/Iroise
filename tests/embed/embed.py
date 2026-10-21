@@ -61,7 +61,7 @@ class Engine:
     SCALE = 2.0
     VIEW = 1
 
-    def __init__(self):
+    def __init__(self, arguments=()):
         executable = os.environ.get('PACIFIC_ENGINE', os.path.join(ROOT, 'dist', 'harbour-pacific', 'bin', 'harbour-pacific'))
         self.directory = tempfile.mkdtemp(prefix='pacific-embed-')
         self.home = os.path.join(self.directory, 'home')
@@ -79,7 +79,7 @@ class Engine:
             XDG_DATA_HOME=self.home + '/.local/share', XDG_DOWNLOAD_DIR=self.downloads)
         self.log_path = os.path.join(self.directory, 'engine.log')
         with open(self.log_path, 'w') as log:
-            self.process = subprocess.Popen([executable, '--engine-role', 'Ladybird'], env=environment,
+            self.process = subprocess.Popen([executable, '--engine-role', 'Ladybird', *arguments], env=environment,
                 stdout=log, stderr=subprocess.STDOUT, start_new_session=True)
         listener.settimeout(30)
         try:
@@ -93,7 +93,14 @@ class Engine:
         self.send('CREATE_VIEW', a=self.WIDTH, b=self.HEIGHT, scale=self.SCALE)
         self.send('SET_VISIBLE', a=1)
 
-    def close(self):
+    def close(self, gracefully=False, timeout=60):
+        """Stops the engine. Gracefully: only closes its socket, which ends it the way the app does on the phone,
+        and waits for every process it started to end too."""
+        if gracefully:
+            self.connection.close()
+            end = time.monotonic() + timeout
+            while self._session_processes() and time.monotonic() < end:
+                time.sleep(0.2)
         try:
             os.killpg(self.process.pid, signal.SIGTERM)
         except ProcessLookupError:
@@ -196,6 +203,20 @@ class Engine:
         self.pump(seconds / steps)
         self.touch('UP', x1, y1)
         self.pump(then)
+
+    def _session_processes(self):
+        processes = []
+        for pid in os.listdir('/proc'):
+            if not pid.isdigit():
+                continue
+            try:
+                with open(f'/proc/{pid}/stat') as file:
+                    fields = file.read().rsplit(')', 1)[1].split()
+            except OSError:
+                continue
+            if int(fields[3]) == self.process.pid and fields[0] != 'Z':
+                processes.append(int(pid))
+        return processes
 
     def page_processes(self):
         """The engine's WebContent processes, by pid."""

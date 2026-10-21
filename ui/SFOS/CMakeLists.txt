@@ -39,4 +39,10 @@ target_link_libraries(pacificengine PRIVATE
 
 add_executable(ladybird EngineLauncher.cpp)
 target_link_libraries(ladybird PRIVATE pacificengine)
+# The instrumented engine that trains profile-guided optimisation (scripts/build.sh, PACIFIC_PGO=generate).
+option(PACIFIC_PGO_GENERATE "Build the engine that writes a profile for profile-guided optimisation" OFF)
+if (PACIFIC_PGO_GENERATE)
+    target_sources(ladybird PRIVATE PgoExit.cpp)
+    target_link_options(ladybird PRIVATE -Wl,--export-dynamic-symbol=_exit -Wl,--export-dynamic-symbol=_Exit)
+endif()
 create_ladybird_bundle(ladybird)

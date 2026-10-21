@@ -1,43 +1,25 @@
 #!/bin/bash
 # The CI build (.github/workflows/build.yml): the engine, the interface, SQLCipher, the bundle and the RPM, as on the
-# build host, into dist/rpm. What is slow to make again lives in CI_CACHE and outlasts the run: the Ladybird
-# checkout with its build directory and vcpkg, the Python venv with CMake, and the ccache.
+# build host, into dist/rpm. The Ladybird checkout and what outlasts the run: scripts/ci-checkout.sh.
 # Usage: scripts/ci-build.sh <rpm release>        (CI_CACHE, default /opt/pacific-ci/cache)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 RELEASE="${1:?usage: ci-build.sh <rpm release>}"
-CACHE="${CI_CACHE:-/opt/pacific-ci/cache}"
-UP="$CACHE/upstream"
-PIN="$(cat "$ROOT/UPSTREAM_COMMIT")"
 VERSION="$(cat "$ROOT/VERSION")"
-mkdir -p "$CACHE"
+source "$ROOT/scripts/ci-checkout.sh"
 
-export CCACHE_DIR="$CACHE/ccache" CCACHE_MAXSIZE="${CCACHE_MAXSIZE:-30G}"
-
-if [ ! -d "$CACHE/venv" ]; then
-    python3 -m venv "$CACHE/venv"
-    "$CACHE/venv/bin/pip" install -q 'cmake>=3.30'
+# With a profile from scripts/pgo-profile.sh (.github/workflows/pgo.yml), the engine is optimised with it. One
+# made at an older pin still helps; PACIFIC_PGO=off builds without.
+if [ "${PACIFIC_PGO:-}" != off ] && [ -f "$CACHE/pgo/profile/stamp" ]; then
+    export PACIFIC_PGO=use PACIFIC_PGO_DIR="$CACHE/pgo/profile"
+    echo "Profile-guided optimisation with profile $(cat "$PACIFIC_PGO_DIR/stamp")"
+else
+    unset PACIFIC_PGO
 fi
-ln -sfn "$CACHE/venv" "$ROOT/.venv"
-
-# The checkout is put back to the pin, as Ladybird has it, whenever the pin or our patches change; build.sh then
-# applies the patches. Its build directory stays (Ladybird ignores Build/), so only what changed is built again.
-if [ ! -d "$UP/.git" ]; then
-    git clone -q https://github.com/LadybirdBrowser/ladybird.git "$UP"
-fi
-# NB: build.sh too, which decides how the patches go in.
-stamp="$(cat "$ROOT/UPSTREAM_COMMIT" "$ROOT"/patches/*.patch "$ROOT/scripts/build.sh" | sha256sum | cut -d' ' -f1)"
-if [ "$(cat "$CACHE/upstream.stamp" 2>/dev/null)" != "$stamp" ]; then
-    git -C "$UP" cat-file -e "$PIN^{commit}" 2>/dev/null || git -C "$UP" fetch -q origin
-    git -C "$UP" checkout -q -f --detach "$PIN"
-    git -C "$UP" clean -q -fd
-    rm -f "$CACHE/upstream.stamp"
-fi
-ln -sfn "$UP" "$ROOT/upstream"
 
 "$ROOT/scripts/build.sh"
-echo "$stamp" > "$CACHE/upstream.stamp"
+echo "$STAMP" > "$CACHE/upstream.stamp"
 "$ROOT/scripts/build-browser.sh"
 "$ROOT/scripts/build-sqlcipher.sh"
 "$ROOT/scripts/bundle.sh"

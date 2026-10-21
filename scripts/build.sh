@@ -41,6 +41,28 @@ export PATH="$PATH:$VCPKG_ROOT"
 export VCPKG_FORCE_SYSTEM_BINARIES=1 VCPKG_MAX_CONCURRENCY="$JOBS"
 BUILD="$UP/Build/release"
 
+# Profile-guided optimisation (scripts/pgo-profile.sh makes the profile):
+#   PACIFIC_PGO=generate  an instrumented engine, in a build directory of its own, that writes its profile to
+#                         PACIFIC_PGO_DIR as it runs;
+#   PACIFIC_PGO=use       the engine optimised with the profile in PACIFIC_PGO_DIR.
+# Profiles are named after the object files relative to the build directory, so the two directories can differ.
+# A profile older than the code is fine: gcc leaves out what no longer matches, and optimises what the training
+# never ran as it would without one.
+PGO="${PACIFIC_PGO:-}"
+PGO_FLAGS=""
+case "$PGO" in
+    "") ;;
+    generate)
+        BUILD="$UP/Build/pgo-generate"
+        PGO_FLAGS="-fprofile-generate=${PACIFIC_PGO_DIR:?} -fprofile-prefix-path=$BUILD -fprofile-update=prefer-atomic" ;;
+    use)
+        # NB: The profile's own stamp is in the flags so that ccache, which does not follow -fprofile-prefix-path to
+        #     the profile, compiles again when the profile changes.
+        PGO_FLAGS="-fprofile-use=${PACIFIC_PGO_DIR:?} -fprofile-prefix-path=$BUILD -fprofile-partial-training"
+        PGO_FLAGS="$PGO_FLAGS -Wno-missing-profile -Wno-coverage-mismatch -DPACIFIC_PGO_PROFILE=$(cat "$PACIFIC_PGO_DIR/stamp")" ;;
+    *) echo "PACIFIC_PGO must be generate or use, not $PGO" >&2; exit 1 ;;
+esac
+
 cd "$UP"
 python3 Meta/ladybird.py vcpkg --preset Release -j "$JOBS"
 # Skia's GL backend would link the desktop GL; ours gets its entry points from GLESContext (patch 0009). vcpkg picks
@@ -68,4 +90,14 @@ fi
 grep -q '^BUILD_TESTING:BOOL=ON' "$BUILD/CMakeCache.txt" || cmake -B "$BUILD" -DBUILD_TESTING=ON
 # Plain ARMv8.0, not the build host's CPU: the Xperia 10 II's Cortex-A73/A53 have none of the host's ARMv8.2 extras.
 grep -q '^ENABLE_ARMV8_BASELINE_CPU:BOOL=ON' "$BUILD/CMakeCache.txt" || cmake -B "$BUILD" -DENABLE_ARMV8_BASELINE_CPU=ON
+# The profile flags go to every compile and link (the link too, for link-time optimisation and gcc's profile
+# runtime). Configured again only when they change, which builds everything again.
+pgo_generate=OFF
+[ "$PGO" = generate ] && pgo_generate=ON
+pgo_settings=()
+for variable in CMAKE_C_FLAGS CMAKE_CXX_FLAGS CMAKE_EXE_LINKER_FLAGS CMAKE_SHARED_LINKER_FLAGS CMAKE_MODULE_LINKER_FLAGS; do
+    grep -qxF "$variable:STRING=$PGO_FLAGS" "$BUILD/CMakeCache.txt" || pgo_settings+=("-D$variable=$PGO_FLAGS")
+done
+grep -qxF "PACIFIC_PGO_GENERATE:BOOL=$pgo_generate" "$BUILD/CMakeCache.txt" || pgo_settings+=("-DPACIFIC_PGO_GENERATE=$pgo_generate")
+[ ${#pgo_settings[@]} -eq 0 ] || cmake -B "$BUILD" "${pgo_settings[@]}"
 exec ninja -C "$BUILD" -j "$JOBS" "${1:-ladybird}"
