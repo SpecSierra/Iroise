@@ -107,4 +107,13 @@ for variable in CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER; do
 done
 grep -qxF "PACIFIC_PGO_GENERATE:BOOL=$pgo_generate" "$BUILD/CMakeCache.txt" || pgo_settings+=("-DPACIFIC_PGO_GENERATE=$pgo_generate")
 [ ${#pgo_settings[@]} -eq 0 ] || cmake -B "$BUILD" "${pgo_settings[@]}"
+# The Rust crates (style, layout, JavaScript) as Ladybird's own distribution profile builds them (Cargo.toml
+# [profile.distribution]): link-time optimisation in one codegen unit. CMake asks cargo for --release, which has
+# neither. Cargo is run again only when a crate's files change, so a change here touches the manifests.
+export CARGO_PROFILE_RELEASE_LTO=true CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
+rust_settings="lto=$CARGO_PROFILE_RELEASE_LTO codegen-units=$CARGO_PROFILE_RELEASE_CODEGEN_UNITS"
+if [ "$(cat "$BUILD/.pacific-rust-settings" 2>/dev/null)" != "$rust_settings" ]; then
+    find "$UP" -name Cargo.toml -not -path "$UP/Build/*" -exec touch {} +
+    echo "$rust_settings" > "$BUILD/.pacific-rust-settings"
+fi
 exec ninja -C "$BUILD" -j "$JOBS" "${1:-ladybird}"
