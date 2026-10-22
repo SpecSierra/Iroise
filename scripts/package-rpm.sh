@@ -52,7 +52,7 @@ DESKTOP
 fpm -s dir -t rpm -n harbour-iroise -v "$VERSION" --iteration "$RELEASE" --architecture aarch64 \
     --rpm-summary "Web browser" \
     --description "A web browser for Sailfish OS." \
-    --license "BSD-2-Clause and MPL-2.0" --url "https://github.com/SpecSierra/Pacific" \
+    --license "BSD-2-Clause and MPL-2.0" --url "https://github.com/SpecSierra/Iroise" \
     --vendor "" --no-auto-depends --rpm-rpmbuild-define "_build_id_links none" \
     --depends sailfishsilica-qt5 --depends qt5-qtpositioning --depends qt5-qtgraphicaleffects --depends libkeepalive \
     --depends nemo-qml-plugin-configuration-qt5 --depends nemo-qml-plugin-dbus-qt5 \
