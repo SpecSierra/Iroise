@@ -132,18 +132,14 @@ for variable in CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER; do
 done
 grep -qxF "PACIFIC_PGO_GENERATE:BOOL=$pgo_generate" "$BUILD/CMakeCache.txt" || pgo_settings+=("-DPACIFIC_PGO_GENERATE=$pgo_generate")
 [ ${#pgo_settings[@]} -eq 0 ] || cmake -B "$BUILD" "${pgo_settings[@]}"
-# The Rust crates (style, layout, JavaScript) as Ladybird's own distribution profile builds them (Cargo.toml
-# [profile.distribution]): link-time optimisation in one codegen unit. CMake asks cargo for --release, which has
-# neither. Cargo is run again only when a crate's files change, so a change here touches the manifests.
+# The Rust crates (style, layout, JavaScript) in one codegen unit each, which cargo's --release (what CMake asks for)
+# splits into 16. Not with link-time optimisation as Ladybird's distribution profile has it: each crate's static
+# library then holds its own copy of the standard library, and liblagom-web, which links several, gets them twice
+# (multiple definitions of rust_eh_personality). Cargo is run again only when a crate's files change, so a change
+# here touches the manifests.
 # The profile's flags reach the engine's own crates through a rustc wrapper (scripts/pgo-rustc.sh). Cargo does not see
 # a wrapper's flags change, so then its build directory goes.
-export CARGO_PROFILE_RELEASE_LTO=true CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
-# NB: Not in the instrumented build: there each crate's one object holds the standard library and the profile's
-#     constructor, which two crates in a library then both define. Its counts still fit the optimised build, as
-#     rustc counts before link-time optimisation.
-if [ "$PGO" = generate ]; then
-    export CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16
-fi
+export CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 if [ -n "$RUST_PGO_FLAGS" ]; then
     export RUSTC_WORKSPACE_WRAPPER="$ROOT/scripts/pgo-rustc.sh" PACIFIC_PGO_RUSTFLAGS="$RUST_PGO_FLAGS"
 else
