@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibWeb/Internals/Internals.cpp b/Libraries/LibWeb/Internals/Internals.cpp
-index e8aa9ca7..2b348312 100644
+index 8b9463e3..91f34ad7 100644
 --- a/Libraries/LibWeb/Internals/Internals.cpp
 +++ b/Libraries/LibWeb/Internals/Internals.cpp
-@@ -834,6 +834,55 @@ void Internals::mouse_cancel()
+@@ -835,6 +835,55 @@ void Internals::mouse_cancel()
      this->page().handle_mousecancel();
  }
  
@@ -59,7 +59,7 @@ index e8aa9ca7..2b348312 100644
  {
      click_and_hold(x, y, click_count, button, modifiers);
 diff --git a/Libraries/LibWeb/Internals/Internals.h b/Libraries/LibWeb/Internals/Internals.h
-index 9d1a0871..e73dfa1f 100644
+index 7e4714dd..e1027886 100644
 --- a/Libraries/LibWeb/Internals/Internals.h
 +++ b/Libraries/LibWeb/Internals/Internals.h
 @@ -112,6 +112,13 @@ public:
@@ -77,7 +77,7 @@ index 9d1a0871..e73dfa1f 100644
      void wheel(GC::Ref<WebIDL::Promise>, double x, double y, double delta_x, double delta_y, bool precise, Bindings::ScrollGesturePhase, Bindings::WheelTicks const&);
      void wheel(double x, double y, double delta_x, double delta_y, bool precise, Bindings::ScrollGesturePhase, Bindings::WheelTicks const&, GC::Ref<WebIDL::Promise>);
 diff --git a/Libraries/LibWeb/Internals/Internals.idl b/Libraries/LibWeb/Internals/Internals.idl
-index aaecdc3a..77b9d7a6 100644
+index eba949b6..dbd270c5 100644
 --- a/Libraries/LibWeb/Internals/Internals.idl
 +++ b/Libraries/LibWeb/Internals/Internals.idl
 @@ -96,6 +96,17 @@ interface Internals {

@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibGfx/CMakeLists.txt b/Libraries/LibGfx/CMakeLists.txt
-index 28bf16d9..8e861a02 100644
+index 10e27efc..5643d600 100644
 --- a/Libraries/LibGfx/CMakeLists.txt
 +++ b/Libraries/LibGfx/CMakeLists.txt
-@@ -72,6 +72,10 @@ if (HAS_VULKAN)
+@@ -70,6 +70,10 @@ if (HAS_VULKAN)
      list(APPEND SOURCES ImportedYCbCrVulkanImage.cpp SkiaVulkanMemoryAllocator.cpp VulkanContext.cpp VulkanImage.cpp)
  endif()
  
@@ -13,7 +13,7 @@ index 28bf16d9..8e861a02 100644
  if (HAS_FONTCONFIG)
      list(APPEND SOURCES Font/GlobalFontConfig.cpp)
  endif()
-@@ -113,6 +117,12 @@ if (HAS_DIRECTX)
+@@ -115,6 +119,12 @@ if (HAS_DIRECTX)
      target_link_libraries(LibGfx PRIVATE d3d12 dxgi d3dcompiler)
  endif()
  
@@ -650,7 +650,7 @@ index 6e3fe63a..fa6baad3 100644
      Optional<LinuxDmaBufHandle> m_linux_dmabuf_handle;
  #    endif
 diff --git a/Libraries/LibGfx/SkiaBackendContext.cpp b/Libraries/LibGfx/SkiaBackendContext.cpp
-index 46be8d07..858aa048 100644
+index eca5ca75..6ce6530d 100644
 --- a/Libraries/LibGfx/SkiaBackendContext.cpp
 +++ b/Libraries/LibGfx/SkiaBackendContext.cpp
 @@ -35,6 +35,12 @@ template<>
@@ -675,7 +675,7 @@ index 46be8d07..858aa048 100644
  static constexpr size_t skia_resource_cache_limit = 256 * MiB;
  #endif
  static constexpr auto skia_deferred_cleanup_interval = AK::Duration::from_seconds(1);
-@@ -160,6 +166,13 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_independent_gpu_backend()
+@@ -168,6 +174,13 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_independent_gpu_backend()
      }
      auto vulkan_context = maybe_vulkan_context.release_value();
      return create_vulkan_context(vulkan_context);
@@ -689,7 +689,7 @@ index 46be8d07..858aa048 100644
  #else
      return {};
  #endif
-@@ -342,4 +355,59 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_metal_context(NonnullRefPt
+@@ -350,4 +363,59 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_metal_context(NonnullRefPt
  }
  #endif
  
@@ -750,7 +750,7 @@ index 46be8d07..858aa048 100644
 +
  }
 diff --git a/Libraries/LibGfx/SkiaBackendContext.h b/Libraries/LibGfx/SkiaBackendContext.h
-index 76b38884..7c6ab2de 100644
+index 806529ba..6e4d6634 100644
 --- a/Libraries/LibGfx/SkiaBackendContext.h
 +++ b/Libraries/LibGfx/SkiaBackendContext.h
 @@ -22,6 +22,10 @@
@@ -775,7 +775,7 @@ index 76b38884..7c6ab2de 100644
      static void initialize_gpu_backend();
      static RefPtr<SkiaBackendContext> create_independent_gpu_backend();
      static RefPtr<SkiaBackendContext> the_main_thread_context();
-@@ -64,6 +72,9 @@ public:
+@@ -65,6 +73,9 @@ public:
      virtual MetalContext& metal_context() = 0;
      virtual VulkanContext const& vulkan_context() = 0;
      virtual Direct3DContext& direct3d_context() { VERIFY_NOT_REACHED(); }

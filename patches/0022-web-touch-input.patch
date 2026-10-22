@@ -14,10 +14,10 @@ index 91df0040..5ff77ffd 100644
          }
  
 diff --git a/Libraries/LibWeb/DOM/EventTarget.cpp b/Libraries/LibWeb/DOM/EventTarget.cpp
-index 5d5ac566..952da97a 100644
+index 81f1d395..f12ffa04 100644
 --- a/Libraries/LibWeb/DOM/EventTarget.cpp
 +++ b/Libraries/LibWeb/DOM/EventTarget.cpp
-@@ -290,7 +290,9 @@ static void invalidate_compositor_keyboard_scroll_state(EventTarget& target, DOM
+@@ -291,7 +291,9 @@ static void invalidate_compositor_keyboard_scroll_state(EventTarget& target, DOM
  
  static bool is_blocking_wheel_event_listener(DOMEventListener const& listener)
  {
@@ -28,7 +28,7 @@ index 5d5ac566..952da97a 100644
  }
  
  static void invalidate_compositor_wheel_event_listener_state(EventTarget& event_target, DOMEventListener const& listener)
-@@ -1103,7 +1105,9 @@ bool EventTarget::dispatch_event(Event& event)
+@@ -1108,7 +1110,9 @@ bool EventTarget::dispatch_event(Event& event)
                  return pointer_event->pointer_type() != u"mouse"sv;
          }
  
@@ -40,10 +40,10 @@ index 5d5ac566..952da97a 100644
          return false;
      };
 diff --git a/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp b/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp
-index 63395b14..3b9d47bf 100644
+index 15753304..e0481e7e 100644
 --- a/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp
 +++ b/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp
-@@ -444,9 +444,11 @@ void EventLoop::process_input_events() const
+@@ -455,9 +455,11 @@ void EventLoop::process_input_events() const
              root->event_handler().set_handling_outdated_input(input_is_outdated);
              auto const* handled_mouse_event = event.event.get_pointer<Web::MouseEvent>();
              root->event_handler().set_handling_input_event_id(handled_mouse_event ? handled_mouse_event->id : 0);
@@ -55,7 +55,7 @@ index 63395b14..3b9d47bf 100644
              };
  
              Optional<RemoteInputEventTarget> remote_target;
-@@ -478,6 +480,11 @@ void EventLoop::process_input_events() const
+@@ -489,6 +491,11 @@ void EventLoop::process_input_events() const
                              return page.handle_mousewheel(*root, mouse_event.position, mouse_event.screen_position, mouse_event.button, mouse_event.buttons, mouse_event.modifiers, mouse_event.wheel_delta_x, mouse_event.wheel_delta_y, mouse_event.wheel_tick_120ths_x, mouse_event.wheel_tick_120ths_y, mouse_event.wheel_delta_precision, mouse_event.scroll_gesture_phase, true, nullptr, &remote_target);
                          }
                          return page.handle_mousewheel(*root, mouse_event.position, mouse_event.screen_position, mouse_event.button, mouse_event.buttons, mouse_event.modifiers, mouse_event.wheel_delta_x, mouse_event.wheel_delta_y, mouse_event.wheel_tick_120ths_x, mouse_event.wheel_tick_120ths_y, mouse_event.wheel_delta_precision, mouse_event.scroll_gesture_phase, false, nullptr, &remote_target);
@@ -68,7 +68,7 @@ index 63395b14..3b9d47bf 100644
                      VERIFY_NOT_REACHED();
                  },
 diff --git a/Libraries/LibWeb/Page/EventHandler.cpp b/Libraries/LibWeb/Page/EventHandler.cpp
-index e8d9bca5..c1e19c0a 100644
+index fecc208d..c3bb326c 100644
 --- a/Libraries/LibWeb/Page/EventHandler.cpp
 +++ b/Libraries/LibWeb/Page/EventHandler.cpp
 @@ -77,6 +77,7 @@
@@ -79,7 +79,7 @@ index e8d9bca5..c1e19c0a 100644
  #include <LibWeb/UIEvents/WheelEvent.h>
  #include <LibWebCommon/Clipboard/SystemClipboard.h>
  #include <LibWebCommon/Infra/Strings.h>
-@@ -1246,7 +1247,11 @@ EventResult EventHandler::handle_mousewheel(CSSPixelPoint visual_viewport_positi
+@@ -1257,7 +1258,11 @@ EventResult EventHandler::handle_mousewheel(CSSPixelPoint visual_viewport_positi
          }
  
          auto is_cancelable = async_scroll_performed_default_action ? UIEvents::WheelEventIsCancelable::No : UIEvents::WheelEventIsCancelable::Yes;
@@ -92,7 +92,7 @@ index e8d9bca5..c1e19c0a 100644
          if (dispatch_result == EventResult::Accepted)
              record_input_routing(InputRoutingDecision::DispatchedWheelEvent, {}, wheel_event_target_node);
          else if (dispatch_result == EventResult::Cancelled)
-@@ -4536,4 +4541,150 @@ void EventHandler::clear_per_test_input_state(Badge<Internals::Internals>)
+@@ -4705,4 +4710,150 @@ void EventHandler::clear_per_test_input_state(Badge<Internals::Internals>)
      m_navigable->page().clear_context_menu_request();
  }
  
@@ -244,10 +244,10 @@ index e8d9bca5..c1e19c0a 100644
 +
  }
 diff --git a/Libraries/LibWeb/Page/EventHandler.h b/Libraries/LibWeb/Page/EventHandler.h
-index 564aa816..e60e878b 100644
+index b042d368..ad76485a 100644
 --- a/Libraries/LibWeb/Page/EventHandler.h
 +++ b/Libraries/LibWeb/Page/EventHandler.h
-@@ -96,6 +96,8 @@ public:
+@@ -103,6 +103,8 @@ public:
  
      EventResult handle_drag_and_drop_event(DragEvent::Type, CSSPixelPoint, CSSPixelPoint screen_position, unsigned button, unsigned buttons, unsigned modifiers, Vector<HTML::SelectedFile> files);
      EventResult handle_pinch_event(CSSPixelPoint, unsigned modifiers, double scale_delta);
@@ -256,7 +256,7 @@ index 564aa816..e60e878b 100644
      [[nodiscard]] EventResult perform_paste_action();
      EventResult perform_paste_action(NonnullRefPtr<HTML::DragDataStore> const&);
  
-@@ -238,6 +240,20 @@ private:
+@@ -260,6 +262,20 @@ private:
      GC::Weak<DOM::Node> m_last_mousedown_target;
      GC::Weak<DOM::Node> m_mousedown_target;
      GC::Weak<HTML::LocalNavigable> m_nested_navigable_under_pointer;
@@ -278,10 +278,10 @@ index 564aa816..e60e878b 100644
      int m_mousedown_click_count { 0 };
      bool m_mousedown_target_is_drag_candidate { false };
 diff --git a/Libraries/LibWeb/Page/Page.cpp b/Libraries/LibWeb/Page/Page.cpp
-index e91f1be7..1fe226aa 100644
+index 6975b6a0..4fccae92 100644
 --- a/Libraries/LibWeb/Page/Page.cpp
 +++ b/Libraries/LibWeb/Page/Page.cpp
-@@ -551,6 +551,21 @@ EventResult Page::handle_pinch_event(DevicePixelPoint position, unsigned modifie
+@@ -558,6 +558,21 @@ EventResult Page::handle_pinch_event(DevicePixelPoint position, unsigned modifie
      return handle_pinch_event(local_traversable(), position, modifiers, scale);
  }
  
@@ -304,7 +304,7 @@ index e91f1be7..1fe226aa 100644
  {
      // The compositor forwards these updates ahead of keyboard events. Both DOM listeners and a main-thread
 diff --git a/Libraries/LibWeb/Page/Page.h b/Libraries/LibWeb/Page/Page.h
-index 05fd2f3f..f8408784 100644
+index c27ead2d..a0100cc5 100644
 --- a/Libraries/LibWeb/Page/Page.h
 +++ b/Libraries/LibWeb/Page/Page.h
 @@ -198,6 +198,22 @@ public:
@@ -330,7 +330,7 @@ index 05fd2f3f..f8408784 100644
      EventResult handle_mouseup(DevicePixelPoint, DevicePixelPoint screen_position, unsigned button, unsigned buttons, unsigned modifiers);
      EventResult handle_mousedown(DevicePixelPoint, DevicePixelPoint screen_position, unsigned button, unsigned buttons, unsigned modifiers, int click_count);
      EventResult handle_mousemove(DevicePixelPoint, DevicePixelPoint screen_position, unsigned buttons, unsigned modifiers);
-@@ -493,6 +509,10 @@ private:
+@@ -495,6 +511,10 @@ private:
      // Mouse events are hit-tested independently, so a release can target an ancestor document after a press began in
      // a child navigable. Retain the interaction owner separately from focus to clear its non-DOM input state.
      GC::Weak<HTML::LocalNavigable> m_mouse_event_tracking_navigable;
@@ -342,10 +342,10 @@ index 05fd2f3f..f8408784 100644
      // that handler ends the hover when its document is replaced; another navigable's replacement (an iframe the pointer
      // once passed through, e.g.) leaves the report standing.
 diff --git a/Libraries/LibWebCommon/Page/InputEvent.cpp b/Libraries/LibWebCommon/Page/InputEvent.cpp
-index f97ee891..e8bf739d 100644
+index 9ac10617..101b9a88 100644
 --- a/Libraries/LibWebCommon/Page/InputEvent.cpp
 +++ b/Libraries/LibWebCommon/Page/InputEvent.cpp
-@@ -18,7 +18,7 @@ KeyEvent KeyEvent::clone_without_browser_data() const
+@@ -15,7 +15,7 @@ KeyEvent KeyEvent::clone_without_browser_data() const
  
  MouseEvent MouseEvent::clone_without_browser_data() const
  {
@@ -354,30 +354,11 @@ index f97ee891..e8bf739d 100644
  }
  
  }
-@@ -93,6 +93,7 @@ ErrorOr<void> IPC::encode(Encoder& encoder, Web::MouseEvent const& event)
-     TRY(encoder.encode(event.async_scroll_performed_default_action));
-     TRY(encoder.encode(event.id));
-     TRY(encoder.encode(event.scrollbar_dragged_by_compositor));
-+    TRY(encoder.encode(event.is_touch_scroll));
-     return {};
- }
- 
-@@ -115,8 +116,9 @@ ErrorOr<Web::MouseEvent> IPC::decode(Decoder& decoder)
-     auto async_scroll_performed_default_action = TRY(decoder.decode<bool>());
-     auto id = TRY(decoder.decode<u64>());
-     auto scrollbar_dragged_by_compositor = TRY(decoder.decode<Optional<Web::ScrollbarDraggedByCompositor>>());
-+    auto is_touch_scroll = TRY(decoder.decode<bool>());
- 
--    return Web::MouseEvent { type, position, screen_position, button, buttons, modifiers, wheel_delta_x, wheel_delta_y, wheel_tick_120ths_x, wheel_tick_120ths_y, wheel_delta_precision, scroll_gesture_phase, click_count, nullptr, async_scroll_performed_default_action, id, scrollbar_dragged_by_compositor };
-+    return Web::MouseEvent { type, position, screen_position, button, buttons, modifiers, wheel_delta_x, wheel_delta_y, wheel_tick_120ths_x, wheel_tick_120ths_y, wheel_delta_precision, scroll_gesture_phase, click_count, nullptr, async_scroll_performed_default_action, id, scrollbar_dragged_by_compositor, is_touch_scroll };
- }
- 
- template<>
 diff --git a/Libraries/LibWebCommon/Page/InputEvent.h b/Libraries/LibWebCommon/Page/InputEvent.h
-index cad28052..9babea98 100644
+index 17c98125..4f6a1e20 100644
 --- a/Libraries/LibWebCommon/Page/InputEvent.h
 +++ b/Libraries/LibWebCommon/Page/InputEvent.h
-@@ -111,6 +111,11 @@ struct WEBCOMMON_API MouseEvent {
+@@ -110,6 +110,11 @@ struct WEBCOMMON_API MouseEvent {
          MouseLeave,
          MouseCancel,
          MouseWheel,
@@ -389,7 +370,7 @@ index cad28052..9babea98 100644
      };
  
      MouseEvent clone_without_browser_data() const;
-@@ -133,6 +138,8 @@ struct WEBCOMMON_API MouseEvent {
+@@ -132,6 +137,8 @@ struct WEBCOMMON_API MouseEvent {
      bool async_scroll_performed_default_action { false };
      u64 id { 0 };
      Optional<Web::ScrollbarDraggedByCompositor> scrollbar_dragged_by_compositor {};
@@ -398,11 +379,34 @@ index cad28052..9babea98 100644
  };
  
  struct WEBCOMMON_API PinchEvent {
+diff --git a/Libraries/LibWebCommon/Page/InputEvent.ipc b/Libraries/LibWebCommon/Page/InputEvent.ipc
+index 2f9c62f8..7bec846b 100644
+--- a/Libraries/LibWebCommon/Page/InputEvent.ipc
++++ b/Libraries/LibWebCommon/Page/InputEvent.ipc
+@@ -19,6 +19,10 @@ enum Web::MouseEvent::Type : u8 {
+     MouseLeave,
+     MouseCancel,
+     MouseWheel,
++    TouchStart,
++    TouchMove,
++    TouchEnd,
++    TouchCancel,
+ }
+ 
+ [ExistingCpp]
+@@ -67,6 +71,7 @@ struct Web::MouseEvent {
+     bool async_scroll_performed_default_action;
+     u64 id;
+     Optional<Web::ScrollbarDraggedByCompositor> scrollbar_dragged_by_compositor;
++    bool is_touch_scroll;
+ }
+ 
+ [ExistingCpp]
 diff --git a/Libraries/LibWebView/ViewImplementation.cpp b/Libraries/LibWebView/ViewImplementation.cpp
-index 22c7ca4a..31a93bce 100644
+index 10c2ec9b..f1015d9b 100644
 --- a/Libraries/LibWebView/ViewImplementation.cpp
 +++ b/Libraries/LibWebView/ViewImplementation.cpp
-@@ -671,11 +671,12 @@ static bool is_activation_triggering_input_event(Web::InputEvent const& event)
+@@ -701,11 +701,12 @@ static bool is_activation_triggering_input_event(Web::InputEvent const& event)
      // An activation triggering input event is any event whose isTrusted attribute is true and whose type is one of:
      // - "keydown", provided the key is neither the Esc key nor a shortcut key reserved by the user agent;
      // - "mousedown";
@@ -418,10 +422,10 @@ index 22c7ca4a..31a93bce 100644
  }
  
 diff --git a/Services/Compositor/CompositorState.cpp b/Services/Compositor/CompositorState.cpp
-index b1ce9a6d..1eff4dda 100644
+index b8b72b1d..3c2a4d04 100644
 --- a/Services/Compositor/CompositorState.cpp
 +++ b/Services/Compositor/CompositorState.cpp
-@@ -551,7 +551,8 @@ void CompositorState::handle_and_dispatch_mouse_event(Web::CompositorContextId c
+@@ -557,7 +557,8 @@ void CompositorState::handle_and_dispatch_mouse_event(Web::CompositorContextId c
          return;
      }
  
@@ -448,10 +452,10 @@ index 6aaefb03..2cfed606 100644
      }
  
 diff --git a/Services/WebContent/PageClient.cpp b/Services/WebContent/PageClient.cpp
-index d9bfdfd5..af12aed0 100644
+index 22b124c6..62d48eb2 100644
 --- a/Services/WebContent/PageClient.cpp
 +++ b/Services/WebContent/PageClient.cpp
-@@ -514,6 +514,10 @@ void PageClient::did_handle_input_event(Web::PageId page_id, Web::InputEvent con
+@@ -519,6 +519,10 @@ void PageClient::did_handle_input_event(Web::PageId page_id, Web::InputEvent con
                  return mouse_event.buttons != Web::UIEvents::MouseButton::None;
              case Web::MouseEvent::Type::MouseLeave:
              case Web::MouseEvent::Type::MouseWheel:

@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibWeb/CMakeLists.txt b/Libraries/LibWeb/CMakeLists.txt
-index 8714c155..8f501757 100644
+index dcc73e64..958da519 100644
 --- a/Libraries/LibWeb/CMakeLists.txt
 +++ b/Libraries/LibWeb/CMakeLists.txt
-@@ -982,6 +982,9 @@ set(SOURCES
+@@ -975,6 +975,9 @@ set(SOURCES
      UIEvents/PointerEvent.cpp
      UIEvents/PointerTypes.cpp
      UIEvents/TextEvent.cpp
@@ -13,10 +13,10 @@ index 8714c155..8f501757 100644
      UIEvents/WheelEvent.cpp
      UserTiming/PerformanceMark.cpp
 diff --git a/Libraries/LibWeb/Forward.h b/Libraries/LibWeb/Forward.h
-index 2947a732..676ed643 100644
+index 4c7f0ee1..5f388694 100644
 --- a/Libraries/LibWeb/Forward.h
 +++ b/Libraries/LibWeb/Forward.h
-@@ -1204,6 +1204,9 @@ class KeyboardEvent;
+@@ -1203,6 +1203,9 @@ class KeyboardEvent;
  class MouseEvent;
  class PointerEvent;
  class TextEvent;
@@ -502,10 +502,10 @@ index 00000000..f8a4c237
 +    getter Touch? item(unsigned long index);
 +};
 diff --git a/Libraries/LibWeb/idl_files.cmake b/Libraries/LibWeb/idl_files.cmake
-index 43e85bfe..e77cfa8c 100644
+index 05be9543..d3317587 100644
 --- a/Libraries/LibWeb/idl_files.cmake
 +++ b/Libraries/LibWeb/idl_files.cmake
-@@ -579,6 +579,10 @@ libweb_js_bindings(UIEvents/MouseEvent)
+@@ -581,6 +581,10 @@ libweb_js_bindings(UIEvents/MouseEvent)
  libweb_js_bindings(UIEvents/PointerEvent)
  libweb_js_bindings(UIEvents/PointerEventHandlers)
  libweb_js_bindings(UIEvents/TextEvent)

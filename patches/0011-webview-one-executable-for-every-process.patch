@@ -14,7 +14,7 @@ index 1afa64a0..d48265df 100644
      auto current_executable_path = TRY(Core::System::current_executable_path());
      return LexicalPath::dirname(current_executable_path);
 diff --git a/Libraries/LibWebView/HelperProcess.cpp b/Libraries/LibWebView/HelperProcess.cpp
-index 95ffab54..365a26e0 100644
+index 9df9033e..c738bb1e 100644
 --- a/Libraries/LibWebView/HelperProcess.cpp
 +++ b/Libraries/LibWebView/HelperProcess.cpp
 @@ -8,6 +8,7 @@
