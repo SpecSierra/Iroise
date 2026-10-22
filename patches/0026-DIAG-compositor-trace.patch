@@ -29,7 +29,7 @@ index 1eff4dda..6d47dcc4 100644
  #ifdef AK_OS_MACOS
      // The window server's reads of an IOSurface wait for GPU work that is already scheduled to write it. Handing the
 diff --git a/Services/Compositor/ContextPresenter.cpp b/Services/Compositor/ContextPresenter.cpp
-index e33e91c9..4c077656 100644
+index e33e91c9..0f858c8b 100644
 --- a/Services/Compositor/ContextPresenter.cpp
 +++ b/Services/Compositor/ContextPresenter.cpp
 @@ -12,6 +12,8 @@
@@ -41,7 +41,7 @@ index e33e91c9..4c077656 100644
  #include <LibCore/Timer.h>
  #include <LibGfx/Bitmap.h>
  #include <LibGfx/SkiaUtils.h>
-@@ -289,6 +291,42 @@ bool ContextPresenter::draws_canvas(Compositing::CanvasId canvas_id) const
+@@ -289,6 +291,43 @@ bool ContextPresenter::draws_canvas(Compositing::CanvasId canvas_id) const
      return m_last_rasterized_frame.has_value() && m_last_rasterized_frame->canvas_content_generations.contains(canvas_id);
  }
  
@@ -55,6 +55,7 @@ index e33e91c9..4c077656 100644
 +    u64 full_frames { 0 };
 +    u64 paint_us { 0 };
 +    u64 flush_us { 0 };
++    Gfx::IntRect last_damage;
 +    MonotonicTime last { MonotonicTime::now() };
 +    void report()
 +    {
@@ -62,8 +63,8 @@ index e33e91c9..4c077656 100644
 +        if ((now - last).to_milliseconds() < 1000)
 +            return;
 +        if (frames > 0) {
-+            dbgln("[pacific-trace] {} frames, damage {}% raster {}% of the viewport, {} full-viewport, paint {} us, flush {} us per frame",
-+                frames, damage_area * 100 / max<u64>(full_area, 1), raster_area * 100 / max<u64>(full_area, 1), full_frames, paint_us / frames, flush_us / frames);
++            dbgln("[pacific-trace] {} frames, damage {}% raster {}% of the viewport, {} full-viewport, paint {} us, flush {} us per frame, last damage {}",
++                frames, damage_area * 100 / max<u64>(full_area, 1), raster_area * 100 / max<u64>(full_area, 1), full_frames, paint_us / frames, flush_us / frames, last_damage);
 +        }
 +        frames = damage_area = raster_area = full_area = full_frames = paint_us = flush_us = 0;
 +        last = now;
@@ -84,7 +85,7 @@ index e33e91c9..4c077656 100644
  Optional<PreparedFrame> ContextPresenter::prepare_frame(DisplayListPlayerSkia& display_list_player, PendingFrame pending_frame, FrameContent const& frame_content)
  {
      if (is_present_blocked()) {
-@@ -313,7 +351,22 @@ Optional<PreparedFrame> ContextPresenter::prepare_frame(DisplayListPlayerSkia& d
+@@ -313,7 +352,23 @@ Optional<PreparedFrame> ContextPresenter::prepare_frame(DisplayListPlayerSkia& d
          return {};
      }
      auto& back_store = render_target->surface;
@@ -96,6 +97,7 @@ index e33e91c9..4c077656 100644
 +        auto raster_full = static_cast<u64>(raster_size.width()) * raster_size.height();
 +        trace.frames++;
 +        trace.damage_area += static_cast<u64>(damage_rect.width()) * damage_rect.height();
++        trace.last_damage = damage_rect;
 +        trace.full_area += viewport_area;
 +        auto raster_area = static_cast<u64>(render_target->damage_rect.width()) * render_target->damage_rect.height();
 +        trace.raster_area += raster_area * viewport_area / max<u64>(raster_full, 1);
