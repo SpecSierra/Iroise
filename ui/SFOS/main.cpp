@@ -44,6 +44,7 @@
 #include <LibWebView/Menu.h>
 #include <LibWebView/Settings.h>
 #include <LibWebView/URL.h>
+#include <LibWebCommon/Loader/UserAgent.h>
 #include <LibWebView/UserAgent.h>
 #include <LibWebView/Utilities.h>
 #include <LibWebView/WebContentPage.h>
