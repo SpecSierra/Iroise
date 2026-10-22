@@ -158,7 +158,7 @@ private:
     bool m_privateBrowsing = false;
     bool m_pageWantsTextInput = false;
     bool m_pageFullscreen = false;
-    qreal m_deviceScaleFactor = 2.5;
+    qreal m_deviceScaleFactor = 2.25;
 
     LadybirdFrame m_frame;
     // From the start of a load until the new page's first frame, a plain fill stands in for the old page.

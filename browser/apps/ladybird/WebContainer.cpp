@@ -29,12 +29,13 @@
 
 #include <unistd.h>
 
-// Where the page's device pixel ratio comes from: a 360 CSS pixel wide viewport on the Xperia 10 II, whose Silica
-// pixel ratio is 1.75, gives 3.0; other devices scale from it (see initialPageDeviceScaleFactor). The screen size is
-// a fallback for when Qt does not know it yet.
-static constexpr qreal kReferenceViewportWidth = 360.0;
+// Where the page's device pixel ratio comes from: a 411 CSS pixel wide viewport on the Xperia 10 II (as Chrome gives a
+// 1080 pixel wide phone), whose Silica pixel ratio is 1.75, gives 2.625, which the quarter steps make 2.75 (393 CSS
+// pixels); other devices scale from it (see initialPageDeviceScaleFactor): the Jolla Phone 2 gets 2.25, 480 CSS pixels
+// wide. 3.0 (360 pixels) showed pages too large. The screen size is a fallback for when Qt does not know it yet.
+static constexpr qreal kReferenceViewportWidth = 411.0;
 static constexpr qreal kReferenceUiPixelRatio = 1.75;
-static constexpr qreal kReferenceDeviceScale = 3.0;
+static constexpr qreal kReferenceDeviceScale = 2.625;
 static constexpr qreal kFallbackScreenWidth = 1080.0;
 static constexpr qreal kFallbackScreenHeight = 2520.0;
 
@@ -194,7 +195,7 @@ qreal WebContainer::initialPageDeviceScaleFactor(const QSizeF &screenSize) const
     // width alone oversized it on the Jolla Phone 2: 1032px / 360 = 2.87 at
     // pixelRatio 1.5. The Xperia 10 II is the reference (1.75 -> 3.0); the
     // Jolla gets 2.57, rounded to 2.5. Quarter steps keep the scale off odd
-    // fractions, whose tile-edge rounding shows as seams.
+    // fractions, whose tile-edge rounding shows as seams. (Figures above are for the earlier reference of 3.0.)
     if (m_uiPixelRatio > 0.0) {
         const qreal scale = kReferenceDeviceScale
                             * m_uiPixelRatio / kReferenceUiPixelRatio;
