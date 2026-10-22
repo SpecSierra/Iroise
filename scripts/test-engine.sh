@@ -10,6 +10,8 @@ BUILD="$UP/Build/release"
 JOBS="${JOBS:-12}"
 RESULTS="$ROOT/dist/test-results"
 
+# NB: Built as CI's build step built the engine, or it would build all of it again another way first.
+[ -n "${CI_CACHE:-}" ] && source "$ROOT/scripts/pgo-select.sh"
 "$ROOT/scripts/build.sh" test-web
 
 # What the patches change, by the tests Ladybird keeps for it: input and pointer events (0021-0025), wheel and

@@ -9,14 +9,8 @@ RELEASE="${1:?usage: ci-build.sh <rpm release>}"
 VERSION="$(cat "$ROOT/VERSION")"
 source "$ROOT/scripts/ci-checkout.sh"
 
-# With a profile from scripts/pgo-profile.sh (.github/workflows/pgo.yml), the engine is optimised with it. One
-# made at an older pin still helps; PACIFIC_PGO=off builds without.
-if [ "${PACIFIC_PGO:-}" != off ] && [ -f "$CACHE/pgo/profile/stamp" ]; then
-    export PACIFIC_PGO=use PACIFIC_PGO_DIR="$CACHE/pgo/profile"
-    echo "Profile-guided optimisation with profile $(cat "$PACIFIC_PGO_DIR/stamp")"
-else
-    unset PACIFIC_PGO
-fi
+# With a profile from scripts/pgo-profile.sh (.github/workflows/pgo.yml), the engine is optimised with it.
+source "$ROOT/scripts/pgo-select.sh"
 
 "$ROOT/scripts/build.sh"
 echo "$STAMP" > "$CACHE/upstream.stamp"
