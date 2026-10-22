@@ -1,4 +1,4 @@
-# Pacific: the browser's pages and tabs, backed by one Ladybird engine process.
+# Iroise: the browser's pages and tabs, backed by one Ladybird engine process.
 INCLUDEPATH += $$PWD
 
 QT += network positioning

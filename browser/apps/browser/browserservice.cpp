@@ -20,8 +20,8 @@ BrowserService::BrowserService(QObject *parent)
 {
     // NB: The object before the name, so that a call can never find the name without the object.
     QDBusConnection bus = QDBusConnection::sessionBus();
-    m_registered = bus.registerObject(QStringLiteral(PACIFIC_SERVICE_PATH), this, QDBusConnection::ExportScriptableSlots)
-        && bus.registerService(QStringLiteral(PACIFIC_SERVICE_NAME));
+    m_registered = bus.registerObject(QStringLiteral(IROISE_SERVICE_PATH), this, QDBusConnection::ExportScriptableSlots)
+        && bus.registerService(QStringLiteral(IROISE_SERVICE_NAME));
 }
 
 void BrowserService::openUrl(const QStringList &args)

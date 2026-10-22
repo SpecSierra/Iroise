@@ -2,7 +2,7 @@
 
 Ladybird has no touch events: a page never hears `touchstart`, `touchmove` or `touchend`, and every pointer is a
 mouse. Pages written for phones need them. A video player's control bar, for one, cancels `touchend` so that the tap
-does not also reach the player behind it and hide the bar. This is how Pacific gives pages touch events until
+does not also reach the player behind it and hide the bar. This is how Iroise gives pages touch events until
 Ladybird has its own, built so that it is cheap to carry across Ladybird updates and easy to drop when that day comes.
 
 ## How it works
@@ -68,7 +68,7 @@ touch, and a tap's mouse events without their own), and `0024-web-no-mouse-point
 same for the hover a tap moves, in `Document.cpp`, kept apart as the one hook there), and `0025-test-touch-events` (tests of them all, with `internals.touchStart()` and
 the rest to drive a finger, which `scripts/test-engine.sh` runs with Ladybird's own tests of input, pointer and wheel
 events on every CI build). The front end sends touches in `ui/SFOS/main.cpp`;
-`PACIFIC_TOUCH_EVENTS=0` turns them off, which brings back the browser without touch events.
+`IROISE_TOUCH_EVENTS=0` turns them off, which brings back the browser without touch events.
 
 ## Not yet
 

@@ -1,5 +1,5 @@
 /*
- * Pacific: Ladybird engine connection.
+ * Iroise: Ladybird engine connection.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */

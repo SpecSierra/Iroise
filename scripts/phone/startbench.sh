@@ -8,7 +8,7 @@ i=0
 while [ $i -lt $n ]; do
   sh /tmp/ladybird/stop.sh >/dev/null 2>&1; sleep 2
   t0=$(cut -d" " -f1 /proc/uptime | tr -d .)
-  PACIFIC_NO_STOP=1 sh /tmp/ladybird/start-browser.sh "$url" 2 >/dev/null 2>&1
+  IROISE_NO_STOP=1 sh /tmp/ladybird/start-browser.sh "$url" 2 >/dev/null 2>&1
   ms=timeout; k=0
   while [ $k -lt 600 ]; do
     if grep -q "EngineView: frames are" /tmp/ladybird/win.log 2>/dev/null; then ms=$(( ($(cut -d" " -f1 /proc/uptime | tr -d .) - t0) * 10 )); break; fi

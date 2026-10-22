@@ -1,6 +1,6 @@
 #!/bin/bash
-# Build the harbour-pacific RPM, as the Jolla Store takes it, from what scripts/bundle.sh laid out in
-# dist/harbour-pacific: the one executable in /usr/bin, everything else in /usr/share/harbour-pacific, and the
+# Build the harbour-iroise RPM, as the Jolla Store takes it, from what scripts/bundle.sh laid out in
+# dist/harbour-iroise: the one executable in /usr/bin, everything else in /usr/share/harbour-iroise, and the
 # launcher entry with its icons. Sailjail confines it by the entry's [X-Sailjail] alone.
 # NB: No "Ladybird" in anything users see, "Powered by" included, until the Ladybird project publishes guidelines
 #     for its name and for packaging: it is their trademark.
@@ -10,46 +10,46 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VERSION="${1:-0.2.0}"
 RELEASE="${2:-1}"
-APP="$ROOT/dist/harbour-pacific"
+APP="$ROOT/dist/harbour-iroise"
 S="$ROOT/build/rpm-stage"
 OUT="$ROOT/dist/rpm"
 
-[ -x "$APP/bin/harbour-pacific" ] || { echo "run scripts/bundle.sh first" >&2; exit 1; }
+[ -x "$APP/bin/harbour-iroise" ] || { echo "run scripts/bundle.sh first" >&2; exit 1; }
 
 rm -rf "$S"
 mkdir -p "$S/usr/share/applications" "$OUT"
 cp -a "$APP/bin" "$APP/share" "$S/usr/"
 
-python3 - "$ROOT/browser/apps/browser/qml/icons/icon-launcher-pacific.svg" "$S" <<'PY'
+python3 - "$ROOT/browser/apps/browser/qml/icons/icon-launcher-iroise.svg" "$S" <<'PY'
 import os, sys, cairosvg
 svg, stage = sys.argv[1], sys.argv[2]
 for size in (86, 108, 128, 172):
     directory = f"{stage}/usr/share/icons/hicolor/{size}x{size}/apps"
     os.makedirs(directory, exist_ok=True)
-    cairosvg.svg2png(url=svg, write_to=f"{directory}/harbour-pacific.png", output_width=size, output_height=size)
+    cairosvg.svg2png(url=svg, write_to=f"{directory}/harbour-iroise.png", output_width=size, output_height=size)
 PY
 
 # no-invoker: started through the booster, /proc/self/exe would be the booster's, and the engine's helper
 # processes are started from it (see browser/apps/launcher).
-cat > "$S/usr/share/applications/harbour-pacific.desktop" <<'DESKTOP'
+cat > "$S/usr/share/applications/harbour-iroise.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
-Name=Pacific
-Icon=harbour-pacific
-Exec=harbour-pacific %U
+Name=Iroise
+Icon=harbour-iroise
+Exec=harbour-iroise %U
 Comment=Web browser
 MimeType=text/html;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
 X-Nemo-Application-Type=no-invoker
 
 [X-Sailjail]
 Permissions=Internet;Audio;Microphone;Location;Downloads;Documents;Pictures;Videos;Music;RemovableMedia;MediaIndexing
-OrganizationName=org.pacific
-ApplicationName=harbour-pacific
+OrganizationName=org.iroise
+ApplicationName=harbour-iroise
 DESKTOP
 
 # NB: No automatic dependencies: the engine brings its own libraries, and the scan would turn each of them into
 #     a requirement that nothing on the phone provides.
-fpm -s dir -t rpm -n harbour-pacific -v "$VERSION" --iteration "$RELEASE" --architecture aarch64 \
+fpm -s dir -t rpm -n harbour-iroise -v "$VERSION" --iteration "$RELEASE" --architecture aarch64 \
     --rpm-summary "Web browser" \
     --description "A web browser for Sailfish OS." \
     --license "BSD-2-Clause and MPL-2.0" --url "https://github.com/SpecSierra/Pacific" \
@@ -58,5 +58,5 @@ fpm -s dir -t rpm -n harbour-pacific -v "$VERSION" --iteration "$RELEASE" --arch
     --depends nemo-qml-plugin-configuration-qt5 --depends nemo-qml-plugin-dbus-qt5 \
     --depends nemo-qml-plugin-notifications-qt5 \
     --depends sailfish-components-webview-qt5-popups \
-    --force -p "$OUT/harbour-pacific-$VERSION-$RELEASE.aarch64.rpm" -C "$S" .
+    --force -p "$OUT/harbour-iroise-$VERSION-$RELEASE.aarch64.rpm" -C "$S" .
 ls -la "$OUT"

@@ -31,7 +31,7 @@
 **
 ****************************************************************************************/
 
-// Pacific: a copy of Sailfish Silica's private VirtualKeyboardObserver (BSD licensed, above), since the Jolla Store
+// Iroise: a copy of Sailfish Silica's private VirtualKeyboardObserver (BSD licensed, above), since the Jolla Store
 // does not allow importing Sailfish.Silica.private.
 
 import QtQuick 2.2

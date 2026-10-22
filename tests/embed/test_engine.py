@@ -20,9 +20,9 @@ class EngineTest(unittest.TestCase):
     def tearDown(self):
         self.engine.close()
         # Each test's engine log and messages, for the CI's results.
-        if os.environ.get('PACIFIC_TEST_LOGS'):
-            os.makedirs(os.environ['PACIFIC_TEST_LOGS'], exist_ok=True)
-            with open(os.path.join(os.environ['PACIFIC_TEST_LOGS'], self.id() + '.log'), 'w') as log:
+        if os.environ.get('IROISE_TEST_LOGS'):
+            os.makedirs(os.environ['IROISE_TEST_LOGS'], exist_ok=True)
+            with open(os.path.join(os.environ['IROISE_TEST_LOGS'], self.id() + '.log'), 'w') as log:
                 log.write(self.engine.log())
                 log.write('\n--- messages ---\n' + '\n'.join(map(repr, self.engine.messages)))
         self.engine.remove()
@@ -75,9 +75,9 @@ class Taps(EngineTest):
         self.engine.load(page('input.html'))
         self.engine.tap(Engine.WIDTH / 2, Engine.HEIGHT / 4)
         self.engine.wait_for('TEXT_INPUT', lambda message: message.a == 1)
-        self.engine.send('COMMIT_TEXT', text='Pacific')
+        self.engine.send('COMMIT_TEXT', text='Iroise')
         self.engine.pump(0.3)
-        self.assertEqual(self.engine.eval('field.value'), 'Pacific')
+        self.assertEqual(self.engine.eval('field.value'), 'Iroise')
 
 
 class Scrolling(EngineTest):

@@ -1,5 +1,5 @@
 /*
- * Pacific: Ladybird engine connection.
+ * Iroise: Ladybird engine connection.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -81,7 +81,7 @@ void LadybirdEngine::start()
     QString runtimeDirectory = QStandardPaths::writableLocation(QStandardPaths::RuntimeLocation);
     if (runtimeDirectory.isEmpty())
         runtimeDirectory = QDir::tempPath();
-    m_socketPath = QStringLiteral("%1/pacific-engine-%2.socket").arg(runtimeDirectory).arg(QCoreApplication::applicationPid());
+    m_socketPath = QStringLiteral("%1/iroise-engine-%2.socket").arg(runtimeDirectory).arg(QCoreApplication::applicationPid());
     QByteArray path = m_socketPath.toLocal8Bit();
     ::unlink(path.constData());
 
@@ -102,7 +102,7 @@ void LadybirdEngine::start()
     // The phone's kernel has no Landlock; this keeps the seccomp half of the engine's sandbox.
     environment.insert(QStringLiteral("LADYBIRD_UNSAFE_ALLOW_MISSING_LANDLOCK"), QStringLiteral("1"));
     // Test runs keep everything the engine writes out of the user's home directory.
-    QString engineHome = QString::fromLocal8Bit(qgetenv("PACIFIC_ENGINE_HOME"));
+    QString engineHome = QString::fromLocal8Bit(qgetenv("IROISE_ENGINE_HOME"));
     if (!engineHome.isEmpty()) {
         QDir().mkpath(engineHome);
         environment.insert(QStringLiteral("HOME"), engineHome);
@@ -127,7 +127,7 @@ void LadybirdEngine::start()
     environment.insert(QStringLiteral("XDG_DOWNLOAD_DIR"), downloads);
     // The engine paces its pages at 60 frames a second unless told the screen's rate (the Jolla Phone 2's is 90).
     if (QScreen* screen = QGuiApplication::primaryScreen()) {
-        if (!qgetenv("PACIFIC_LOG_ENGINE").isEmpty())
+        if (!qgetenv("IROISE_LOG_ENGINE").isEmpty())
             qWarning("LadybirdEngine: the screen refreshes at %.1f Hz", screen->refreshRate());
         // NB: One set already wins (to compare rates).
         if (screen->refreshRate() >= 30 && !environment.contains(QStringLiteral("LADYBIRD_SFOS_REFRESH_RATE")))
@@ -293,8 +293,8 @@ void LadybirdEngine::send(quint32 view, lb_embed_message_type type, int a, int b
     header.c = c;
     header.d = d;
     header.scale = scale;
-    // PACIFIC_LOG_ENGINE=1 traces what the interface asks of the engine, except the touch stream.
-    static const bool logMessages = !qgetenv("PACIFIC_LOG_ENGINE").isEmpty();
+    // IROISE_LOG_ENGINE=1 traces what the interface asks of the engine, except the touch stream.
+    static const bool logMessages = !qgetenv("IROISE_LOG_ENGINE").isEmpty();
     if (logMessages && type != LB_EMBED_TOUCH)
         qWarning("LadybirdEngine: view %u message %d a=%d b=%d c=%d d=%d scale=%.3f text=%s", view, int(type), a, b, c, d, scale, text.left(80).constData());
     // NB: Refused, not cut: a cut JSON text would be read as nothing (site options would all be cleared).

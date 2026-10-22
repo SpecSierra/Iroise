@@ -1,5 +1,5 @@
 TEMPLATE = app
-TARGET = harbour-pacific
+TARGET = harbour-iroise
 CONFIG -= qt app_bundle
 CONFIG += c11
 SOURCES += launcher.c

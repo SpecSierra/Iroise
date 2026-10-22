@@ -40,7 +40,7 @@ Rectangle {
             font.pixelSize: Theme.fontSizeMedium
             color: Theme.primaryColor
             //% "This tab has crashed"
-            text: qsTrId("pacific-la-tab_crashed")
+            text: qsTrId("iroise-la-tab_crashed")
         }
         Label {
             width: parent.width
@@ -49,12 +49,12 @@ Rectangle {
             color: Theme.secondaryColor
             wrapMode: Text.WordWrap
             //% "The page stopped unexpectedly. Your other tabs are fine."
-            text: qsTrId("pacific-la-tab_crashed_description")
+            text: qsTrId("iroise-la-tab_crashed_description")
         }
         Button {
             anchors.horizontalCenter: parent.horizontalCenter
             //% "Reload"
-            text: qsTrId("pacific-bt-reload_crashed_tab")
+            text: qsTrId("iroise-bt-reload_crashed_tab")
             onClicked: crashBanner.webView.reload()
         }
     }

@@ -10,7 +10,7 @@
 
 import QtQuick 2.0
 import Sailfish.Silica 1.0
-import harbour.pacific 1.0
+import harbour.iroise 1.0
 import Nemo.Configuration 1.0
 import "../shared" as Shared
 import "components"
@@ -54,7 +54,7 @@ Page {
     ConfigurationValue {
         id: startPageFolder
 
-        key: "/apps/harbour-pacific/settings/start_page_folder"
+        key: "/apps/harbour-iroise/settings/start_page_folder"
         defaultValue: ""
     }
 
@@ -68,14 +68,14 @@ Page {
         PullDownMenu {
             MenuItem {
                 //% "Show this folder on the start page"
-                text: qsTrId("pacific-me-folder_on_start_page")
+                text: qsTrId("iroise-me-folder_on_start_page")
                 visible: !page.searching && startPageFolder.value !== page.folderId
                 onClicked: startPageFolder.value = page.folderId
             }
 
             MenuItem {
                 //% "New folder"
-                text: qsTrId("pacific-me-new_folder")
+                text: qsTrId("iroise-me-new_folder")
                 visible: !page.searching
                 onClicked: pageStack.animatorPush(newFolderDialog)
             }
@@ -89,7 +89,7 @@ Page {
                                                    : qsTrId("sailfish_browser-he-bookmarks")
                 //% "Shown on the start page"
                 description: startPageFolder.value === page.folderId
-                             ? qsTrId("pacific-la-shown_on_start_page") : ""
+                             ? qsTrId("iroise-la-shown_on_start_page") : ""
             }
             SearchField {
                 width: parent.width
@@ -125,13 +125,13 @@ Page {
 
                 DialogHeader {
                     //% "Create"
-                    acceptText: qsTrId("pacific-he-create_folder_accept")
+                    acceptText: qsTrId("iroise-he-create_folder_accept")
                 }
 
                 TextField {
                     width: parent.width
                     //% "Folder name"
-                    label: qsTrId("pacific-la-folder_name")
+                    label: qsTrId("iroise-la-folder_name")
                     placeholderText: label
                     EnterKey.iconSource: "image://theme/icon-m-enter-accept"
                     EnterKey.onClicked: accept()

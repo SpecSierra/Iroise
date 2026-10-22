@@ -1,4 +1,4 @@
-"""The engine, driven as Pacific's interface drives it: over the embedding protocol (ui/protocol/EmbedProtocol.h), with
+"""The engine, driven as Iroise's interface drives it: over the embedding protocol (ui/protocol/EmbedProtocol.h), with
 no interface, no Qt and no phone. Used by the tests in this directory (scripts/test-front-end.sh).
 
 The engine is the bundle's own executable in its engine role (scripts/bundle.sh lays the bundle out). On a host
@@ -23,7 +23,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 PAGES = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'pages')
 HEADER = '<IiiiiIdII'
 HEADER_SIZE = struct.calcsize(HEADER)
-PAGE_MESSAGE_MARKER = '\u0001pacific'
+PAGE_MESSAGE_MARKER = '\u0001iroise'
 
 # The message types and their arguments, from the protocol header itself, so that the tests cannot drift from it.
 _protocol = open(os.path.join(ROOT, 'ui', 'protocol', 'EmbedProtocol.h')).read()
@@ -62,8 +62,8 @@ class Engine:
     VIEW = 1
 
     def __init__(self, arguments=()):
-        executable = os.environ.get('PACIFIC_ENGINE', os.path.join(ROOT, 'dist', 'harbour-pacific', 'bin', 'harbour-pacific'))
-        self.directory = tempfile.mkdtemp(prefix='pacific-embed-')
+        executable = os.environ.get('IROISE_ENGINE', os.path.join(ROOT, 'dist', 'harbour-iroise', 'bin', 'harbour-iroise'))
+        self.directory = tempfile.mkdtemp(prefix='iroise-embed-')
         self.home = os.path.join(self.directory, 'home')
         self.downloads = os.path.join(self.home, 'Downloads')
         os.makedirs(self.downloads)

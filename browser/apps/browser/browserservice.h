@@ -17,18 +17,18 @@
 #include <QObject>
 #include <QStringList>
 
-// Pacific: the app's D-Bus service. Sailjail lets an app own only the bus name made of its OrganizationName and
+// Iroise: the app's D-Bus service. Sailjail lets an app own only the bus name made of its OrganizationName and
 // ApplicationName, and a Jolla Store app cannot be started by D-Bus activation. So the name is there for a second
-// launch (another app opening a link in Pacific starts the app again) to hand its URL to the running browser, see
-// pacific_ui_main().
-#define PACIFIC_SERVICE_NAME "org.pacific.harbour-pacific"
-#define PACIFIC_SERVICE_PATH "/"
-#define PACIFIC_SERVICE_INTERFACE "org.pacific.Browser"
+// launch (another app opening a link in Iroise starts the app again) to hand its URL to the running browser, see
+// iroise_ui_main().
+#define IROISE_SERVICE_NAME "org.iroise.harbour-iroise"
+#define IROISE_SERVICE_PATH "/"
+#define IROISE_SERVICE_INTERFACE "org.iroise.Browser"
 
 class BrowserService : public QObject
 {
     Q_OBJECT
-    Q_CLASSINFO("D-Bus Interface", PACIFIC_SERVICE_INTERFACE)
+    Q_CLASSINFO("D-Bus Interface", IROISE_SERVICE_INTERFACE)
 
 public:
     explicit BrowserService(QObject *parent);

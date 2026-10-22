@@ -1,5 +1,5 @@
 /*
- * Pacific: a loader whose old item stays until it has animated out, as PopUpMenu used Silica's private
+ * Iroise: a loader whose old item stays until it has animated out, as PopUpMenu used Silica's private
  * AnimatedLoader (which the Jolla Store does not allow importing).
  *
  * When active or source changes, the current item becomes replacedItem, a new item is made from source (a

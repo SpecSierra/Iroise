@@ -1,5 +1,5 @@
 /*
- * Pacific: the Sailfish OS front end for the Ladybird engine.
+ * Iroise: the Sailfish OS front end for the Ladybird engine.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -311,7 +311,7 @@ private:
         ++m_frames_presented;
         if (auto elapsed = m_frame_timer.elapsed_milliseconds(); elapsed >= 1000) {
             if (s_log_frame_rate)
-                warnln("pacific: {} fps", m_frames_presented * 1000 / elapsed);
+                warnln("iroise: {} fps", m_frames_presented * 1000 / elapsed);
             m_frames_presented = 0;
             m_frame_timer.start();
         }
@@ -369,8 +369,8 @@ private:
     }
 
     static inline bool s_log_frame_rate = Core::Environment::has("LADYBIRD_SFOS_LOG_FPS"sv);
-    // PACIFIC_TOUCH_EVENTS=0 leaves pages without touch events, as Pacific was before them.
-    static inline bool s_touch_events = Core::Environment::get("PACIFIC_TOUCH_EVENTS"sv).value_or({}) != "0"sv;
+    // IROISE_TOUCH_EVENTS=0 leaves pages without touch events, as Iroise was before them.
+    static inline bool s_touch_events = Core::Environment::get("IROISE_TOUCH_EVENTS"sv).value_or({}) != "0"sv;
     // The screen's refresh rate, as the app found it; the engine assumes 60 otherwise.
     static inline double s_refresh_rate = [] {
         auto rate = Core::Environment::get("LADYBIRD_SFOS_REFRESH_RATE"sv).value_or({}).to_number<double>();
@@ -419,9 +419,9 @@ private:
     }
 
     static constexpr int idle_after_milliseconds = 3000;
-    // PACIFIC_IDLE_FPS: the rate of a page nobody uses (30; 0 keeps the full rate).
+    // IROISE_IDLE_FPS: the rate of a page nobody uses (30; 0 keeps the full rate).
     static inline double s_idle_frames_per_second = [] {
-        auto rate = Core::Environment::get("PACIFIC_IDLE_FPS"sv).value_or({}).to_number<double>();
+        auto rate = Core::Environment::get("IROISE_IDLE_FPS"sv).value_or({}).to_number<double>();
         return rate.has_value() && *rate >= 0 ? *rate : 30.0;
     }();
     RefPtr<Core::Timer> m_idle_timer;
@@ -603,7 +603,7 @@ private:
             name = "download"sv;
         auto destination = WebView::Application::the().default_path_for_downloaded_file(name);
         if (destination.is_error()) {
-            warnln("pacific: nowhere to save {}: {}", *url, destination.error());
+            warnln("iroise: nowhere to save {}: {}", *url, destination.error());
             return;
         }
         WebView::Application::the().file_downloader().download_file(is_private, *url, destination.release_value());
@@ -910,10 +910,10 @@ private:
     static ByteString const& autoconsent_source()
     {
         static ByteString source = [] {
-            auto path = LexicalPath::join(WebView::s_ladybird_resource_root, "pacific"sv, "autoconsent.js"sv);
+            auto path = LexicalPath::join(WebView::s_ladybird_resource_root, "iroise"sv, "autoconsent.js"sv);
             auto file = Core::File::open(path.string(), Core::File::OpenMode::Read);
             if (file.is_error()) {
-                warnln("pacific: no autoconsent at {}: {}", path, file.error());
+                warnln("iroise: no autoconsent at {}: {}", path, file.error());
                 return ByteString {};
             }
             auto contents = file.value()->read_until_eof();
@@ -1314,7 +1314,7 @@ private:
                 if (auto file = WebView::create_selected_file(path); !file.is_error())
                     files.append(file.release_value());
                 else
-                    warnln("pacific: cannot open the chosen file {}: {}", path, file.error());
+                    warnln("iroise: cannot open the chosen file {}: {}", path, file.error());
             });
             view.file_picker_closed(move(files));
             break;

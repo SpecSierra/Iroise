@@ -11,7 +11,7 @@
 
 #include "logging.h"
 
-Q_LOGGING_CATEGORY(lcCoreLog, "org.pacific.browser.core", QtWarningMsg)
-Q_LOGGING_CATEGORY(lcBackupLog, "org.pacific.browser.backup", QtWarningMsg)
-Q_LOGGING_CATEGORY(lcDownloadLog, "org.pacific.browser.download", QtWarningMsg)
-Q_LOGGING_CATEGORY(lcFavoritesLog, "org.pacific.browser.favorites", QtWarningMsg)
+Q_LOGGING_CATEGORY(lcCoreLog, "org.iroise.browser.core", QtWarningMsg)
+Q_LOGGING_CATEGORY(lcBackupLog, "org.iroise.browser.backup", QtWarningMsg)
+Q_LOGGING_CATEGORY(lcDownloadLog, "org.iroise.browser.download", QtWarningMsg)
+Q_LOGGING_CATEGORY(lcFavoritesLog, "org.iroise.browser.favorites", QtWarningMsg)

@@ -1,5 +1,5 @@
 /*
- * Pacific: the tabs (see WebContainer.h).
+ * Iroise: the tabs (see WebContainer.h).
  * SPDX-License-Identifier: LGPL-2.1+
  */
 
@@ -73,8 +73,8 @@ WebContainer::WebContainer(QQuickItem *parent)
     // processes and their memory. Keep only the active tab + a small MRU set
     // live; discard the rest (their tab-model entry survives, so activatePage()
     // recreates + reloads them on return).
-    if (qEnvironmentVariableIsSet("PACIFIC_TAB_DISCARD"))
-        m_tabDiscardEnabled = qgetenv("PACIFIC_TAB_DISCARD").trimmed() != "0";
+    if (qEnvironmentVariableIsSet("IROISE_TAB_DISCARD"))
+        m_tabDiscardEnabled = qgetenv("IROISE_TAB_DISCARD").trimmed() != "0";
     // A tab is a whole page process: phones with less memory keep fewer of them alive.
     {
         QFile meminfo(QStringLiteral("/proc/meminfo"));
@@ -86,12 +86,12 @@ WebContainer::WebContainer(QQuickItem *parent)
             }
         }
     }
-    if (qEnvironmentVariableIsSet("PACIFIC_MAX_LIVE_TABS"))
-        m_maxLiveTabCount = qMax(1, qEnvironmentVariableIntValue("PACIFIC_MAX_LIVE_TABS"));
-    if (qEnvironmentVariableIsSet("PACIFIC_TAB_DISCARD_KEEP_MIN"))
-        m_pressureKeepMin = qMax(1, qEnvironmentVariableIntValue("PACIFIC_TAB_DISCARD_KEEP_MIN"));
-    if (qEnvironmentVariableIsSet("PACIFIC_TAB_DISCARD_MEMFREE_MB"))
-        m_memFreeThresholdMb = qMax(0, qEnvironmentVariableIntValue("PACIFIC_TAB_DISCARD_MEMFREE_MB"));
+    if (qEnvironmentVariableIsSet("IROISE_MAX_LIVE_TABS"))
+        m_maxLiveTabCount = qMax(1, qEnvironmentVariableIntValue("IROISE_MAX_LIVE_TABS"));
+    if (qEnvironmentVariableIsSet("IROISE_TAB_DISCARD_KEEP_MIN"))
+        m_pressureKeepMin = qMax(1, qEnvironmentVariableIntValue("IROISE_TAB_DISCARD_KEEP_MIN"));
+    if (qEnvironmentVariableIsSet("IROISE_TAB_DISCARD_MEMFREE_MB"))
+        m_memFreeThresholdMb = qMax(0, qEnvironmentVariableIntValue("IROISE_TAB_DISCARD_MEMFREE_MB"));
     qInfo() << "[DISCARD] enabled=" << m_tabDiscardEnabled
             << "maxLive=" << m_maxLiveTabCount
             << "keepMin=" << m_pressureKeepMin

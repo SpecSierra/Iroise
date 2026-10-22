@@ -10,7 +10,7 @@
 
 import QtQuick 2.0
 import Sailfish.Silica 1.0
-import harbour.pacific 1.0
+import harbour.iroise 1.0
 import Sailfish.WebView.Popups 1.0 as Popups
 
 ListItem {
@@ -126,7 +126,7 @@ ListItem {
             }
             MenuItem {
                 //% "Move to folder"
-                text: qsTrId("pacific-me-move_to_folder")
+                text: qsTrId("iroise-me-move_to_folder")
                 onClicked: pageStack.animatorPush(moveToFolderDialog)
             }
             MenuItem {
@@ -149,7 +149,7 @@ ListItem {
             }
             MenuItem {
                 //% "Rename"
-                text: qsTrId("pacific-me-rename_folder")
+                text: qsTrId("iroise-me-rename_folder")
                 visible: model.isFolder
                 onClicked: pageStack.animatorPush(renameDialog)
             }
@@ -172,14 +172,14 @@ ListItem {
 
                 DialogHeader {
                     //% "Rename"
-                    acceptText: qsTrId("pacific-he-rename_accept")
+                    acceptText: qsTrId("iroise-he-rename_accept")
                 }
 
                 TextField {
                     width: parent.width
                     text: model.title
                     //% "Folder name"
-                    label: qsTrId("pacific-la-folder_name")
+                    label: qsTrId("iroise-la-folder_name")
                     placeholderText: label
                     EnterKey.iconSource: "image://theme/icon-m-enter-accept"
                     EnterKey.onClicked: accept()
@@ -206,7 +206,7 @@ ListItem {
 
                 DialogHeader {
                     //% "Move"
-                    acceptText: qsTrId("pacific-he-move_accept")
+                    acceptText: qsTrId("iroise-he-move_accept")
                 }
 
                 BackgroundItem {

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Build the SQLCipher the password vault opens (browser/apps/browser/settings/credentialstore.cpp), into
 # build/sqlcipher/libsqlcipher.so.0. The phone's own needs ICU, which a Jolla Store app may not link; this one
-# needs only libcrypto.so.3. scripts/bundle.sh ships it in share/harbour-pacific/lib.
+# needs only libcrypto.so.3. scripts/bundle.sh ships it in share/harbour-iroise/lib.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"

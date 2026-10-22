@@ -64,7 +64,7 @@ Item {
                 text: qsTrId("settings_browser-la-desktop_site")
 
                 onClicked: {
-                    // setDesktopMode() swaps the UA (pacificUserAgent) and
+                    // setDesktopMode() swaps the UA (iroiseUserAgent) and
                     // reloads so the server sends the matching page variant.
                     webView.contentItem.desktopMode = !webView.contentItem.desktopMode
                     overlay.animator.showChrome()

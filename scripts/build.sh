@@ -10,10 +10,10 @@ JOBS="${JOBS:-12}"
 # Apply our patches once; the front end itself lives in this repo and is linked in.
 # A patch that is neither applied nor cleanly applicable means upstream/ was edited by hand: regenerate that patch
 # from the tree (git -C upstream diff -- <its files>) rather than letting patch half-apply it.
-# NB: Once the whole series is in, upstream/.pacific-patches says which. A patch that later ones change where it
+# NB: Once the whole series is in, upstream/.iroise-patches says which. A patch that later ones change where it
 #     changed things (the touch patches) can no longer be undone alone, so the check below only works on its way in.
 series="$(cat "$ROOT"/patches/[0-9]*.patch | sha256sum | cut -d' ' -f1)"
-if [ "$(cat "$UP/.pacific-patches" 2>/dev/null)" != "$series" ]; then
+if [ "$(cat "$UP/.iroise-patches" 2>/dev/null)" != "$series" ]; then
     for p in "$ROOT"/patches/[0-9]*.patch; do
         if patch -d "$UP" -p1 -R --dry-run -s -f < "$p" >/dev/null 2>&1; then
             continue
@@ -24,7 +24,7 @@ if [ "$(cat "$UP/.pacific-patches" 2>/dev/null)" != "$series" ]; then
             exit 1
         fi
     done
-    echo "$series" > "$UP/.pacific-patches"
+    echo "$series" > "$UP/.iroise-patches"
 fi
 ln -sfn "$ROOT/ui/SFOS" "$UP/UI/SFOS"
 ln -sfn "$ROOT/ui/protocol" "$UP/UI/protocol"
@@ -42,13 +42,13 @@ export VCPKG_FORCE_SYSTEM_BINARIES=1 VCPKG_MAX_CONCURRENCY="$JOBS"
 BUILD="$UP/Build/release"
 
 # Profile-guided optimisation (scripts/pgo-profile.sh makes the profile):
-#   PACIFIC_PGO=generate  an instrumented engine, in a build directory of its own, that writes its profile to
-#                         PACIFIC_PGO_DIR as it runs;
-#   PACIFIC_PGO=use       the engine optimised with the profile in PACIFIC_PGO_DIR.
+#   IROISE_PGO=generate  an instrumented engine, in a build directory of its own, that writes its profile to
+#                         IROISE_PGO_DIR as it runs;
+#   IROISE_PGO=use       the engine optimised with the profile in IROISE_PGO_DIR.
 # Profiles are named after the object files relative to the build directory, so the two directories can differ.
 # A profile older than the code is fine: gcc leaves out what no longer matches, and optimises what the training
 # never ran as it would without one.
-PGO="${PACIFIC_PGO:-}"
+PGO="${IROISE_PGO:-}"
 PGO_FLAGS=""
 PGO_PROFILER_RUNTIME=""
 RUST_PGO_FLAGS=""
@@ -57,28 +57,28 @@ case "$PGO" in
     "") ;;
     generate)
         BUILD="$UP/Build/pgo-generate"
-        PGO_FLAGS="-fprofile-generate=${PACIFIC_PGO_DIR:?} -fprofile-prefix-path=$(realpath -m "$BUILD") -fprofile-update=prefer-atomic"
+        PGO_FLAGS="-fprofile-generate=${IROISE_PGO_DIR:?} -fprofile-prefix-path=$(realpath -m "$BUILD") -fprofile-update=prefer-atomic"
         # The Rust crates count in LLVM's way, into files that hold the counts as they change ("continuous mode",
         # %c in LLVM_PROFILE_FILE, see scripts/pgo-profile.sh), so a process that ends with _exit loses nothing.
         # LLVM's profile runtime, which Cargo's static libraries leave out: ui/SFOS/CMakeLists.txt links it into the
         # libraries with Rust code.
         # NB: Without value profiling (which call an indirect call makes): continuous mode cannot keep it, and files
         #     that say they have it are refused as truncated.
-        RUST_PGO_FLAGS="-Cprofile-generate=$PACIFIC_PGO_DIR/rust -Cllvm-args=-runtime-counter-relocation"
+        RUST_PGO_FLAGS="-Cprofile-generate=$IROISE_PGO_DIR/rust -Cllvm-args=-runtime-counter-relocation"
         RUST_PGO_FLAGS="$RUST_PGO_FLAGS -Cllvm-args=-disable-vp=true"
         PGO_PROFILER_RUNTIME="$(ls "$(cd "$UP" && rustc --print sysroot)"/lib/rustlib/*/lib/libprofiler_builtins-*.rlib)" ;;
     use)
         # NB: The profile's own stamp is in the flags so that ccache, which does not follow -fprofile-prefix-path to
         #     the profile, compiles again when the profile changes.
-        PGO_FLAGS="-fprofile-use=${PACIFIC_PGO_DIR:?} -fprofile-prefix-path=$(realpath -m "$BUILD") -fprofile-partial-training"
-        PGO_FLAGS="$PGO_FLAGS -Wno-missing-profile -Wno-coverage-mismatch -DPACIFIC_PGO_PROFILE=$(cat "$PACIFIC_PGO_DIR/stamp")"
+        PGO_FLAGS="-fprofile-use=${IROISE_PGO_DIR:?} -fprofile-prefix-path=$(realpath -m "$BUILD") -fprofile-partial-training"
+        PGO_FLAGS="$PGO_FLAGS -Wno-missing-profile -Wno-coverage-mismatch -DIROISE_PGO_PROFILE=$(cat "$IROISE_PGO_DIR/stamp")"
         # A profile from before the Rust crates were profiled has no rust.profdata.
-        if [ -f "$PACIFIC_PGO_DIR/rust.profdata" ]; then
+        if [ -f "$IROISE_PGO_DIR/rust.profdata" ]; then
             # NB: -disable-vp as in the instrumented build, or every indirect call is reported as a stale profile.
-            RUST_PGO_FLAGS="-Cprofile-use=$PACIFIC_PGO_DIR/rust.profdata -Cllvm-args=-no-pgo-warn-mismatch"
+            RUST_PGO_FLAGS="-Cprofile-use=$IROISE_PGO_DIR/rust.profdata -Cllvm-args=-no-pgo-warn-mismatch"
             RUST_PGO_FLAGS="$RUST_PGO_FLAGS -Cllvm-args=-pgo-warn-missing-function=false -Cllvm-args=-disable-vp=true"
         fi ;;
-    *) echo "PACIFIC_PGO must be generate or use, not $PGO" >&2; exit 1 ;;
+    *) echo "IROISE_PGO must be generate or use, not $PGO" >&2; exit 1 ;;
 esac
 
 cd "$UP"
@@ -126,11 +126,11 @@ done
 for variable in CMAKE_C_STANDARD_LIBRARIES CMAKE_CXX_STANDARD_LIBRARIES; do
     cached "$variable" "" || pgo_settings+=("-D$variable=")
 done
-cached PACIFIC_PGO_PROFILER_RUNTIME "$PGO_PROFILER_RUNTIME" || pgo_settings+=("-DPACIFIC_PGO_PROFILER_RUNTIME=$PGO_PROFILER_RUNTIME")
+cached IROISE_PGO_PROFILER_RUNTIME "$PGO_PROFILER_RUNTIME" || pgo_settings+=("-DIROISE_PGO_PROFILER_RUNTIME=$PGO_PROFILER_RUNTIME")
 for variable in CMAKE_C_COMPILER_LAUNCHER CMAKE_CXX_COMPILER_LAUNCHER; do
     cached "$variable" "$launcher" || pgo_settings+=("-D$variable=$launcher")
 done
-grep -qxF "PACIFIC_PGO_GENERATE:BOOL=$pgo_generate" "$BUILD/CMakeCache.txt" || pgo_settings+=("-DPACIFIC_PGO_GENERATE=$pgo_generate")
+grep -qxF "IROISE_PGO_GENERATE:BOOL=$pgo_generate" "$BUILD/CMakeCache.txt" || pgo_settings+=("-DIROISE_PGO_GENERATE=$pgo_generate")
 [ ${#pgo_settings[@]} -eq 0 ] || cmake -B "$BUILD" "${pgo_settings[@]}"
 # The Rust crates (style, layout, JavaScript) in one codegen unit each, which cargo's --release (what CMake asks for)
 # splits into 16. Not with link-time optimisation as Ladybird's distribution profile has it: each crate's static
@@ -141,19 +141,19 @@ grep -qxF "PACIFIC_PGO_GENERATE:BOOL=$pgo_generate" "$BUILD/CMakeCache.txt" || p
 # a wrapper's flags change, so then its build directory goes.
 export CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_CODEGEN_UNITS=1
 if [ -n "$RUST_PGO_FLAGS" ]; then
-    export RUSTC_WORKSPACE_WRAPPER="$ROOT/scripts/pgo-rustc.sh" PACIFIC_PGO_RUSTFLAGS="$RUST_PGO_FLAGS"
+    export RUSTC_WORKSPACE_WRAPPER="$ROOT/scripts/pgo-rustc.sh" IROISE_PGO_RUSTFLAGS="$RUST_PGO_FLAGS"
 else
-    unset RUSTC_WORKSPACE_WRAPPER PACIFIC_PGO_RUSTFLAGS
+    unset RUSTC_WORKSPACE_WRAPPER IROISE_PGO_RUSTFLAGS
 fi
 rust_profile_stamp=""
-[ "$PGO" = use ] && [ -n "$RUST_PGO_FLAGS" ] && rust_profile_stamp="$(cat "$PACIFIC_PGO_DIR/stamp")"
+[ "$PGO" = use ] && [ -n "$RUST_PGO_FLAGS" ] && rust_profile_stamp="$(cat "$IROISE_PGO_DIR/stamp")"
 rust_settings="lto=$CARGO_PROFILE_RELEASE_LTO codegen-units=$CARGO_PROFILE_RELEASE_CODEGEN_UNITS"
 rust_settings="$rust_settings pgo=$RUST_PGO_FLAGS $rust_profile_stamp"
-old_rust_settings="$(cat "$BUILD/.pacific-rust-settings" 2>/dev/null || true)"
+old_rust_settings="$(cat "$BUILD/.iroise-rust-settings" 2>/dev/null || true)"
 if [ "$old_rust_settings" != "$rust_settings" ]; then
     # Profile flags before or now: build every crate again.
     case "$old_rust_settings $rust_settings" in *"pgo=-C"*) rm -rf "$BUILD/cargo/build" ;; esac
     find "$UP" -name Cargo.toml -not -path "$UP/Build/*" -exec touch {} +
-    echo "$rust_settings" > "$BUILD/.pacific-rust-settings"
+    echo "$rust_settings" > "$BUILD/.iroise-rust-settings"
 fi
 exec ninja -C "$BUILD" -j "$JOBS" "${1:-ladybird}"

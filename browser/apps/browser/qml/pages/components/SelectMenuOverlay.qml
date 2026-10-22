@@ -55,7 +55,7 @@ Item {
                     font.pixelSize: Theme.fontSizeLarge
                     color: Theme.highlightColor
                     //% "Select option"
-                    text: qsTrId("pacific-he-select_option")
+                    text: qsTrId("iroise-he-select_option")
                 }
             }
 

@@ -9,7 +9,7 @@
 import QtQuick 2.2
 import QtGraphicalEffects 1.0
 import Sailfish.Silica 1.0
-import harbour.pacific 1.0
+import harbour.iroise 1.0
 import "." as Browser
 import "../../shared" as Shared
 
@@ -384,7 +384,7 @@ Item {
 
                                 if (binned) {
                                     //% "Removing bookmark"
-                                    removeRemorse.execute(qsTrId("pacific-la-removing_bookmark"),
+                                    removeRemorse.execute(qsTrId("iroise-la-removing_bookmark"),
                                                           function() { favoritesModel.removeAt(from) })
                                 } else if (to >= 0 && to !== from) {
                                     favoritesModel.move(from, to)
@@ -446,7 +446,7 @@ Item {
                     width: grid.cell
                     horizontalAlignment: Text.AlignHCenter
                     //% "Add"
-                    text: qsTrId("pacific-la-add")
+                    text: qsTrId("iroise-la-add")
                     color: Theme.secondaryColor
                     font.pixelSize: Theme.fontSizeExtraSmall
                 }

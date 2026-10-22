@@ -85,7 +85,7 @@ static void registerBrowserQmlTypes()
         return;
     }
 
-    const char *uri = "harbour.pacific";
+    const char *uri = "harbour.iroise";
 
     qmlRegisterRevision<QQuickItem, 1>(uri, 1, 0);
     qmlRegisterRevision<QWindow, 1>(uri, 1, 0);
@@ -114,7 +114,7 @@ static void registerBrowserQmlTypes()
     registered = true;
 }
 
-// The installation's top directory (share/harbour-pacific): the parent of the lib/ this library is in. The
+// The installation's top directory (share/harbour-iroise): the parent of the lib/ this library is in. The
 // interface's QML is in qml/ and its translations in translations/ there.
 static QString installationPath()
 {
@@ -136,8 +136,8 @@ static void onTermination(int)
     alarm(3);
 }
 
-// Pacific: the interface's start. The app's executable (launcher/launcher.c) loads this library and calls this.
-extern "C" Q_DECL_EXPORT int pacific_ui_main(int argc, char *argv[])
+// Iroise: the interface's start. The app's executable (launcher/launcher.c) loads this library and calls this.
+extern "C" Q_DECL_EXPORT int iroise_ui_main(int argc, char *argv[])
 {
     signal(SIGPIPE, SIG_IGN);
 
@@ -150,14 +150,14 @@ extern "C" Q_DECL_EXPORT int pacific_ui_main(int argc, char *argv[])
 
     QGuiApplication app(argc, argv);
     // Sailjail derives the app's directories and its bus name from these (the launcher entry's X-Sailjail).
-    app.setOrganizationName(QStringLiteral("org.pacific"));
-    app.setApplicationName(QStringLiteral("harbour-pacific"));
+    app.setOrganizationName(QStringLiteral("org.iroise"));
+    app.setApplicationName(QStringLiteral("harbour-iroise"));
 
     // Another app opening a link while the browser runs starts the app again: hand the link over and leave.
     QDBusConnection bus = QDBusConnection::sessionBus();
-    if (bus.interface() && bus.interface()->isServiceRegistered(QStringLiteral(PACIFIC_SERVICE_NAME))) {
-        QDBusMessage call = QDBusMessage::createMethodCall(QStringLiteral(PACIFIC_SERVICE_NAME), QStringLiteral(PACIFIC_SERVICE_PATH),
-            QStringLiteral(PACIFIC_SERVICE_INTERFACE), QStringLiteral("openUrl"));
+    if (bus.interface() && bus.interface()->isServiceRegistered(QStringLiteral(IROISE_SERVICE_NAME))) {
+        QDBusMessage call = QDBusMessage::createMethodCall(QStringLiteral(IROISE_SERVICE_NAME), QStringLiteral(IROISE_SERVICE_PATH),
+            QStringLiteral(IROISE_SERVICE_INTERFACE), QStringLiteral("openUrl"));
         call << QStringList(app.arguments().mid(1));
         bus.call(call);
         return 0;
@@ -176,32 +176,32 @@ extern "C" Q_DECL_EXPORT int pacific_ui_main(int argc, char *argv[])
     const QString installation = installationPath();
     const QString translations = installation + QStringLiteral("/translations");
     QTranslator *engineeringEnglish = new QTranslator(&app);
-    engineeringEnglish->load(QStringLiteral("pacific-browser_eng_en"), translations);
+    engineeringEnglish->load(QStringLiteral("iroise-browser_eng_en"), translations);
     app.installTranslator(engineeringEnglish);
     QTranslator *translator = new QTranslator(&app);
-    translator->load(QLocale(), QStringLiteral("pacific-browser"), QStringLiteral("-"), translations);
+    translator->load(QLocale(), QStringLiteral("iroise-browser"), QStringLiteral("-"), translations);
     app.installTranslator(translator);
 
     OpenSearchConfigs::setShippedPath(installation + QStringLiteral("/qml/searchEngines/"));
     registerBrowserQmlTypes();
 
     QQuickView view;
-    view.setTitle(QStringLiteral("Pacific"));
+    view.setTitle(QStringLiteral("Iroise"));
     Browser *browser = new Browser(&view, installation + QStringLiteral("/qml/"), &app);
 
     BrowserService *service = new BrowserService(&app);
     if (!service->registered())
-        qWarning("Pacific: cannot own %s; links from other apps will start another browser", PACIFIC_SERVICE_NAME);
+        qWarning("Iroise: cannot own %s; links from other apps will start another browser", IROISE_SERVICE_NAME);
     QObject::connect(service, &BrowserService::openUrlRequested, browser, &Browser::openUrl);
     QObject::connect(service, &BrowserService::openSettingsRequested, browser, &Browser::openSettings);
     QObject::connect(service, &BrowserService::activateNewTabViewRequested, browser, &Browser::openNewTabView);
 
     browser->load();
 
-    // PACIFIC_GRAB_DIR=<dir> saves what the window shows once a second, as <dir>/grab-<n>.jpg (the last 20 are
-    // kept). PACIFIC_GRAB_INTERVAL_MS makes that more often, to catch a transition; the files are then named by
+    // IROISE_GRAB_DIR=<dir> saves what the window shows once a second, as <dir>/grab-<n>.jpg (the last 20 are
+    // kept). IROISE_GRAB_INTERVAL_MS makes that more often, to catch a transition; the files are then named by
     // the millisecond they were taken at, to set beside the log, and the last 80 are kept. The system screenshot service only writes under the home directory, which test runs stay out of.
-    const QString grabDirectory = QString::fromLocal8Bit(qgetenv("PACIFIC_GRAB_DIR"));
+    const QString grabDirectory = QString::fromLocal8Bit(qgetenv("IROISE_GRAB_DIR"));
     if (!grabDirectory.isEmpty()) {
         QTimer *grabTimer = new QTimer(&view);
         QObject::connect(grabTimer, &QTimer::timeout, &view, [&view, grabDirectory]() {
@@ -210,7 +210,7 @@ extern "C" Q_DECL_EXPORT int pacific_ui_main(int argc, char *argv[])
             static QStringList fastGrabs;
             if (!clock.isValid())
                 clock.start();
-            if (qEnvironmentVariableIsSet("PACIFIC_GRAB_INTERVAL_MS")) {
+            if (qEnvironmentVariableIsSet("IROISE_GRAB_INTERVAL_MS")) {
                 QString name = QStringLiteral("%1/grab-%2.jpg").arg(grabDirectory).arg(clock.elapsed(), 7, 10, QLatin1Char('0'));
                 view.grabWindow().scaledToWidth(344).save(name, "JPG", 60);
                 fastGrabs.append(name);
@@ -221,7 +221,7 @@ extern "C" Q_DECL_EXPORT int pacific_ui_main(int argc, char *argv[])
             }
             ++count;
         });
-        grabTimer->start(qMax(50, qEnvironmentVariableIsSet("PACIFIC_GRAB_INTERVAL_MS") ? qEnvironmentVariableIntValue("PACIFIC_GRAB_INTERVAL_MS") : 1000));
+        grabTimer->start(qMax(50, qEnvironmentVariableIsSet("IROISE_GRAB_INTERVAL_MS") ? qEnvironmentVariableIntValue("IROISE_GRAB_INTERVAL_MS") : 1000));
     }
 
     view.showFullScreen();

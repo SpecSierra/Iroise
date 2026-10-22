@@ -6,8 +6,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-export PACIFIC_ENGINE="${PACIFIC_ENGINE:-$ROOT/dist/harbour-pacific/bin/harbour-pacific}"
-export PACIFIC_TEST_LOGS="$ROOT/dist/front-end-test-logs"
-rm -rf "$PACIFIC_TEST_LOGS"
+export IROISE_ENGINE="${IROISE_ENGINE:-$ROOT/dist/harbour-iroise/bin/harbour-iroise}"
+export IROISE_TEST_LOGS="$ROOT/dist/front-end-test-logs"
+rm -rf "$IROISE_TEST_LOGS"
 cd "$ROOT/tests/embed"
 exec python3 -m unittest -v "${@:-test_engine}"

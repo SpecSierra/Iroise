@@ -1,5 +1,5 @@
 /*
- * Pacific: the downloads of this run, as the engine reports them.
+ * Iroise: the downloads of this run, as the engine reports them.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */

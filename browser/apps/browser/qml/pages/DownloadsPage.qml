@@ -1,5 +1,5 @@
 /*
- * Pacific: this run's downloads. The engine saves each one into the Downloads folder by itself; this lists them,
+ * Iroise: this run's downloads. The engine saves each one into the Downloads folder by itself; this lists them,
  * with how far along they are, and lets the user cancel one or open what came down.
  *
  * SPDX-License-Identifier: BSD-2-Clause
@@ -7,7 +7,7 @@
 
 import QtQuick 2.2
 import Sailfish.Silica 1.0
-import harbour.pacific 1.0
+import harbour.iroise 1.0
 
 Page {
     SilicaListView {
@@ -18,14 +18,14 @@ Page {
 
         header: PageHeader {
             //% "Downloads"
-            title: qsTrId("pacific-la-downloads")
+            title: qsTrId("iroise-la-downloads")
         }
 
         PullDownMenu {
             visible: list.count > 0
             MenuItem {
                 //% "Clear finished"
-                text: qsTrId("pacific-me-clear_finished_downloads")
+                text: qsTrId("iroise-me-clear_finished_downloads")
                 onClicked: Downloads.clearFinished()
             }
         }
@@ -33,9 +33,9 @@ Page {
         ViewPlaceholder {
             enabled: list.count === 0
             //% "No downloads yet"
-            text: qsTrId("pacific-la-no_downloads")
+            text: qsTrId("iroise-la-no_downloads")
             //% "Files you download are saved to the Downloads folder"
-            hintText: qsTrId("pacific-la-no_downloads_hint")
+            hintText: qsTrId("iroise-la-no_downloads_hint")
         }
 
         delegate: ListItem {
@@ -55,13 +55,13 @@ Page {
                 MenuItem {
                     visible: item.active
                     //% "Cancel"
-                    text: qsTrId("pacific-me-cancel_download")
+                    text: qsTrId("iroise-me-cancel_download")
                     onClicked: Downloads.cancel(model.downloadId)
                 }
                 MenuItem {
                     visible: item.done
                     //% "Open"
-                    text: qsTrId("pacific-me-open_download")
+                    text: qsTrId("iroise-me-open_download")
                     onClicked: item.open()
                 }
             }
@@ -99,16 +99,16 @@ Page {
                         case DownloadModel.InProgress:
                             return model.total > 0
                                     //% "%1 of %2"
-                                    ? qsTrId("pacific-la-download_progress").arg(Format.formatFileSize(model.received)).arg(Format.formatFileSize(model.total))
+                                    ? qsTrId("iroise-la-download_progress").arg(Format.formatFileSize(model.received)).arg(Format.formatFileSize(model.total))
                                     : Format.formatFileSize(model.received)
                         case DownloadModel.Completed:
                             return Format.formatFileSize(model.received)
                         case DownloadModel.Cancelled:
                             //% "Cancelled"
-                            return qsTrId("pacific-la-download_cancelled")
+                            return qsTrId("iroise-la-download_cancelled")
                         default:
                             //% "Failed"
-                            return model.error.length > 0 ? model.error : qsTrId("pacific-la-download_failed")
+                            return model.error.length > 0 ? model.error : qsTrId("iroise-la-download_failed")
                         }
                     }
                 }

@@ -21,7 +21,7 @@
 #include <grp.h>
 #include <unistd.h>
 
-static const char *const kDatabaseName = "pacific-browser.sqlite";
+static const char *const kDatabaseName = "iroise-browser.sqlite";
 
 static QString getLocation(QStandardPaths::StandardLocation locationType)
 {

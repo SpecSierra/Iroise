@@ -1,5 +1,5 @@
 /*
- * Pacific: the Sailfish OS front end for the Ladybird engine.
+ * Iroise: the Sailfish OS front end for the Ladybird engine.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */

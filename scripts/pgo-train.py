@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Runs the instrumented engine (scripts/build.sh with PACIFIC_PGO=generate) through what a phone's browser does
+"""Runs the instrumented engine (scripts/build.sh with IROISE_PGO=generate) through what a phone's browser does
 most, so that its profile tells gcc which code is hot: real sites loaded and scrolled, then Speedometer for the
 DOM and JavaScript work of web apps.
 
-usage: PACIFIC_ENGINE=<instrumented Ladybird executable> pgo-train.py [seconds for Speedometer, default 420]
+usage: IROISE_ENGINE=<instrumented Ladybird executable> pgo-train.py [seconds for Speedometer, default 420]
 
 The sites are fetched live: nothing of theirs is kept. One that fails to load only teaches less. The engine runs
 without its sandbox, which would keep its processes from writing the profile, and is stopped the way the app stops

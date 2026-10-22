@@ -31,7 +31,7 @@ BrowserWindow {
 
     ConfigurationValue {
         id: colorSchemeConf
-        key: "/apps/harbour-pacific/settings/color_scheme"
+        key: "/apps/harbour-iroise/settings/color_scheme"
         defaultValue: 2
     }
 

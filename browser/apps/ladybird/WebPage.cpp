@@ -3,7 +3,7 @@
  * License, v. 2.0. If a copy of the MPL was not distributed with this file,
  * You can obtain one at http://mozilla.org/MPL/2.0/.
  *
- * Pacific: Atlantic's page class on top of a Ladybird engine view. See WebPage.h.
+ * Iroise: Atlantic's page class on top of a Ladybird engine view. See WebPage.h.
  */
 
 #include "WebPage.h"
@@ -61,11 +61,11 @@ const qreal kChromeScrollThreshold = 10.0;
 // again does nothing. If the page replaced console.log, a hidden frame lends us a working one.
 const char kPageAgentScript[] =
     "(function(){"
-    "if(window.__pacificAgent)return 0;window.__pacificAgent=1;"
+    "if(window.__iroiseAgent)return 0;window.__iroiseAgent=1;"
     "var log=console.log;"
     "if(!/\\[native code\\]/.test(Function.prototype.toString.call(log))){"
     "var f=document.createElement('iframe');f.style.display='none';document.documentElement.appendChild(f);log=f.contentWindow.console.log;}"
-    "function post(k,d){log('\\u0001pacific',JSON.stringify([k,d]));}"
+    "function post(k,d){log('\\u0001iroise',JSON.stringify([k,d]));}"
     "function selection(){"
     "var s=getSelection();if(!s||!s.rangeCount||s.isCollapsed)return {t:''};"
     "var q=s.getRangeAt(0).getClientRects();if(!q.length)return {t:''};"
@@ -130,13 +130,13 @@ const char kInputPickerScript[] =
     "if(!e||e.disabled||e.readOnly)return null;"
     "var t=(e.getAttribute('type')||'').toLowerCase();"
     "if(['date','month','week','time','datetime-local'].indexOf(t)<0)return null;"
-    "window.__pacificPendingInput=e;e.blur();"
+    "window.__iroisePendingInput=e;e.blur();"
     "return {type:t,value:e.value||''};"
     "})(%1,%2)";
 
 const char kResolveInputPickerScript[] =
     "(function(v){"
-    "var e=window.__pacificPendingInput;window.__pacificPendingInput=null;"
+    "var e=window.__iroisePendingInput;window.__iroisePendingInput=null;"
     "if(!e)return 0;"
     "e.value=v;"
     "e.dispatchEvent(new Event('input',{bubbles:true,composed:true}));"
@@ -459,7 +459,7 @@ void WebPage::captureThumbnail()
 
 void WebPage::setChrome(bool chrome)
 {
-    static const bool logChrome = !qgetenv("PACIFIC_LOG_ENGINE").isEmpty();
+    static const bool logChrome = !qgetenv("IROISE_LOG_ENGINE").isEmpty();
     if (logChrome && m_chrome != chrome)
         qWarning("WebPage: chrome %d, page %dx%d painted %dx%d", chrome, int(width()), int(height()), paintedSize().width(), paintedSize().height());
     if (m_chrome != chrome) {
@@ -1374,7 +1374,7 @@ void WebPage::cancelInputPicker()
     if (m_inputPickerIsEngineColor)
         sendToEngine(LB_EMBED_COLOR_PICKED, 0);
     else
-        evaluate(QStringLiteral("window.__pacificPendingInput=null,0"));
+        evaluate(QStringLiteral("window.__iroisePendingInput=null,0"));
     closeInputPicker();
 }
 
@@ -1442,7 +1442,7 @@ void WebPage::longPressed(const QPointF &position)
 
 void WebPage::pageMessage(const QString &kind, const QJsonValue &data)
 {
-    static const bool log = !qgetenv("PACIFIC_LOG_ENGINE").isEmpty();
+    static const bool log = !qgetenv("IROISE_LOG_ENGINE").isEmpty();
     if (log)
         qWarning("WebPage: page message %s", qPrintable(kind));
     if (kind == QLatin1String("scroll")) {

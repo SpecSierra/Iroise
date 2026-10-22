@@ -103,7 +103,7 @@ QString DesktopBookmarkWriter::uniqueDesktopFileName(QString title)
     QDir dir(filePath);
     dir.mkpath(filePath);
 
-    dir.setNameFilters(QStringList() << QString("pacific-browser-%2*").arg(title));
+    dir.setNameFilters(QStringList() << QString("iroise-browser-%2*").arg(title));
     QStringList similarlyNamedFiles = dir.entryList();
     int count = similarlyNamedFiles.count();
 
@@ -142,5 +142,5 @@ QString DesktopBookmarkWriter::write(const QString &url, const QString &title, c
 
 QString DesktopBookmarkWriter::desktopFilePattern()
 {
-    return QStringLiteral("pacific-browser-%2-%3.desktop");
+    return QStringLiteral("iroise-browser-%2-%3.desktop");
 }

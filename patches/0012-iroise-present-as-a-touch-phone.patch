@@ -66,7 +66,7 @@ index d2239889..20118343 100644
  #endif
  
 -constexpr auto default_platform = NAVIGATOR_PLATFORM_STRING ""sv;
-+// Pacific runs on phones: sites must get their mobile pages, so the engine introduces itself as Chrome on Android,
++// Iroise runs on phones: sites must get their mobile pages, so the engine introduces itself as Chrome on Android,
 +// the frozen token included (sites only recognise those), and so does navigator.platform.
 +constexpr auto default_user_agent = "Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Mobile Safari/537.36"sv;
 +constexpr auto default_platform = "Linux armv81"sv;

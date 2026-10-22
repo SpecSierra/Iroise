@@ -1,5 +1,5 @@
 /*
- * Pacific: page frames as textures without copying them.
+ * Iroise: page frames as textures without copying them.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */

@@ -1,5 +1,5 @@
 /*
- * Pacific: page frames as textures without copying them.
+ * Iroise: page frames as textures without copying them.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -62,7 +62,7 @@ struct Hybris {
 
     Hybris()
     {
-        if (!qgetenv("PACIFIC_UPLOAD_FRAMES").isEmpty())
+        if (!qgetenv("IROISE_UPLOAD_FRAMES").isEmpty())
             return;
         display = eglGetCurrentDisplay();
         const char* extensions = display != EGL_NO_DISPLAY ? eglQueryString(display, EGL_EXTENSIONS) : nullptr;

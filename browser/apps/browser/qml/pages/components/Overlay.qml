@@ -10,7 +10,7 @@
 import QtQuick 2.2
 import QtQuick.Window 2.2 as QuickWindow
 import Sailfish.Silica 1.0
-import harbour.pacific 1.0
+import harbour.iroise 1.0
 import Sailfish.WebView.Popups 1.0
 import Nemo.Configuration 1.0
 import "." as Browser
@@ -324,7 +324,7 @@ Shared.Background {
                                 Label {
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     //% "Copy"
-                                    text: qsTrId("pacific-la-copy")
+                                    text: qsTrId("iroise-la-copy")
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     color: Theme.highlightColor
                                 }
@@ -346,7 +346,7 @@ Shared.Background {
                                 Label {
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     //% "Select All"
-                                    text: qsTrId("pacific-la-select_all")
+                                    text: qsTrId("iroise-la-select_all")
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     color: Theme.highlightColor
                                 }
@@ -368,7 +368,7 @@ Shared.Background {
                                 Label {
                                     anchors.horizontalCenter: parent.horizontalCenter
                                     //% "Clear"
-                                    text: qsTrId("pacific-la-clear")
+                                    text: qsTrId("iroise-la-clear")
                                     font.pixelSize: Theme.fontSizeExtraSmall
                                     color: Theme.highlightColor
                                 }
@@ -798,7 +798,7 @@ Shared.Background {
 
     ConfigurationValue {
         id: searchEngineConf
-        key: "/apps/harbour-pacific/settings/search_engine"
+        key: "/apps/harbour-iroise/settings/search_engine"
         defaultValue: "Google"
     }
 }

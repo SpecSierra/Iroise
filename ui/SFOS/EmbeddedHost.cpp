@@ -1,5 +1,5 @@
 /*
- * Pacific: the Sailfish OS front end for the Ladybird engine.
+ * Iroise: the Sailfish OS front end for the Ladybird engine.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -78,7 +78,7 @@ EmbeddedHost::Sent EmbeddedHost::write(lb_embed_header const& header, StringView
         return Sent::Yes;
     if (errno == EAGAIN)
         return Sent::WouldBlock;
-    warnln("pacific: sending to the embedding app failed: {}", strerror(errno));
+    warnln("iroise: sending to the embedding app failed: {}", strerror(errno));
     return Sent::Failed;
 }
 
@@ -143,7 +143,7 @@ void EmbeddedHost::send_text(u32 view, lb_embed_message_type type, StringView te
     header.a = a;
     header.b = b;
     if (text.length() > LB_EMBED_TEXT_MAX) {
-        warnln("pacific: message {} is {} bytes, more than the app takes; not sent", to_underlying(type), text.length());
+        warnln("iroise: message {} is {} bytes, more than the app takes; not sent", to_underlying(type), text.length());
         return;
     }
     header.text_length = static_cast<u32>(text.length());
@@ -184,7 +184,7 @@ void EmbeddedHost::receive()
         if (static_cast<size_t>(length) < sizeof(lb_embed_header))
             continue;
         if (header.msg_flags & MSG_TRUNC) {
-            warnln("pacific: dropped a message ({}) longer than the protocol allows", message.header.type);
+            warnln("iroise: dropped a message ({}) longer than the protocol allows", message.header.type);
             continue;
         }
 

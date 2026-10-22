@@ -33,7 +33,7 @@ index 00000000..6e3e6647
 +++ b/Libraries/LibGfx/GLESContext.cpp
 @@ -0,0 +1,357 @@
 +/*
-+ * Pacific: the Sailfish OS front end for the Ladybird engine.
++ * Iroise: the Sailfish OS front end for the Ladybird engine.
 + *
 + * SPDX-License-Identifier: BSD-2-Clause
 + */
@@ -396,7 +396,7 @@ index 00000000..bcc57698
 +++ b/Libraries/LibGfx/GLESContext.h
 @@ -0,0 +1,62 @@
 +/*
-+ * Pacific: the Sailfish OS front end for the Ladybird engine.
++ * Iroise: the Sailfish OS front end for the Ladybird engine.
 + *
 + * SPDX-License-Identifier: BSD-2-Clause
 + */

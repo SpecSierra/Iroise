@@ -1,5 +1,5 @@
 /*
- * Pacific: the Sailfish OS front end for the Ladybird engine.
+ * Iroise: the Sailfish OS front end for the Ladybird engine.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -25,12 +25,12 @@ static u64 page_size()
     return size > 0 ? static_cast<u64>(size) : 4096;
 }
 
-// What one process may hold: PACIFIC_PROCESS_MEMORY_LIMIT_MB, else 30% of the phone's memory, within 1 to 3 GiB
+// What one process may hold: IROISE_PROCESS_MEMORY_LIMIT_MB, else 30% of the phone's memory, within 1 to 3 GiB
 // (3 GiB on the Jolla Phone 2's 12 GB, about 1.1 GiB on the Xperia 10 II's 4 GB). The heaviest pages take well
 // under 1 GiB.
 static u64 memory_limit()
 {
-    if (auto megabytes = Core::Environment::get("PACIFIC_PROCESS_MEMORY_LIMIT_MB"sv); megabytes.has_value()) {
+    if (auto megabytes = Core::Environment::get("IROISE_PROCESS_MEMORY_LIMIT_MB"sv); megabytes.has_value()) {
         if (auto value = megabytes->to_number<u64>(); value.has_value() && *value > 0)
             return *value * MiB;
     }
@@ -72,7 +72,7 @@ NonnullRefPtr<Core::Timer> start_memory_guard()
             auto resident = resident_memory(process.pid());
             if (!resident.has_value() || *resident <= limit)
                 return;
-            warnln("Pacific: {} (pid {}) holds {} MiB, more than the {} MiB a process may: ending it",
+            warnln("Iroise: {} (pid {}) holds {} MiB, more than the {} MiB a process may: ending it",
                 WebView::process_name_from_type(process.type()), process.pid(), *resident / MiB, limit / MiB);
             kill(process.pid(), SIGKILL);
         });

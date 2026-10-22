@@ -1,8 +1,8 @@
-# How Pacific works
+# How Iroise works
 
 ## The big picture
 
-Pacific is two programs that talk to each other.
+Iroise is two programs that talk to each other.
 
 The **engine** is Ladybird, with a small front end of our own (`ui/SFOS`) in place of upstream's Qt 6 one, which
 Sailfish OS cannot run. It runs the way Ladybird always does: one process that manages the tabs, and helper
@@ -20,7 +20,7 @@ everything else go the other.
 
 ## One executable
 
-The Jolla Store allows an app a single executable, so everything runs as `harbour-pacific`, a few lines of C
+The Jolla Store allows an app a single executable, so everything runs as `harbour-iroise`, a few lines of C
 (`browser/apps/launcher`). Started with `--engine-role <name>` it loads the engine library and becomes that engine
 process; otherwise it loads the interface library. That way an engine process never loads Qt, and the engine can
 bring gcc 14's C++ runtime while the interface uses the phone's.
@@ -30,11 +30,11 @@ was asked for. It tells Ladybird to start its helpers through the same executabl
 both worked out from where the library itself is installed:
 
 ```
-bin/harbour-pacific
-share/harbour-pacific/lib/            the interface's libraries
-share/harbour-pacific/lib/engine/     the engine and the libraries only it needs, apart so Qt never sees them
-share/harbour-pacific/share/Lagom/    the engine's resources (fonts, icons, themes)
-share/harbour-pacific/qml/            the interface, and the search engines it ships
+bin/harbour-iroise
+share/harbour-iroise/lib/            the interface's libraries
+share/harbour-iroise/lib/engine/     the engine and the libraries only it needs, apart so Qt never sees them
+share/harbour-iroise/share/Lagom/    the engine's resources (fonts, icons, themes)
+share/harbour-iroise/qml/            the interface, and the search engines it ships
 ```
 
 The launcher entry starts the app without Sailfish's booster: under the booster the process would not be our own
@@ -53,7 +53,7 @@ interface. The interface shows that same memory as a texture, so a frame is neve
 phone's EGL only accepts Android buffer handles, not plain shared memory, so for each new buffer the interface has
 the driver allocate a buffer of the same size and shape, swaps in the engine's memory, and shows that. It works
 because both sides ask for the same simple, uncompressed layout. Where it cannot work, the interface falls back
-to copying the frame into a texture (`PACIFIC_UPLOAD_FRAMES=1` forces that).
+to copying the frame into a texture (`IROISE_UPLOAD_FRAMES=1` forces that).
 
 On the Jolla Phone 2, scrolling a page this way costs the interface about half the CPU the copying did. Pages are
 paced at the screen's own refresh rate, which the interface tells the engine (90 Hz there; Ladybird assumes 60
@@ -62,7 +62,7 @@ otherwise).
 ## The interface
 
 The interface was renamed throughout so it can live beside an Atlantic install without touching its files: it
-keeps its data under `org.pacific/harbour-pacific` and its settings under `/apps/harbour-pacific`.
+keeps its data under `org.iroise/harbour-iroise` and its settings under `/apps/harbour-iroise`.
 
 Three classes carry the engine into it. `EngineView` is one engine view as a Qt Quick item: it shows frames and
 sends input, size and navigation. `WebPage` builds a tab's page on top of it, which is what the QML uses.
@@ -108,11 +108,11 @@ agents and a per-site JavaScript switch are applied as soon as the engine knows 
 private tab closes.
 
 **Video.** Ladybird's own FFmpeg leaves out H.264 and AAC, which are patent-encumbered. Sailfish OS ships FFmpeg
-5.1, so Pacific uses the phone's for those two, loading it at run time; VP9, AV1 and the other free codecs use the
+5.1, so Iroise uses the phone's for those two, loading it at run time; VP9, AV1 and the other free codecs use the
 engine's own. On the Jolla Phone 2, H.264 plays at full speed up to 1080p at 30 frames a second, and at 53 to 57 frames a
 second for 1080p60, all decoded in software.
 
-**Blocking ads and cookie banners.** Ladybird has an ad blocker built in (Brave's), and Pacific gives it the
+**Blocking ads and cookie banners.** Ladybird has an ad blocker built in (Brave's), and Iroise gives it the
 lists Atlantic used. The Adblock switch turns on EasyList and EasyPrivacy, uBlock Origin's filters and annoyances,
 Fanboy's annoyance and social lists, eyeo's lists against sites that defeat blockers (in English and the phone's
 language), the ads list for the phone's language, and a few rules of our own for what those miss. The

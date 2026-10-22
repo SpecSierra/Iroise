@@ -1,5 +1,5 @@
 /*
- * Pacific: the page view the browser interface is written against, backed by a Ladybird engine view.
+ * Iroise: the page view the browser interface is written against, backed by a Ladybird engine view.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -30,7 +30,7 @@ EngineView::EngineView(QQuickItem* parent)
     setFlag(ItemHasContents, true);
     setAcceptedMouseButtons(Qt::LeftButton);
     bool ok = false;
-    qreal scale = qgetenv("PACIFIC_DEVICE_PIXEL_RATIO").toDouble(&ok);
+    qreal scale = qgetenv("IROISE_DEVICE_PIXEL_RATIO").toDouble(&ok);
     if (ok && scale >= 1)
         m_deviceScaleFactor = scale;
 
@@ -195,7 +195,7 @@ void EngineView::setCovered(bool covered)
 
 void EngineView::engineFrame(const LadybirdFrame& frame)
 {
-    static const bool logFrames = !qgetenv("PACIFIC_LOG_ENGINE").isEmpty();
+    static const bool logFrames = !qgetenv("IROISE_LOG_ENGINE").isEmpty();
     if (logFrames && (frame.pitch != m_frame.pitch || frame.bufferSize != m_frame.bufferSize || frame.paintedSize != m_frame.paintedSize)) {
         qWarning("EngineView: frame geometry pitch=%d buffer=%dx%d painted=%dx%d item=%dx%d", frame.pitch,
             frame.bufferSize.width(), frame.bufferSize.height(), frame.paintedSize.width(), frame.paintedSize.height(),

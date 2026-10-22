@@ -13,7 +13,7 @@
 import QtQuick 2.2
 import QtQuick.Window 2.2 as QuickWindow
 import Sailfish.Silica 1.0
-import harbour.pacific 1.0
+import harbour.iroise 1.0
 
 ApplicationWindow {
     id: window

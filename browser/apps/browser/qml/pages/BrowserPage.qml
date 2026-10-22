@@ -14,7 +14,7 @@ import QtQuick 2.2
 import QtQuick.Window 2.2 as QuickWindow
 import Sailfish.Silica 1.0
 import Sailfish.Pickers 1.0
-import harbour.pacific 1.0
+import harbour.iroise 1.0
 import Nemo.Configuration 1.0
 import Nemo.Notifications 1.0 as Nemo
 import "components" as Browser
@@ -50,7 +50,7 @@ Page {
 
     ConfigurationValue {
         id: homePageConf
-        key: "/apps/harbour-pacific/settings/home_page"
+        key: "/apps/harbour-iroise/settings/home_page"
         defaultValue: "https://jolla.com/"
         // Settings live in dconf and only QML reads them (ConfigurationValue); each one is pushed into C++.
         onValueChanged: WebUtils.setHomePage(value)
@@ -59,7 +59,7 @@ Page {
 
     ConfigurationValue {
         id: privateBrowsingAutostart
-        key: "/apps/harbour-pacific/settings/browser_privatebrowsing_autostart"
+        key: "/apps/harbour-iroise/settings/browser_privatebrowsing_autostart"
         defaultValue: false
         // "Start browser in private browsing mode". Startup only, deliberately no onValueChanged: flipping the switch
         // mid-session must not yank the current session into private mode.
@@ -68,7 +68,7 @@ Page {
 
     ConfigurationValue {
         id: closeAllTabsOnExit
-        key: "/apps/harbour-pacific/settings/close_all_tabs"
+        key: "/apps/harbour-iroise/settings/close_all_tabs"
         defaultValue: false
         // Acted on when the app quits (SettingManager).
         onValueChanged: Settings.setCloseAllTabsOnExit(value)
@@ -77,7 +77,7 @@ Page {
 
     ConfigurationValue {
         id: adBlockEngine
-        key: "/apps/harbour-pacific/settings/adblock_enabled"
+        key: "/apps/harbour-iroise/settings/adblock_enabled"
         defaultValue: true
         // webView.setAdBlockEnabled applies to the whole engine: every tab,
         // open or still to come, and it holds with no tab open.
@@ -89,7 +89,7 @@ Page {
 
     ConfigurationValue {
         id: adBlockAllowlist
-        key: "/apps/harbour-pacific/settings/adblock_allowlist"
+        key: "/apps/harbour-iroise/settings/adblock_allowlist"
         defaultValue: "[]"
         // JSON array of hosts on which the ad blocker is disabled ("Block ads
         // on this site" toggle in the popup menu). Same shape as adblock_enabled
@@ -118,7 +118,7 @@ Page {
 
     ConfigurationValue {
         id: javascriptBlocklist
-        key: "/apps/harbour-pacific/settings/javascript_blocklist"
+        key: "/apps/harbour-iroise/settings/javascript_blocklist"
         defaultValue: "[]"
         // JSON array of hosts on which JavaScript is disabled ("Enable
         // JavaScript on this site" toggle in the popup menu). Default is JS-on
@@ -148,7 +148,7 @@ Page {
 
     ConfigurationValue {
         id: cookieBannerBlocking
-        key: "/apps/harbour-pacific/settings/cookie_banner_blocking"
+        key: "/apps/harbour-iroise/settings/cookie_banner_blocking"
         defaultValue: true
         // Same shape as adblock_enabled above: dconf is the single source of
         // truth, applied process-wide (autoconsent user script on every tab).
@@ -158,7 +158,7 @@ Page {
 
     ConfigurationValue {
         id: siteUaOverrides
-        key: "/apps/harbour-pacific/settings/site_ua_overrides"
+        key: "/apps/harbour-iroise/settings/site_ua_overrides"
         defaultValue: "{}"
         // Same shape as adblock_enabled above: dconf (JSON object of
         // host → UA profile id, edited by SiteUaSettingsPage) is the single
@@ -273,7 +273,7 @@ Page {
     // and when it is done.
     Nemo.Notification {
         id: downloadNotification
-        appName: "Pacific"
+        appName: "Iroise"
         appIcon: "icon-m-downloads"
     }
     Connections {
@@ -289,9 +289,9 @@ Page {
         onFinished: {
             downloadNotification.isTransient = false
             //% "Download complete"
-            downloadNotification.summary = completed ? qsTrId("pacific-no-download_complete")
+            downloadNotification.summary = completed ? qsTrId("iroise-no-download_complete")
                                                      //% "Download failed"
-                                                     : qsTrId("pacific-no-download_failed")
+                                                     : qsTrId("iroise-no-download_failed")
             downloadNotification.body = fileName
             downloadNotification.previewSummary = downloadNotification.summary
             downloadNotification.previewBody = fileName
@@ -573,7 +573,7 @@ Page {
     ConfigurationValue {
         id: startPageFolder
 
-        key: "/apps/harbour-pacific/settings/start_page_folder"
+        key: "/apps/harbour-iroise/settings/start_page_folder"
         defaultValue: ""
     }
 
@@ -861,7 +861,7 @@ Page {
                 openFilePicker()
             } else {
                 _filePickerOpen = false
-                if (pageStack.currentPage && pageStack.currentPage.objectName === "pacificFilePickerPage") {
+                if (pageStack.currentPage && pageStack.currentPage.objectName === "iroiseFilePickerPage") {
                     pageStack.pop(pageStack.currentPage, PageStackAction.Immediate)
                 }
             }

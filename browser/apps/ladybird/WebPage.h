@@ -1,7 +1,7 @@
 /*
  * Copyright (c) 2024 Jolla Ltd.
  *
- * Pacific: a browser tab's page, as the interface's QML sees it, on top of an EngineView: text selection, find,
+ * Iroise: a browser tab's page, as the interface's QML sees it, on top of an EngineView: text selection, find,
  * dialogs, pickers, permissions, logins, certificates, the toolbar's reaction to scrolling.
  *
  * This Source Code Form is subject to the terms of the Mozilla Public

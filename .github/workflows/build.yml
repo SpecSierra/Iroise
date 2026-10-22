@@ -1,6 +1,6 @@
 name: Build
 
-# Builds the engine, the interface and the RPM on Pacific's self-hosted aarch64 runner (scripts/ci-build.sh).
+# Builds the engine, the interface and the RPM on Iroise's self-hosted aarch64 runner (scripts/ci-build.sh).
 # NB: Push and manual runs only, never pull requests: a self-hosted runner would run a fork's code.
 on:
   push:
@@ -40,14 +40,14 @@ jobs:
       - name: Keep the RPM
         uses: actions/upload-artifact@v4
         with:
-          name: harbour-pacific-${{ github.run_number }}
-          path: dist/rpm/harbour-pacific-*.rpm
+          name: harbour-iroise-${{ github.run_number }}
+          path: dist/rpm/harbour-iroise-*.rpm
           retention-days: 7
           if-no-files-found: error
 
       # After keeping it, so that a package the store would refuse can still be looked at.
       - name: Check against the store's rules
-        run: scripts/validate-rpm.sh dist/rpm/harbour-pacific-*-${{ github.run_number }}.aarch64.rpm
+        run: scripts/validate-rpm.sh dist/rpm/harbour-iroise-*-${{ github.run_number }}.aarch64.rpm
 
       # Whatever the store makes of it.
       - name: Test the engine

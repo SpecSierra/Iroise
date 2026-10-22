@@ -1,5 +1,5 @@
 /*
- * Pacific: the tabs. Keeps a WebPage per live tab (discarding the least recently used ones beyond a budget or under
+ * Iroise: the tabs. Keeps a WebPage per live tab (discarding the least recently used ones beyond a budget or under
  * memory pressure), shows the active one, and relays its state to the interface.
  * SPDX-License-Identifier: LGPL-2.1+
  */
@@ -191,9 +191,9 @@ private:
     qreal m_bottomInset = 0.0;              // reserved bottom URL-bar strip (dip); see setContentBottomInset
     QList<int> m_mruTabs;                   // most-recently-used first; front = active
     QTimer *m_memoryPressureTimer = nullptr;
-    bool m_tabDiscardEnabled = true;        // PACIFIC_TAB_DISCARD (default on)
-    int m_pressureKeepMin = 2;              // PACIFIC_TAB_DISCARD_KEEP_MIN
-    int m_memFreeThresholdMb = 400;         // PACIFIC_TAB_DISCARD_MEMFREE_MB
+    bool m_tabDiscardEnabled = true;        // IROISE_TAB_DISCARD (default on)
+    int m_pressureKeepMin = 2;              // IROISE_TAB_DISCARD_KEEP_MIN
+    int m_memFreeThresholdMb = 400;         // IROISE_TAB_DISCARD_MEMFREE_MB
     bool m_underMemoryPressure = false;
     QPointer<QObject> m_chromeWindow;
     QPointer<QQuickWindow> m_foregroundWindow;

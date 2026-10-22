@@ -1,5 +1,5 @@
 /*
- * Pacific: one engine view (LadybirdEngine) as a Qt Quick item: it shows the view's frames and passes it input,
+ * Iroise: one engine view (LadybirdEngine) as a Qt Quick item: it shows the view's frames and passes it input,
  * size, visibility and navigation. WebPage builds the browser's page on top of it.
  *
  * SPDX-License-Identifier: BSD-2-Clause

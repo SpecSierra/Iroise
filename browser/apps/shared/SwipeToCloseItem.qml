@@ -1,5 +1,5 @@
 /*
- * Pacific: a list or grid item that can be swiped away, as the tab cards used Silica's private SwipeItem (which the
+ * Iroise: a list or grid item that can be swiped away, as the tab cards used Silica's private SwipeItem (which the
  * Jolla Store does not allow importing). Its contentItem follows a sideways drag; let go past a third of the item's
  * width it slides out and swipedAway() is emitted, otherwise it springs back.
  *

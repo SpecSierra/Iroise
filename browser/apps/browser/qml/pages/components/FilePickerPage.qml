@@ -12,13 +12,13 @@ import Sailfish.Pickers 1.0
 // clears browserPage._filePickerOpen when done.
 ContentPickerPage {
     id: filePicker
-    objectName: "pacificFilePickerPage"
+    objectName: "iroiseFilePickerPage"
 
     property var webView
     property var browserPage
 
     //% "Select file"
-    title: qsTrId("pacific-he-select_file")
+    title: qsTrId("iroise-he-select_file")
     property bool _selectionCommitted: false
     property int _selectionRetryCount: 0
 

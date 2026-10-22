@@ -1,11 +1,11 @@
 /*
- * Pacific: the Sailfish OS front end for the Ladybird engine.
+ * Iroise: the Sailfish OS front end for the Ladybird engine.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
 // The whole engine as one library, for an app that may ship a single executable (the Jolla Store's rule). That
-// executable loads this library and calls pacific_engine_main() with the role it was started for: "Ladybird" (the
+// executable loads this library and calls iroise_engine_main() with the role it was started for: "Ladybird" (the
 // engine the interface talks to, see main.cpp) or one of the helper processes. Each role's ladybird_main() is
 // compiled in under its own name (see CMakeLists.txt).
 
@@ -22,7 +22,7 @@
 #include <UI/SFOS/EngineMain.h>
 #include <UI/SFOS/MemoryGuard.h>
 
-// The helpers come from CMakeLists.txt (PACIFIC_HELPERS), which compiles their main.cpp in.
+// The helpers come from CMakeLists.txt (IROISE_HELPERS), which compiles their main.cpp in.
 #include <EngineHelperRoles.h>
 
 #define ENUMERATE_ENGINE_ROLES(X) \
@@ -43,8 +43,8 @@ void set_return_code_for_errors(int code) { s_return_code_for_errors = code; }
 }
 
 // The helpers are started as `<executable> --engine-role <name> ...` (LADYBIRD_HELPER_LAUNCHER), and find the
-// engine's resources from LADYBIRD_APPLICATION_DIRECTORY: share/harbour-pacific/libexec for this library in
-// share/harbour-pacific/lib/engine (Build/release/libexec on the build host), as the engine's executables would be laid
+// engine's resources from LADYBIRD_APPLICATION_DIRECTORY: share/harbour-iroise/libexec for this library in
+// share/harbour-iroise/lib/engine (Build/release/libexec on the build host), as the engine's executables would be laid
 // out. Both pass on to every helper.
 static void describe_installation()
 {
@@ -59,7 +59,7 @@ static void describe_installation()
         setenv("LADYBIRD_HELPER_LAUNCHER", executable.value().characters(), 0);
 }
 
-int pacific_engine_main(char const* role, int argc, char** argv)
+int iroise_engine_main(char const* role, int argc, char** argv)
 {
     tzset();
     describe_installation();

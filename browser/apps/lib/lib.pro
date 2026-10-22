@@ -1,6 +1,6 @@
-# Pacific: the interface, loaded by the app's executable (../launcher), which calls pacific_ui_main().
+# Iroise: the interface, loaded by the app's executable (../launcher), which calls iroise_ui_main().
 TEMPLATE = lib
-TARGET = pacificbrowser
+TARGET = iroisebrowser
 
 QT += qml quick gui gui-private dbus concurrent sql
 
@@ -22,8 +22,8 @@ LIBS += -ldl
 
 # Translations, from the interface's code and QML.
 TS_PATH = $$PWD/../browser $$PWD/../shared
-TS_FILE = $$OUT_PWD/pacific-browser.ts
-EE_QM = $$OUT_PWD/pacific-browser_eng_en.qm
+TS_FILE = $$OUT_PWD/iroise-browser.ts
+EE_QM = $$OUT_PWD/iroise-browser_eng_en.qm
 include(../../translations/translations.pri)
 
 INSTALLS += target

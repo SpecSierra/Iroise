@@ -11,7 +11,7 @@
 
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-import harbour.pacific 1.0
+import harbour.iroise 1.0
 import Nemo.Configuration 1.0
 import Sailfish.Pickers 1.0
 import "../shared" as Shared
@@ -34,10 +34,10 @@ Page {
         id: webEngineSettings
         property alias colorScheme: colorSchemeConf.value
     }
-    ConfigurationValue { id: adBlockConf; key: "/apps/harbour-pacific/settings/adblock_enabled"; defaultValue: true }
-    ConfigurationValue { id: cookieBannerConf; key: "/apps/harbour-pacific/settings/cookie_banner_blocking"; defaultValue: true }
+    ConfigurationValue { id: adBlockConf; key: "/apps/harbour-iroise/settings/adblock_enabled"; defaultValue: true }
+    ConfigurationValue { id: cookieBannerConf; key: "/apps/harbour-iroise/settings/cookie_banner_blocking"; defaultValue: true }
     // 0 = light, 1 = dark, 2 = follow ambience (applied by SettingManager)
-    ConfigurationValue { id: colorSchemeConf; key: "/apps/harbour-pacific/settings/color_scheme"; defaultValue: page._followsAmbience }
+    ConfigurationValue { id: colorSchemeConf; key: "/apps/harbour-iroise/settings/color_scheme"; defaultValue: page._followsAmbience }
 
     readonly property int _textSwitchIconCenter: Math.round((Theme.iconSizeMedium - Theme.itemSizeExtraSmall) / 2.0)
 
@@ -73,7 +73,7 @@ Page {
             SectionHeader {
                 //: Section Header for the settings that are asked about most
                 //% "General"
-                text: qsTrId("pacific-sh-general")
+                text: qsTrId("iroise-sh-general")
             }
 
             BrowserComboBox {
@@ -179,9 +179,9 @@ Page {
             SettingsLinkItem {
                 iconSource: "image://theme/icon-m-downloads"
                 //% "Downloads"
-                text: qsTrId("pacific-la-downloads")
+                text: qsTrId("iroise-la-downloads")
                 //% "Files saved to the Downloads folder"
-                description: qsTrId("pacific-la-downloads_description")
+                description: qsTrId("iroise-la-downloads_description")
                 onClicked: pageStack.push("DownloadsPage.qml")
             }
 
@@ -192,7 +192,7 @@ Page {
                 //% "Passwords"
                 text: qsTrId("settings_browser-la-passwords")
                 //% "Saved logins, kept in an encrypted vault"
-                description: qsTrId("pacific-la-passwords_description")
+                description: qsTrId("iroise-la-passwords_description")
                 onClicked: pageStack.push("LoginsPage.qml")
             }
 
@@ -250,7 +250,7 @@ Page {
             SectionHeader {
                 //: Section Header for privacy and security settings
                 //% "Privacy & security"
-                text: qsTrId("pacific-sh-privacy_security")
+                text: qsTrId("iroise-sh-privacy_security")
             }
 
             TextSwitch {
@@ -282,9 +282,9 @@ Page {
 
             TextSwitch {
                 //% "Adblock"
-                text: qsTrId("pacific-la-ad_block")
+                text: qsTrId("iroise-la-ad_block")
                 //% "Block advertisements and trackers"
-                description: qsTrId("pacific-la-ad_block_description")
+                description: qsTrId("iroise-la-ad_block_description")
                 checked: adBlockConf.value
                 automaticCheck: false
                 leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
@@ -302,9 +302,9 @@ Page {
 
             TextSwitch {
                 //% "Block cookie banners"
-                text: qsTrId("pacific-la-cookie_banner_blocking")
+                text: qsTrId("iroise-la-cookie_banner_blocking")
                 //% "Automatically refuse cookie consent pop-ups"
-                description: qsTrId("pacific-la-cookie_banner_blocking_description")
+                description: qsTrId("iroise-la-cookie_banner_blocking_description")
                 checked: cookieBannerConf.value
                 automaticCheck: false
                 leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
@@ -317,7 +317,7 @@ Page {
             SectionHeader {
                 //: Section Header for settings most people never need to open
                 //% "Advanced"
-                text: qsTrId("pacific-sh-advanced")
+                text: qsTrId("iroise-sh-advanced")
             }
 
             SettingsLinkItem {
@@ -326,16 +326,16 @@ Page {
                 //% "Clear browsing data"
                 text: qsTrId("settings_browser-la-clear-browsing-data")
                 //% "History, cookies, caches and site data"
-                description: qsTrId("pacific-la-clear_browsing_data_description")
+                description: qsTrId("iroise-la-clear_browsing_data_description")
                 onClicked: pageStack.push("PrivacySettingsPage.qml", { previousPage: page })
             }
 
             SettingsLinkItem {
                 iconSource: "image://theme/icon-m-wizard"
                 //% "Change user agents"
-                text: qsTrId("pacific-he-site_user_agents")
+                text: qsTrId("iroise-he-site_user_agents")
                 //% "Make selected websites see a different browser"
-                description: qsTrId("pacific-he-site_user_agents_description")
+                description: qsTrId("iroise-he-site_user_agents_description")
                 onClicked: pageStack.push("SiteUaSettingsPage.qml")
             }
 
@@ -345,35 +345,35 @@ Page {
     ConfigurationValue {
         id: closeAllTabsConfig
 
-        key: "/apps/harbour-pacific/settings/close_all_tabs"
+        key: "/apps/harbour-iroise/settings/close_all_tabs"
         defaultValue: false
     }
 
     ConfigurationValue {
         id: searchEngineConfig
 
-        key: "/apps/harbour-pacific/settings/search_engine"
+        key: "/apps/harbour-iroise/settings/search_engine"
         defaultValue: "Google"
     }
 
     ConfigurationValue {
         id: homePageConfig
 
-        key: "/apps/harbour-pacific/settings/home_page"
+        key: "/apps/harbour-iroise/settings/home_page"
         defaultValue: "https://jolla.com/"
     }
 
     ConfigurationValue {
         id: fixedToolbarConfig
 
-        key: "/apps/harbour-pacific/settings/fixed_toolbar"
+        key: "/apps/harbour-iroise/settings/fixed_toolbar"
         defaultValue: false
     }
 
     ConfigurationValue {
         id: autoStartPrivateBrowser
 
-        key: "/apps/harbour-pacific/settings/browser_privatebrowsing_autostart"
+        key: "/apps/harbour-iroise/settings/browser_privatebrowsing_autostart"
         defaultValue: false
     }
 

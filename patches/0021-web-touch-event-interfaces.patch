@@ -78,7 +78,7 @@ index 00000000..0c1ce454
 +++ b/Libraries/LibWeb/UIEvents/Touch.cpp
 @@ -0,0 +1,37 @@
 +/*
-+ * Copyright (c) 2026, the Pacific developers.
++ * Copyright (c) 2026, the Iroise developers.
 + *
 + * SPDX-License-Identifier: BSD-2-Clause
 + */
@@ -121,7 +121,7 @@ index 00000000..2be69280
 +++ b/Libraries/LibWeb/UIEvents/Touch.h
 @@ -0,0 +1,52 @@
 +/*
-+ * Copyright (c) 2026, the Pacific developers.
++ * Copyright (c) 2026, the Iroise developers.
 + *
 + * SPDX-License-Identifier: BSD-2-Clause
 + */
@@ -202,7 +202,7 @@ index 00000000..4b6076fb
 +++ b/Libraries/LibWeb/UIEvents/TouchEvent.cpp
 @@ -0,0 +1,98 @@
 +/*
-+ * Copyright (c) 2026, the Pacific developers.
++ * Copyright (c) 2026, the Iroise developers.
 + *
 + * SPDX-License-Identifier: BSD-2-Clause
 + */
@@ -306,7 +306,7 @@ index 00000000..9b0fc34d
 +++ b/Libraries/LibWeb/UIEvents/TouchEvent.h
 @@ -0,0 +1,58 @@
 +/*
-+ * Copyright (c) 2026, the Pacific developers.
++ * Copyright (c) 2026, the Iroise developers.
 + *
 + * SPDX-License-Identifier: BSD-2-Clause
 + */
@@ -409,7 +409,7 @@ index 00000000..67bf089a
 +++ b/Libraries/LibWeb/UIEvents/TouchList.cpp
 @@ -0,0 +1,40 @@
 +/*
-+ * Copyright (c) 2026, the Pacific developers.
++ * Copyright (c) 2026, the Iroise developers.
 + *
 + * SPDX-License-Identifier: BSD-2-Clause
 + */
@@ -455,7 +455,7 @@ index 00000000..51e7070c
 +++ b/Libraries/LibWeb/UIEvents/TouchList.h
 @@ -0,0 +1,35 @@
 +/*
-+ * Copyright (c) 2026, the Pacific developers.
++ * Copyright (c) 2026, the Iroise developers.
 + *
 + * SPDX-License-Identifier: BSD-2-Clause
 + */

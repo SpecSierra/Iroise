@@ -4,7 +4,7 @@
 
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-import harbour.pacific 1.0
+import harbour.iroise 1.0
 
 // Long-press action panel: links, images, and browser.contextMenus entries —
 // Atlantic has no menu bar, so a long press is where all of those have to live.
@@ -169,7 +169,7 @@ Item {
                     truncationMode: TruncationMode.Fade
                     color: parent.highlighted ? Theme.highlightColor : Theme.primaryColor
                     //% "Save image"
-                    text: qsTrId("pacific-bt-save_image")
+                    text: qsTrId("iroise-bt-save_image")
                 }
 
                 onClicked: {

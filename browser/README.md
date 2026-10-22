@@ -1,6 +1,6 @@
 # The browser interface
 
-This is the part of Pacific you see: the Silica interface with its tabs, menus, settings, bookmarks, history and
+This is the part of Iroise you see: the Silica interface with its tabs, menus, settings, bookmarks, history and
 password vault. It comes from Jolla's [sailfish-browser](https://github.com/sailfishos/sailfish-browser) by way of
 Atlantic; `apps/ladybird/` is what connects it to the Ladybird engine.
 

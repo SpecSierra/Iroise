@@ -1,5 +1,5 @@
 /*
- * Pacific: the Sailfish OS front end for the Ladybird engine.
+ * Iroise: the Sailfish OS front end for the Ladybird engine.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -18,7 +18,7 @@
 /* A datagram has to fit the socket's send buffer, which an unprivileged process cannot raise past the system's
    default (about 208 KiB). A text longer than this is refused, never cut: half a JSON document is worth less than none. */
 #define LB_EMBED_TEXT_MAX (160 * 1024)
-#define LB_EMBED_PAGE_MESSAGE_MARKER "\001pacific"
+#define LB_EMBED_PAGE_MESSAGE_MARKER "\001iroise"
 #define LB_EMBED_FIRST_ENGINE_VIEW 0x40000000u
 
 enum lb_embed_message_type {

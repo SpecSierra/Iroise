@@ -47,7 +47,7 @@ index c3bb326c..b4a7d508 100644
      auto device_pixels_per_css_pixel = static_cast<float>(m_navigable->page().client().device_pixels_per_css_pixel());
      auto async_scroll_delta_in_device_pixels = Gfx::FloatPoint { static_cast<float>(wheel_delta_x), static_cast<float>(wheel_delta_y) }.scaled(device_pixels_per_css_pixel);
 +    // NB: A step of a finger's scroll fires no wheel event: the page's touch events and touch-action decide it, before
-+    //     it goes on to the compositor, which would scroll it whatever they say (Pacific, patches/0022 and 0023).
++    //     it goes on to the compositor, which would scroll it whatever they say (Iroise, patches/0022 and 0023).
 +    if (m_navigable->page().handling_touch_scroll()
 +        && m_navigable->page().touch_scroll_step_result(!async_scroll_performed_default_action, wheel_delta_x, wheel_delta_y) == EventResult::Cancelled) {
 +        record_input_routing(InputRoutingDecision::PageCanceledWheelEvent);
@@ -61,7 +61,7 @@ index c3bb326c..b4a7d508 100644
          }
  
          auto is_cancelable = async_scroll_performed_default_action ? UIEvents::WheelEventIsCancelable::No : UIEvents::WheelEventIsCancelable::Yes;
--        // NB: A step of a finger's scroll fires no wheel event; the page's touch events decide it (Pacific,
+-        // NB: A step of a finger's scroll fires no wheel event; the page's touch events decide it (Iroise,
 -        //     patches/0022).
 +        // NB: A step of a finger's scroll fires no wheel event, and was decided above.
          auto dispatch_result = m_navigable->page().handling_touch_scroll()
@@ -76,7 +76,7 @@ index c3bb326c..b4a7d508 100644
      m_buttons_of_last_dispatched_pointer_event = type == PointerEventType::PointerCancel ? 0 : buttons;
 -    bool pointer_event_cancelled = !node->dispatch_event(pointer_event);
 +    // NB: The mouse events of a tap follow the pointer events of its touch, which the page has had already, and a
-+    //     cancelled pointerdown of that touch keeps them from firing (Pacific, patches/0023).
++    //     cancelled pointerdown of that touch keeps them from firing (Iroise, patches/0023).
 +    auto& page = m_navigable->page();
 +    bool pointer_event_cancelled = page.handling_touch_compatibility()
 +        ? type == PointerEventType::PointerDown && page.touch_pointer_down_cancelled()
@@ -106,7 +106,7 @@ index c3bb326c..b4a7d508 100644
  }
  
 +// https://w3c.github.io/pointerevents/
-+// A pointer event of a touch (Pacific, patches/0023): a pointer of type "touch", captured by the element it went down on.
++// A pointer event of a touch (Iroise, patches/0023): a pointer of type "touch", captured by the element it went down on.
 +static bool fire_touch_pointer_event(Utf16FlyString const& event_name, DOM::Node& target, GC::Ptr<HTML::WindowProxy> view, i32 identifier, CSSPixelPoint screen, CSSPixelPoint client, CSSPixelPoint page, unsigned modifiers, bool pressed)
 +{
 +    bool is_boundary_event = first_is_one_of(event_name, UIEvents::EventNames::pointerenter, UIEvents::EventNames::pointerleave);

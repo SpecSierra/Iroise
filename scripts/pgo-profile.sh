@@ -1,6 +1,6 @@
 #!/bin/bash
 # Makes the profile for profile-guided optimisation (.github/workflows/pgo.yml): builds the instrumented engine
-# (scripts/build.sh, PACIFIC_PGO=generate), trains it (scripts/pgo-train.py), and keeps the profile in
+# (scripts/build.sh, IROISE_PGO=generate), trains it (scripts/pgo-train.py), and keeps the profile in
 # $CACHE/pgo/profile, where scripts/ci-build.sh finds it. Run again after a Ladybird bump; until then the old profile
 # still helps. Also packs it into dist/pgo-profile.tar.gz.
 # Usage: scripts/pgo-profile.sh [seconds for Speedometer]        (CI_CACHE, default /opt/pacific-ci/cache)
@@ -14,14 +14,14 @@ rm -rf "$NEW"
 mkdir -p "$NEW"
 # NB: Not exec'd as in CI's build: the instrumented build's own tools write profiles while it builds; they are
 #     cleared below.
-PACIFIC_PGO=generate PACIFIC_PGO_DIR="$NEW" "$ROOT/scripts/build.sh"
+IROISE_PGO=generate IROISE_PGO_DIR="$NEW" "$ROOT/scripts/build.sh"
 echo "$STAMP" > "$CACHE/upstream.stamp"
 find "$NEW" -name '*.gcda' -delete
 rm -rf "$NEW/rust"
 mkdir -p "$NEW/rust"
 
 # The Rust crates' counts: one file per library (%m), counted into as the processes run (%c, continuous mode).
-LLVM_PROFILE_FILE="$NEW/rust/%c%m.profraw" PACIFIC_ENGINE="$UP/Build/pgo-generate/bin/Ladybird" \
+LLVM_PROFILE_FILE="$NEW/rust/%c%m.profraw" IROISE_ENGINE="$UP/Build/pgo-generate/bin/Ladybird" \
     python3 "$ROOT/scripts/pgo-train.py" "$@"
 
 # llvm-profdata of the LLVM inside the pinned rustc (rust-toolchain.toml), which wrote the counts.

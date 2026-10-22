@@ -9,7 +9,7 @@
 
 import QtQuick 2.2
 import Sailfish.Silica 1.0
-import harbour.pacific 1.0
+import harbour.iroise 1.0
 import "." as Browser
 import "../../shared" as Shared
 

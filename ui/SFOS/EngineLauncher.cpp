@@ -1,5 +1,5 @@
 /*
- * Pacific: the Sailfish OS front end for the Ladybird engine.
+ * Iroise: the Sailfish OS front end for the Ladybird engine.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -13,6 +13,6 @@
 int main(int argc, char** argv)
 {
     if (argc >= 3 && !strcmp(argv[1], "--engine-role"))
-        return pacific_engine_main(argv[2], argc - 2, argv + 2);
-    return pacific_engine_main("Ladybird", argc, argv);
+        return iroise_engine_main(argv[2], argc - 2, argv + 2);
+    return iroise_engine_main("Ladybird", argc, argv);
 }

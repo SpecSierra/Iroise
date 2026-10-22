@@ -1,5 +1,5 @@
 /*
- * Pacific: a grid with cells sized like the launcher's, for the favourites. Silica's own (IconGridViewBase) is
+ * Iroise: a grid with cells sized like the launcher's, for the favourites. Silica's own (IconGridViewBase) is
  * private, which the Jolla Store does not allow importing.
  *
  * SPDX-License-Identifier: BSD-2-Clause

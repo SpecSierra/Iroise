@@ -7,7 +7,7 @@ index fa75d464..ad71fd93 100644
          window_proxy = navigable->active_window_proxy();
      auto page_offset = hover_event_page_offset(hover_event_data);
 +    // NB: The mouse events of a tap move the hover with no pointer events of type "mouse": the tap's pointer events
-+    //     were its touch's (Pacific, patches/0024).
++    //     were its touch's (Iroise, patches/0024).
 +    bool fires_pointer_events = !page().handling_touch_compatibility();
  
      struct HoverEventTarget {

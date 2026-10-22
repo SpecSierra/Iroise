@@ -1,4 +1,4 @@
-# Building Pacific
+# Building Iroise
 
 ## What the host needs
 
@@ -25,7 +25,7 @@ python3 -m venv .venv && .venv/bin/pip install 'cmake>=3.30'
 scripts/build.sh            # the engine, in upstream/Build/release
 scripts/build-browser.sh    # the interface and the app's executable, in build/browser
 scripts/build-sqlcipher.sh  # the SQLCipher the password vault uses
-scripts/bundle.sh           # everything laid out as installed, in dist/harbour-pacific
+scripts/bundle.sh           # everything laid out as installed, in dist/harbour-iroise
 ```
 
 `upstream/` is a plain Ladybird checkout at the commit in `UPSTREAM_COMMIT`. `scripts/build.sh` applies our patches
@@ -39,11 +39,11 @@ the phone over SSH; then, on the phone, `sh /tmp/ladybird/start-browser.sh [url]
 profile under `/tmp` too, so your own browser and its data are left alone. It stops by itself after the given
 minutes (15 by default), or with `sh /tmp/ladybird/stop.sh`.
 
-`deploy.sh` reaches the phone as `defaultuser` at `PACIFIC_PHONE` (default `127.0.0.1`) on `PACIFIC_PHONE_PORT`
-(default `2222`, for a forwarded port), with the developer-mode password in `PACIFIC_PHONE_PASSWORD`, or with an
+`deploy.sh` reaches the phone as `defaultuser` at `IROISE_PHONE` (default `127.0.0.1`) on `IROISE_PHONE_PORT`
+(default `2222`, for a forwarded port), with the developer-mode password in `IROISE_PHONE_PASSWORD`, or with an
 SSH key if you leave that unset.
 
-Close the installed Pacific before starting a test copy: the app allows only one of itself, so a second start just
+Close the installed Iroise before starting a test copy: the app allows only one of itself, so a second start just
 hands its address to the running one, which opens it as a new tab.
 
 A few tools help with measuring:
@@ -56,11 +56,11 @@ A few tools help with measuring:
 ## The package
 
 ```sh
-scripts/package-rpm.sh "$(cat VERSION)" 1    # dist/rpm/harbour-pacific-<version>-1.aarch64.rpm
+scripts/package-rpm.sh "$(cat VERSION)" 1    # dist/rpm/harbour-iroise-<version>-1.aarch64.rpm
 ```
 
 The package is laid out the way the Jolla Store wants it: the one executable in `/usr/bin`, everything else under
-`/usr/share/harbour-pacific`, plus the launcher entry and its icons, and nothing else. It depends only on packages
+`/usr/share/harbour-iroise`, plus the launcher entry and its icons, and nothing else. It depends only on packages
 the store allows (the pickers come with `Sailfish.Pickers`, an import the store allows, so the package names none),
 and its release is a plain number, as the store wants. It passes the store's validator
 ([sdk-harbour-rpmvalidator](https://github.com/sailfishos/sdk-harbour-rpmvalidator),

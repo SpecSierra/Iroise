@@ -1,4 +1,4 @@
-Pacific DIAGNOSTIC, never for main: LADYBIRD_PACIFIC_COMPOSITOR_TRACE=1 logs once a second what
+Iroise DIAGNOSTIC, never for main: LADYBIRD_IROISE_COMPOSITOR_TRACE=1 logs once a second what
 presenting frames cost (damage and raster share of the viewport, paint and flush time).
 
 diff --git a/Services/Compositor/CompositorState.cpp b/Services/Compositor/CompositorState.cpp
@@ -9,7 +9,7 @@ index 1eff4dda..6d47dcc4 100644
      schedule_pending_present_frame(context_id, *context);
  }
  
-+void pacific_trace_flush(u64 microseconds);
++void iroise_trace_flush(u64 microseconds);
 +
  void CompositorState::present_frame(Web::CompositorContextId context_id, ContextState& context, PendingFrame pending_frame)
  {
@@ -24,7 +24,7 @@ index 1eff4dda..6d47dcc4 100644
              self->did_finish_async_present(*pending_present);
          });
      });
-+    pacific_trace_flush(static_cast<u64>((MonotonicTime::now() - flush_start).to_microseconds()));
++    iroise_trace_flush(static_cast<u64>((MonotonicTime::now() - flush_start).to_microseconds()));
      context.presenter().did_submit_prepared_frame(pending_frame.viewport_rect);
  #ifdef AK_OS_MACOS
      // The window server's reads of an IOSurface wait for GPU work that is already scheduled to write it. Handing the
@@ -45,9 +45,9 @@ index e33e91c9..0f858c8b 100644
      return m_last_rasterized_frame.has_value() && m_last_rasterized_frame->canvas_content_generations.contains(canvas_id);
  }
  
-+// PACIFIC DIAGNOSTIC, not for main: with LADYBIRD_PACIFIC_COMPOSITOR_TRACE set (helpers only see LADYBIRD_* variables), once a second, what presenting frames cost.
-+struct PacificTrace {
-+    bool enabled { Core::Environment::get("LADYBIRD_PACIFIC_COMPOSITOR_TRACE"sv).has_value() };
++// IROISE DIAGNOSTIC, not for main: with LADYBIRD_IROISE_COMPOSITOR_TRACE set (helpers only see LADYBIRD_* variables), once a second, what presenting frames cost.
++struct IroiseTrace {
++    bool enabled { Core::Environment::get("LADYBIRD_IROISE_COMPOSITOR_TRACE"sv).has_value() };
 +    u64 frames { 0 };
 +    u64 damage_area { 0 };
 +    u64 raster_area { 0 };
@@ -63,23 +63,23 @@ index e33e91c9..0f858c8b 100644
 +        if ((now - last).to_milliseconds() < 1000)
 +            return;
 +        if (frames > 0) {
-+            dbgln("[pacific-trace] {} frames, damage {}% raster {}% of the viewport, {} full-viewport, paint {} us, flush {} us per frame, last damage {}",
++            dbgln("[iroise-trace] {} frames, damage {}% raster {}% of the viewport, {} full-viewport, paint {} us, flush {} us per frame, last damage {}",
 +                frames, damage_area * 100 / max<u64>(full_area, 1), raster_area * 100 / max<u64>(full_area, 1), full_frames, paint_us / frames, flush_us / frames, last_damage);
 +        }
 +        frames = damage_area = raster_area = full_area = full_frames = paint_us = flush_us = 0;
 +        last = now;
 +    }
 +};
-+static PacificTrace& pacific_trace()
++static IroiseTrace& iroise_trace()
 +{
-+    static PacificTrace trace;
++    static IroiseTrace trace;
 +    return trace;
 +}
-+void pacific_trace_flush(u64 microseconds);
-+void pacific_trace_flush(u64 microseconds)
++void iroise_trace_flush(u64 microseconds);
++void iroise_trace_flush(u64 microseconds)
 +{
-+    if (pacific_trace().enabled)
-+        pacific_trace().flush_us += microseconds;
++    if (iroise_trace().enabled)
++        iroise_trace().flush_us += microseconds;
 +}
 +
  Optional<PreparedFrame> ContextPresenter::prepare_frame(DisplayListPlayerSkia& display_list_player, PendingFrame pending_frame, FrameContent const& frame_content)
@@ -91,7 +91,7 @@ index e33e91c9..0f858c8b 100644
      auto& back_store = render_target->surface;
 +    auto paint_start = MonotonicTime::now();
      paint_current_display_list(display_list_player, back_store, frame_content, render_target->damage_rect);
-+    if (auto& trace = pacific_trace(); trace.enabled) {
++    if (auto& trace = iroise_trace(); trace.enabled) {
 +        auto viewport_area = static_cast<u64>(pending_frame.viewport_rect.width()) * pending_frame.viewport_rect.height();
 +        auto raster_size = this->raster_size();
 +        auto raster_full = static_cast<u64>(raster_size.width()) * raster_size.height();

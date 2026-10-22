@@ -22,7 +22,7 @@ index 81f1d395..f12ffa04 100644
  static bool is_blocking_wheel_event_listener(DOMEventListener const& listener)
  {
 -    return AK::first_is_one_of(listener.type, u"wheel"sv, u"mousewheel"sv) && listener.passive != true;
-+    // NB: A touchstart or touchmove listener can stop the scroll of a finger, whose steps are wheel steps (Pacific,
++    // NB: A touchstart or touchmove listener can stop the scroll of a finger, whose steps are wheel steps (Iroise,
 +    //     patches/0022), and holds them back for the page as a wheel listener does.
 +    return AK::first_is_one_of(listener.type, u"wheel"sv, u"mousewheel"sv, u"touchstart"sv, u"touchmove"sv) && listener.passive != true;
  }
@@ -84,7 +84,7 @@ index fecc208d..c3bb326c 100644
  
          auto is_cancelable = async_scroll_performed_default_action ? UIEvents::WheelEventIsCancelable::No : UIEvents::WheelEventIsCancelable::Yes;
 -        auto dispatch_result = dispatch_wheel_event(read, *wheel_event_target_layout_node, visual_viewport_position, screen_position, button, buttons, modifiers, wheel_delta_x, wheel_delta_y, wheel_tick_120ths_x, wheel_tick_120ths_y, is_cancelable == UIEvents::WheelEventIsCancelable::Yes);
-+        // NB: A step of a finger's scroll fires no wheel event; the page's touch events decide it (Pacific,
++        // NB: A step of a finger's scroll fires no wheel event; the page's touch events decide it (Iroise,
 +        //     patches/0022).
 +        auto dispatch_result = m_navigable->page().handling_touch_scroll()
 +            ? m_navigable->page().touch_scroll_step_result(is_cancelable == UIEvents::WheelEventIsCancelable::Yes)
@@ -96,7 +96,7 @@ index fecc208d..c3bb326c 100644
      m_navigable->page().clear_context_menu_request();
  }
  
-+// Pacific: touch events, until Ladybird has its own (patches/0022, docs/TOUCH.md in Pacific).
++// Iroise: touch events, until Ladybird has its own (patches/0022, docs/TOUCH.md in Iroise).
 +// https://w3c.github.io/touch-events/
 +EventResult EventHandler::handle_touch(Web::MouseEvent::Type type, CSSPixelPoint visual_viewport_position, CSSPixelPoint screen_position, unsigned modifiers, Optional<RemoteInputEventTarget>* remote_target)
 +{
@@ -251,7 +251,7 @@ index b042d368..ad76485a 100644
  
      EventResult handle_drag_and_drop_event(DragEvent::Type, CSSPixelPoint, CSSPixelPoint screen_position, unsigned button, unsigned buttons, unsigned modifiers, Vector<HTML::SelectedFile> files);
      EventResult handle_pinch_event(CSSPixelPoint, unsigned modifiers, double scale_delta);
-+    // A finger on a touch screen (Pacific, patches/0022). `type` is one of MouseEvent's touch types.
++    // A finger on a touch screen (Iroise, patches/0022). `type` is one of MouseEvent's touch types.
 +    EventResult handle_touch(Web::MouseEvent::Type type, CSSPixelPoint visual_viewport_position, CSSPixelPoint screen_position, unsigned modifiers, Optional<RemoteInputEventTarget>* remote_target = nullptr);
      [[nodiscard]] EventResult perform_paste_action();
      EventResult perform_paste_action(NonnullRefPtr<HTML::DragDataStore> const&);
@@ -311,7 +311,7 @@ index c27ead2d..a0100cc5 100644
      EventResult handle_drag_and_drop_event(HTML::LocalNavigable& root, DragEvent::Type, DevicePixelPoint, DevicePixelPoint screen_position, unsigned button, unsigned buttons, unsigned modifiers, Vector<HTML::SelectedFile> files);
      EventResult handle_pinch_event(HTML::LocalNavigable& root, DevicePixelPoint point, unsigned modifiers, double scale);
  
-+    // A finger on a touch screen (Pacific, patches/0022). `type` is one of MouseEvent's touch types.
++    // A finger on a touch screen (Iroise, patches/0022). `type` is one of MouseEvent's touch types.
 +    EventResult handle_touch(HTML::LocalNavigable& root, Web::MouseEvent::Type type, DevicePixelPoint position, DevicePixelPoint screen_position, unsigned modifiers, Optional<RemoteInputEventTarget>* remote_target);
 +    // The wheel event being handled is a step of a finger's scroll.
 +    void set_handling_touch_scroll(bool handling) { m_handling_touch_scroll = handling; }
@@ -362,7 +362,7 @@ index 17c98125..4f6a1e20 100644
          MouseLeave,
          MouseCancel,
          MouseWheel,
-+        // A finger on a touch screen (Pacific, patches/0022): position and modifiers only.
++        // A finger on a touch screen (Iroise, patches/0022): position and modifiers only.
 +        TouchStart,
 +        TouchMove,
 +        TouchEnd,

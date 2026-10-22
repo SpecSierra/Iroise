@@ -1,5 +1,5 @@
 /*
- * Pacific: the phone's position, for pages the user let have it.
+ * Iroise: the phone's position, for pages the user let have it.
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
