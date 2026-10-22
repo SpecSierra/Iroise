@@ -126,6 +126,7 @@ public:
     void handle_touch(TouchPhase phase, int id, Gfx::IntPoint position)
     {
         using enum TouchPhase;
+        keep_full_frame_rate();
 
         if (phase == Down) {
             if (m_active_touch.has_value())
@@ -239,6 +240,17 @@ public:
     bool holds_wake_lock { false };
     bool is_page_fullscreen { false };
 
+    // Pages animate at the full rate while someone uses them, and at idle_frames_per_second once nobody has touched
+    // the page for a while: an animation that loops for ever (Wikipedia's pulsating dot) then costs a third as much.
+    // Media that plays sound and fullscreen pages keep the full rate.
+    void keep_full_frame_rate()
+    {
+        if (m_idle_frame_rate)
+            set_frame_rate(s_refresh_rate);
+        m_idle_frame_rate = false;
+        m_idle_timer->restart();
+    }
+
     void handle_pinch(Gfx::IntPoint position, double scale)
     {
         if (scale <= 0)
@@ -259,6 +271,8 @@ private:
         m_device_pixel_ratio = device_pixel_ratio;
         // NB: Before the first page is prepared, which hands the rate to WebContent and the Compositor.
         m_maximum_frames_per_second = s_refresh_rate;
+        m_idle_timer = Core::Timer::create_single_shot(AK::Duration::from_milliseconds(idle_after_milliseconds), [this] { enter_idle_frame_rate(); });
+        m_idle_timer->start();
         m_frame_timer.start();
         on_ready_to_paint = [this] { present(); };
     }
@@ -382,6 +396,36 @@ private:
     // This touch is passed on as a mouse with its button held (see handle_touch).
     bool m_touch_is_mouse { false };
     bool m_mouse_held { false };
+
+    void enter_idle_frame_rate()
+    {
+        if (s_idle_frames_per_second <= 0 || s_idle_frames_per_second >= s_refresh_rate || plays_audio || is_page_fullscreen) {
+            m_idle_timer->restart();
+            return;
+        }
+        m_idle_frame_rate = true;
+        set_frame_rate(s_idle_frames_per_second);
+    }
+
+    // The rate paces the Compositor's animations and the pages' animation frames, in the tab's page and in every
+    // process hosting one of its cross-site frames.
+    void set_frame_rate(double frames_per_second)
+    {
+        m_maximum_frames_per_second = frames_per_second;
+        traversable().for_each_hosting_page([&](WebView::WebContentPage& page) {
+            page.async_set_maximum_frames_per_second(frames_per_second);
+            WebView::Application::the().update_compositor_display_metadata(page.compositor_context_id(), display_id(), frames_per_second);
+        });
+    }
+
+    static constexpr int idle_after_milliseconds = 3000;
+    // PACIFIC_IDLE_FPS: the rate of a page nobody uses (30; 0 keeps the full rate).
+    static inline double s_idle_frames_per_second = [] {
+        auto rate = Core::Environment::get("PACIFIC_IDLE_FPS"sv).value_or({}).to_number<double>();
+        return rate.has_value() && *rate >= 0 ? *rate : 30.0;
+    }();
+    RefPtr<Core::Timer> m_idle_timer;
+    bool m_idle_frame_rate { false };
 
     Core::ElapsedTimer m_frame_timer;
     i64 m_frames_presented { 0 };
@@ -607,7 +651,10 @@ private:
             auto text = title.to_utf8();
             m_host.send_text(id, LB_EMBED_TITLE, text.bytes_as_string_view());
         };
-        view->on_load_start = [this, id] { m_host.send_flags(id, LB_EMBED_LOADING, true); };
+        view->on_load_start = [this, id, raw_view] {
+            raw_view->keep_full_frame_rate();
+            m_host.send_flags(id, LB_EMBED_LOADING, true);
+        };
         view->on_load_finish = [this, id](URL::URL const&) { m_host.send_flags(id, LB_EMBED_LOADING, false); };
         view->on_top_level_navigation_commit = [this, id] { m_host.send_flags(id, LB_EMBED_COMMIT, true); };
         view->on_input_method_state_change = [this, id, raw_view] {
@@ -710,6 +757,7 @@ private:
         view->on_fullscreen_window = [this, id, raw_view] {
             raw_view->set_is_fullscreen(Web::ViewportIsFullscreen::Yes);
             raw_view->is_page_fullscreen = true;
+            raw_view->keep_full_frame_rate();
             m_host.send_flags(id, LB_EMBED_FULLSCREEN, true);
         };
         view->on_exit_fullscreen_window = [this, id, raw_view] {
@@ -719,6 +767,8 @@ private:
         };
         view->on_audio_play_state_changed = [this, id, raw_view](Web::HTML::AudioPlayState state) {
             raw_view->plays_audio = state == Web::HTML::AudioPlayState::Playing;
+            if (raw_view->plays_audio)
+                raw_view->keep_full_frame_rate();
             m_host.send_flags(id, LB_EMBED_MEDIA, raw_view->plays_audio, raw_view->holds_wake_lock);
         };
         view->on_screen_wake_lock_state_changed = [this, id, raw_view](Web::ScreenWakeLockState state) {
@@ -1273,9 +1323,11 @@ private:
             view.color_picker_update(header.a ? Gfx::Color::from_string(text) : Optional<Gfx::Color> {}, Web::HTML::ColorPickerUpdateState::Closed);
             break;
         case LB_EMBED_PINCH:
+            view.keep_full_frame_rate();
             view.handle_pinch({ header.c, header.d }, header.scale);
             break;
         case LB_EMBED_COMMIT_TEXT:
+            view.keep_full_frame_rate();
             view.commit_text_from_input_method(Utf16String::from_utf8(text), -header.a, header.a);
             break;
         case LB_EMBED_COMPOSE_TEXT:
@@ -1285,6 +1337,7 @@ private:
                 view.set_marked_text_from_input_method(Utf16String::from_utf8(text));
             break;
         case LB_EMBED_KEY:
+            view.keep_full_frame_rate();
             switch (header.a) {
             case LB_EMBED_KEY_BACKSPACE:
                 send_key(view, Web::UIEvents::KeyCode::Key_Backspace, 0);
