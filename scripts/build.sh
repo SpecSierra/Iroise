@@ -74,8 +74,9 @@ case "$PGO" in
         PGO_FLAGS="$PGO_FLAGS -Wno-missing-profile -Wno-coverage-mismatch -DPACIFIC_PGO_PROFILE=$(cat "$PACIFIC_PGO_DIR/stamp")"
         # A profile from before the Rust crates were profiled has no rust.profdata.
         if [ -f "$PACIFIC_PGO_DIR/rust.profdata" ]; then
-            RUST_PGO_FLAGS="-Cprofile-use=$PACIFIC_PGO_DIR/rust.profdata -Cllvm-args=-pgo-warn-mismatch=false"
-            RUST_PGO_FLAGS="$RUST_PGO_FLAGS -Cllvm-args=-pgo-warn-missing-function=false"
+            # NB: -disable-vp as in the instrumented build, or every indirect call is reported as a stale profile.
+            RUST_PGO_FLAGS="-Cprofile-use=$PACIFIC_PGO_DIR/rust.profdata -Cllvm-args=-no-pgo-warn-mismatch"
+            RUST_PGO_FLAGS="$RUST_PGO_FLAGS -Cllvm-args=-pgo-warn-missing-function=false -Cllvm-args=-disable-vp=true"
         fi ;;
     *) echo "PACIFIC_PGO must be generate or use, not $PGO" >&2; exit 1 ;;
 esac
