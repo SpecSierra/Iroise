@@ -1,4 +1,4 @@
-Pacific DIAGNOSTIC, never for main: PACIFIC_COMPOSITOR_TRACE=1 logs once a second what
+Pacific DIAGNOSTIC, never for main: LADYBIRD_PACIFIC_COMPOSITOR_TRACE=1 logs once a second what
 presenting frames cost (damage and raster share of the viewport, paint and flush time).
 
 diff --git a/Services/Compositor/CompositorState.cpp b/Services/Compositor/CompositorState.cpp
@@ -45,9 +45,9 @@ index e33e91c9..4c077656 100644
      return m_last_rasterized_frame.has_value() && m_last_rasterized_frame->canvas_content_generations.contains(canvas_id);
  }
  
-+// PACIFIC DIAGNOSTIC, not for main: with PACIFIC_COMPOSITOR_TRACE set, once a second, what presenting frames cost.
++// PACIFIC DIAGNOSTIC, not for main: with LADYBIRD_PACIFIC_COMPOSITOR_TRACE set (helpers only see LADYBIRD_* variables), once a second, what presenting frames cost.
 +struct PacificTrace {
-+    bool enabled { Core::Environment::get("PACIFIC_COMPOSITOR_TRACE"sv).has_value() };
++    bool enabled { Core::Environment::get("LADYBIRD_PACIFIC_COMPOSITOR_TRACE"sv).has_value() };
 +    u64 frames { 0 };
 +    u64 damage_area { 0 };
 +    u64 raster_area { 0 };
