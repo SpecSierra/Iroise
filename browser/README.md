@@ -9,4 +9,4 @@ How to build it is in [docs/BUILDING.md](../docs/BUILDING.md), how it fits with 
 
 When code comes over from sailfish-browser, keep its copyright header and credit the author in the commit.
 
-MPL-2.0, as upstream: see [LICENSE.txt](LICENSE.txt).
+MPL-2.0, as upstream: see [LICENSES/MPL-2.0.txt](../LICENSES/MPL-2.0.txt).

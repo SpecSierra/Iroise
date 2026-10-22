@@ -37,7 +37,14 @@ explains the pieces and why they are the way they are.
 
 ## Licences
 
-Our front end for the engine, the launcher and our patches to Ladybird are BSD-2-Clause, like Ladybird itself. The
-browser interface comes from Jolla's sailfish-browser by way of Atlantic and is MPL-2.0
-([browser/LICENSE.txt](browser/LICENSE.txt)), apart from the few files whose header says otherwise. Every source
-file names its licence.
+Iroise is free software, under three licences:
+
+- **BSD-2-Clause** ([LICENSE](LICENSE)), like Ladybird itself: our front end for the engine (`ui/`), the launcher,
+  the scripts and our patches to Ladybird (`patches/`).
+- **MPL-2.0** ([LICENSES/MPL-2.0.txt](LICENSES/MPL-2.0.txt)): the browser interface in `browser/`, which comes
+  from Jolla's [sailfish-browser](https://github.com/sailfishos/sailfish-browser) by way of Atlantic.
+- **LGPL-2.1-or-later** ([LICENSES/LGPL-2.1-or-later.txt](LICENSES/LGPL-2.1-or-later.txt)): the few files under
+  `browser/` whose header says so, carried over from Atlantic.
+
+A file's header names its licence; a file without one takes the licence of the part it is in. Ladybird, fetched
+at build time, keeps its own licence.
