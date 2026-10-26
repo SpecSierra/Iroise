@@ -33,9 +33,13 @@ target_include_directories(iroiseengine PRIVATE ${LADYBIRD_SOURCE_DIR} ${LADYBIR
 # What each process's own executable links (Services/*/CMakeLists.txt), except LibMain, whose main() is ours.
 target_link_libraries(iroiseengine PRIVATE
     LibWebView LibCore LibSandbox LibThreading LibFileSystem LibURL LibAudio LibMedia LibMediaCodecs LibUnicode
-    audioserverservice compositorservice imagedecoderservice mediaserverservice requestserverservice
+    audioserverservice imagedecoderservice mediaserverservice requestserverservice
     videodecoderserverservice webcontentservice webworkerservice
     OpenSSL::Crypto OpenSSL::SSL)
+# Upstream fails the configuration when anything but the Compositor reaches Skia (check_skia_confinement.cmake). The
+# one executable must link it for its Compositor role; the check walks only plain target names, so this one goes
+# through a generator expression.
+target_link_libraries(iroiseengine PRIVATE $<BUILD_INTERFACE:compositorservice>)
 
 add_executable(ladybird EngineLauncher.cpp)
 target_link_libraries(ladybird PRIVATE iroiseengine)
