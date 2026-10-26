@@ -25,8 +25,15 @@ mkdir -p "$OUT/bin" "$ENGINE" "$SHARE/share" "$SHARE/qml/shared" "$SHARE/transla
 # needs CXXABI_1.3.15). Only engine processes load these: the app's executable loads either the engine or the
 # interface (browser/apps/launcher), and the interface uses the phone's own runtime with Qt.
 cp -L "$BUILD/lib/libiroiseengine.so" "$ENGINE/"
-ldd "$BUILD/lib/libiroiseengine.so" | awk '/=>/ {print $3}' | grep -E "^$BUILD/|/libstdc\+\+\.so|/libgcc_s\.so" | sort -u |
-    while read -r lib; do cp -L "$lib" "$ENGINE/"; done
+# NB: Compared by real path: the build directory is reached through symlinks (CI's checkout dir has changed name, and
+#     the CMake cache keeps the old one), so the paths ldd prints need not start with $BUILD.
+BUILD_REAL="$(realpath "$BUILD")"
+ldd "$BUILD/lib/libiroiseengine.so" | awk '/=>/ {print $3}' | sort -u |
+    while read -r lib; do
+        case "$(realpath "$lib")" in
+            "$BUILD_REAL"/* | */libstdc++.so* | */libgcc_s.so*) cp -L "$lib" "$ENGINE/" ;;
+        esac
+    done
 cp -a "$BUILD/share/Lagom" "$SHARE/share/"
 # The cookie-consent answerer the engine runs in pages (scripts/fetch-autoconsent.sh).
 "$ROOT/scripts/fetch-autoconsent.sh"
