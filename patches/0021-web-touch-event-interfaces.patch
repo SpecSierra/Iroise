@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibWeb/CMakeLists.txt b/Libraries/LibWeb/CMakeLists.txt
-index dcc73e64..958da519 100644
+index 32aea2e0e..501da6c5e 100644
 --- a/Libraries/LibWeb/CMakeLists.txt
 +++ b/Libraries/LibWeb/CMakeLists.txt
-@@ -975,6 +975,9 @@ set(SOURCES
+@@ -965,6 +965,9 @@ set(SOURCES
      UIEvents/PointerEvent.cpp
      UIEvents/PointerTypes.cpp
      UIEvents/TextEvent.cpp
@@ -13,10 +13,10 @@ index dcc73e64..958da519 100644
      UIEvents/WheelEvent.cpp
      UserTiming/PerformanceMark.cpp
 diff --git a/Libraries/LibWeb/Forward.h b/Libraries/LibWeb/Forward.h
-index 4c7f0ee1..5f388694 100644
+index 9b84ffc5f..afaf82310 100644
 --- a/Libraries/LibWeb/Forward.h
 +++ b/Libraries/LibWeb/Forward.h
-@@ -1203,6 +1203,9 @@ class KeyboardEvent;
+@@ -1171,6 +1171,9 @@ class KeyboardEvent;
  class MouseEvent;
  class PointerEvent;
  class TextEvent;
@@ -27,10 +27,10 @@ index 4c7f0ee1..5f388694 100644
  
  }
 diff --git a/Libraries/LibWeb/HTML/AttributeNames.h b/Libraries/LibWeb/HTML/AttributeNames.h
-index 0d86d5fe..2d824dc1 100644
+index f38879c43..7fa1d46ee 100644
 --- a/Libraries/LibWeb/HTML/AttributeNames.h
 +++ b/Libraries/LibWeb/HTML/AttributeNames.h
-@@ -250,6 +250,10 @@ namespace AttributeNames {
+@@ -252,6 +252,10 @@ namespace AttributeNames {
      __ENUMERATE_HTML_ATTRIBUTE(onsuspend, "onsuspend")                                             \
      __ENUMERATE_HTML_ATTRIBUTE(ontimeupdate, "ontimeupdate")                                       \
      __ENUMERATE_HTML_ATTRIBUTE(ontoggle, "ontoggle")                                               \
@@ -42,7 +42,7 @@ index 0d86d5fe..2d824dc1 100644
      __ENUMERATE_HTML_ATTRIBUTE(ontransitionend, "ontransitionend")                                 \
      __ENUMERATE_HTML_ATTRIBUTE(ontransitionrun, "ontransitionrun")                                 \
 diff --git a/Libraries/LibWeb/HTML/GlobalEventHandlers.h b/Libraries/LibWeb/HTML/GlobalEventHandlers.h
-index 1fd6279f..242c7558 100644
+index 1fd6279fd..242c75580 100644
 --- a/Libraries/LibWeb/HTML/GlobalEventHandlers.h
 +++ b/Libraries/LibWeb/HTML/GlobalEventHandlers.h
 @@ -99,6 +99,10 @@
@@ -57,7 +57,7 @@ index 1fd6279f..242c7558 100644
      E(ontransitionend, HTML::EventNames::transitionend)                       \
      E(ontransitionrun, HTML::EventNames::transitionrun)                       \
 diff --git a/Libraries/LibWeb/UIEvents/EventNames.h b/Libraries/LibWeb/UIEvents/EventNames.h
-index ba800490..01cbe99e 100644
+index ba800490c..01cbe99e9 100644
 --- a/Libraries/LibWeb/UIEvents/EventNames.h
 +++ b/Libraries/LibWeb/UIEvents/EventNames.h
 @@ -46,6 +46,10 @@ namespace Web::UIEvents::EventNames {
@@ -73,7 +73,7 @@ index ba800490..01cbe99e 100644
  #define __ENUMERATE_UI_EVENT(name) extern WEB_API Utf16FlyString const& name;
 diff --git a/Libraries/LibWeb/UIEvents/Touch.cpp b/Libraries/LibWeb/UIEvents/Touch.cpp
 new file mode 100644
-index 00000000..0c1ce454
+index 000000000..568c07626
 --- /dev/null
 +++ b/Libraries/LibWeb/UIEvents/Touch.cpp
 @@ -0,0 +1,37 @@
@@ -116,7 +116,7 @@ index 00000000..0c1ce454
 +}
 diff --git a/Libraries/LibWeb/UIEvents/Touch.h b/Libraries/LibWeb/UIEvents/Touch.h
 new file mode 100644
-index 00000000..2be69280
+index 000000000..ccf407ae1
 --- /dev/null
 +++ b/Libraries/LibWeb/UIEvents/Touch.h
 @@ -0,0 +1,52 @@
@@ -174,7 +174,7 @@ index 00000000..2be69280
 +}
 diff --git a/Libraries/LibWeb/UIEvents/Touch.idl b/Libraries/LibWeb/UIEvents/Touch.idl
 new file mode 100644
-index 00000000..4f21cfb3
+index 000000000..4f21cfb3a
 --- /dev/null
 +++ b/Libraries/LibWeb/UIEvents/Touch.idl
 @@ -0,0 +1,17 @@
@@ -197,7 +197,7 @@ index 00000000..4f21cfb3
 +};
 diff --git a/Libraries/LibWeb/UIEvents/TouchEvent.cpp b/Libraries/LibWeb/UIEvents/TouchEvent.cpp
 new file mode 100644
-index 00000000..4b6076fb
+index 000000000..0aba766e6
 --- /dev/null
 +++ b/Libraries/LibWeb/UIEvents/TouchEvent.cpp
 @@ -0,0 +1,98 @@
@@ -301,7 +301,7 @@ index 00000000..4b6076fb
 +}
 diff --git a/Libraries/LibWeb/UIEvents/TouchEvent.h b/Libraries/LibWeb/UIEvents/TouchEvent.h
 new file mode 100644
-index 00000000..9b0fc34d
+index 000000000..22356020b
 --- /dev/null
 +++ b/Libraries/LibWeb/UIEvents/TouchEvent.h
 @@ -0,0 +1,58 @@
@@ -365,7 +365,7 @@ index 00000000..9b0fc34d
 +}
 diff --git a/Libraries/LibWeb/UIEvents/TouchEvent.idl b/Libraries/LibWeb/UIEvents/TouchEvent.idl
 new file mode 100644
-index 00000000..db27728c
+index 000000000..db27728c0
 --- /dev/null
 +++ b/Libraries/LibWeb/UIEvents/TouchEvent.idl
 @@ -0,0 +1,20 @@
@@ -391,7 +391,7 @@ index 00000000..db27728c
 +};
 diff --git a/Libraries/LibWeb/UIEvents/TouchEventHandlers.idl b/Libraries/LibWeb/UIEvents/TouchEventHandlers.idl
 new file mode 100644
-index 00000000..467c9fcc
+index 000000000..467c9fccc
 --- /dev/null
 +++ b/Libraries/LibWeb/UIEvents/TouchEventHandlers.idl
 @@ -0,0 +1,7 @@
@@ -404,7 +404,7 @@ index 00000000..467c9fcc
 +};
 diff --git a/Libraries/LibWeb/UIEvents/TouchList.cpp b/Libraries/LibWeb/UIEvents/TouchList.cpp
 new file mode 100644
-index 00000000..67bf089a
+index 000000000..fca4b5ca8
 --- /dev/null
 +++ b/Libraries/LibWeb/UIEvents/TouchList.cpp
 @@ -0,0 +1,40 @@
@@ -450,7 +450,7 @@ index 00000000..67bf089a
 +}
 diff --git a/Libraries/LibWeb/UIEvents/TouchList.h b/Libraries/LibWeb/UIEvents/TouchList.h
 new file mode 100644
-index 00000000..51e7070c
+index 000000000..ca6cf564d
 --- /dev/null
 +++ b/Libraries/LibWeb/UIEvents/TouchList.h
 @@ -0,0 +1,35 @@
@@ -491,7 +491,7 @@ index 00000000..51e7070c
 +}
 diff --git a/Libraries/LibWeb/UIEvents/TouchList.idl b/Libraries/LibWeb/UIEvents/TouchList.idl
 new file mode 100644
-index 00000000..f8a4c237
+index 000000000..f8a4c237b
 --- /dev/null
 +++ b/Libraries/LibWeb/UIEvents/TouchList.idl
 @@ -0,0 +1,6 @@
@@ -502,10 +502,10 @@ index 00000000..f8a4c237
 +    getter Touch? item(unsigned long index);
 +};
 diff --git a/Libraries/LibWeb/idl_files.cmake b/Libraries/LibWeb/idl_files.cmake
-index 05be9543..d3317587 100644
+index 0998c303f..c71a9d851 100644
 --- a/Libraries/LibWeb/idl_files.cmake
 +++ b/Libraries/LibWeb/idl_files.cmake
-@@ -581,6 +581,10 @@ libweb_js_bindings(UIEvents/MouseEvent)
+@@ -611,6 +611,10 @@ libweb_js_bindings(UIEvents/MouseEvent)
  libweb_js_bindings(UIEvents/PointerEvent)
  libweb_js_bindings(UIEvents/PointerEventHandlers)
  libweb_js_bindings(UIEvents/TextEvent)

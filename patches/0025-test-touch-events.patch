@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibWeb/Internals/Internals.cpp b/Libraries/LibWeb/Internals/Internals.cpp
-index 8b9463e3..91f34ad7 100644
+index 39cb89041..9a8627b41 100644
 --- a/Libraries/LibWeb/Internals/Internals.cpp
 +++ b/Libraries/LibWeb/Internals/Internals.cpp
-@@ -835,6 +835,55 @@ void Internals::mouse_cancel()
+@@ -837,6 +837,55 @@ void Internals::mouse_cancel()
      this->page().handle_mousecancel();
  }
  
@@ -59,10 +59,10 @@ index 8b9463e3..91f34ad7 100644
  {
      click_and_hold(x, y, click_count, button, modifiers);
 diff --git a/Libraries/LibWeb/Internals/Internals.h b/Libraries/LibWeb/Internals/Internals.h
-index 7e4714dd..e1027886 100644
+index 1c8e42b1d..a38671798 100644
 --- a/Libraries/LibWeb/Internals/Internals.h
 +++ b/Libraries/LibWeb/Internals/Internals.h
-@@ -112,6 +112,13 @@ public:
+@@ -116,6 +116,13 @@ public:
  
      // High-level mouse conveniences
      void click(double x, double y, WebIDL::UnsignedShort click_count, WebIDL::UnsignedShort button, WebIDL::UnsignedShort modifiers);
@@ -77,10 +77,10 @@ index 7e4714dd..e1027886 100644
      void wheel(GC::Ref<WebIDL::Promise>, double x, double y, double delta_x, double delta_y, bool precise, Bindings::ScrollGesturePhase, Bindings::WheelTicks const&);
      void wheel(double x, double y, double delta_x, double delta_y, bool precise, Bindings::ScrollGesturePhase, Bindings::WheelTicks const&, GC::Ref<WebIDL::Promise>);
 diff --git a/Libraries/LibWeb/Internals/Internals.idl b/Libraries/LibWeb/Internals/Internals.idl
-index eba949b6..dbd270c5 100644
+index c68f10a60..9767f18b8 100644
 --- a/Libraries/LibWeb/Internals/Internals.idl
 +++ b/Libraries/LibWeb/Internals/Internals.idl
-@@ -96,6 +96,17 @@ interface Internals {
+@@ -101,6 +101,17 @@ interface Internals {
      // viewport if none is given.
      object compositorScrollState(optional Element? scroller = null);
      undefined pinch(double x, double y, double scaleDelta, optional unsigned short modifiers = 0);
@@ -100,7 +100,7 @@ index eba949b6..dbd270c5 100644
      DOMString currentCursor();
 diff --git a/Tests/LibWeb/Text/expected/UIEvents/touch-action.txt b/Tests/LibWeb/Text/expected/UIEvents/touch-action.txt
 new file mode 100644
-index 00000000..19d5d292
+index 000000000..19d5d292c
 --- /dev/null
 +++ b/Tests/LibWeb/Text/expected/UIEvents/touch-action.txt
 @@ -0,0 +1,17 @@
@@ -123,7 +123,7 @@ index 00000000..19d5d292
 +  outer: pointermove
 diff --git a/Tests/LibWeb/Text/expected/UIEvents/touch-cancelled-touch-has-no-mouse-events.txt b/Tests/LibWeb/Text/expected/UIEvents/touch-cancelled-touch-has-no-mouse-events.txt
 new file mode 100644
-index 00000000..4aa4f43b
+index 000000000..4aa4f43b9
 --- /dev/null
 +++ b/Tests/LibWeb/Text/expected/UIEvents/touch-cancelled-touch-has-no-mouse-events.txt
 @@ -0,0 +1,4 @@
@@ -133,7 +133,7 @@ index 00000000..4aa4f43b
 +  down: click
 diff --git a/Tests/LibWeb/Text/expected/UIEvents/touch-event-interfaces.txt b/Tests/LibWeb/Text/expected/UIEvents/touch-event-interfaces.txt
 new file mode 100644
-index 00000000..8ed04395
+index 000000000..8ed043955
 --- /dev/null
 +++ b/Tests/LibWeb/Text/expected/UIEvents/touch-event-interfaces.txt
 @@ -0,0 +1,8 @@
@@ -147,7 +147,7 @@ index 00000000..8ed04395
 +attribute handler ran: true
 diff --git a/Tests/LibWeb/Text/expected/UIEvents/touch-pointer-target-removed.txt b/Tests/LibWeb/Text/expected/UIEvents/touch-pointer-target-removed.txt
 new file mode 100644
-index 00000000..4b4f36c3
+index 000000000..4b4f36c3b
 --- /dev/null
 +++ b/Tests/LibWeb/Text/expected/UIEvents/touch-pointer-target-removed.txt
 @@ -0,0 +1,3 @@
@@ -156,7 +156,7 @@ index 00000000..4b4f36c3
 +touchend at tile
 diff --git a/Tests/LibWeb/Text/expected/UIEvents/touch-scroll-decided-by-touchmove.txt b/Tests/LibWeb/Text/expected/UIEvents/touch-scroll-decided-by-touchmove.txt
 new file mode 100644
-index 00000000..9200a092
+index 000000000..9200a0920
 --- /dev/null
 +++ b/Tests/LibWeb/Text/expected/UIEvents/touch-scroll-decided-by-touchmove.txt
 @@ -0,0 +1,13 @@
@@ -175,7 +175,7 @@ index 00000000..9200a092
 +  lets: touchmove, cancelable false
 diff --git a/Tests/LibWeb/Text/expected/UIEvents/touch-tap-event-order.txt b/Tests/LibWeb/Text/expected/UIEvents/touch-tap-event-order.txt
 new file mode 100644
-index 00000000..6e835233
+index 000000000..6e835233f
 --- /dev/null
 +++ b/Tests/LibWeb/Text/expected/UIEvents/touch-tap-event-order.txt
 @@ -0,0 +1,14 @@
@@ -195,7 +195,7 @@ index 00000000..6e835233
 +click
 diff --git a/Tests/LibWeb/Text/input/UIEvents/touch-action.html b/Tests/LibWeb/Text/input/UIEvents/touch-action.html
 new file mode 100644
-index 00000000..99166889
+index 000000000..70b9dff40
 --- /dev/null
 +++ b/Tests/LibWeb/Text/input/UIEvents/touch-action.html
 @@ -0,0 +1,35 @@
@@ -236,7 +236,7 @@ index 00000000..99166889
 +</script>
 diff --git a/Tests/LibWeb/Text/input/UIEvents/touch-cancelled-touch-has-no-mouse-events.html b/Tests/LibWeb/Text/input/UIEvents/touch-cancelled-touch-has-no-mouse-events.html
 new file mode 100644
-index 00000000..0ff9d555
+index 000000000..0ff9d555a
 --- /dev/null
 +++ b/Tests/LibWeb/Text/input/UIEvents/touch-cancelled-touch-has-no-mouse-events.html
 @@ -0,0 +1,33 @@
@@ -275,7 +275,7 @@ index 00000000..0ff9d555
 +</script>
 diff --git a/Tests/LibWeb/Text/input/UIEvents/touch-event-interfaces.html b/Tests/LibWeb/Text/input/UIEvents/touch-event-interfaces.html
 new file mode 100644
-index 00000000..ef162d98
+index 000000000..f8883e872
 --- /dev/null
 +++ b/Tests/LibWeb/Text/input/UIEvents/touch-event-interfaces.html
 @@ -0,0 +1,34 @@
@@ -315,7 +315,7 @@ index 00000000..ef162d98
 +</script>
 diff --git a/Tests/LibWeb/Text/input/UIEvents/touch-pointer-target-removed.html b/Tests/LibWeb/Text/input/UIEvents/touch-pointer-target-removed.html
 new file mode 100644
-index 00000000..22258d21
+index 000000000..438acb4e2
 --- /dev/null
 +++ b/Tests/LibWeb/Text/input/UIEvents/touch-pointer-target-removed.html
 @@ -0,0 +1,22 @@
@@ -343,7 +343,7 @@ index 00000000..22258d21
 +</script>
 diff --git a/Tests/LibWeb/Text/input/UIEvents/touch-scroll-decided-by-touchmove.html b/Tests/LibWeb/Text/input/UIEvents/touch-scroll-decided-by-touchmove.html
 new file mode 100644
-index 00000000..96ea5718
+index 000000000..488f044db
 --- /dev/null
 +++ b/Tests/LibWeb/Text/input/UIEvents/touch-scroll-decided-by-touchmove.html
 @@ -0,0 +1,34 @@
@@ -383,7 +383,7 @@ index 00000000..96ea5718
 +</script>
 diff --git a/Tests/LibWeb/Text/input/UIEvents/touch-tap-event-order.html b/Tests/LibWeb/Text/input/UIEvents/touch-tap-event-order.html
 new file mode 100644
-index 00000000..481e749f
+index 000000000..5b8769b79
 --- /dev/null
 +++ b/Tests/LibWeb/Text/input/UIEvents/touch-tap-event-order.html
 @@ -0,0 +1,22 @@

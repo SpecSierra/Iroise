@@ -35,10 +35,7 @@ ENUMERATE_ENGINE_ROLES(DECLARE_ROLE)
 
 namespace Main {
 
-static int s_return_code_for_errors = 1;
-
-int return_code_for_errors() { return s_return_code_for_errors; }
-void set_return_code_for_errors(int code) { s_return_code_for_errors = code; }
+int return_code_for_errors() { return 1; }
 
 }
 

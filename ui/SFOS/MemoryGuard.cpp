@@ -88,7 +88,7 @@ void raise_out_of_memory_priority(StringView role)
     int score = 0;
     if (role == "WebContent"sv || role == "WebWorker"sv)
         score = 950;
-    else if (role == "ImageDecoder"sv || role == "WasmCompiler"sv)
+    else if (role == "ImageDecoder"sv)
         score = 900;
     else if (role == "MediaServer"sv || role == "VideoDecoderServer"sv || role == "AudioServer"sv)
         score = 800;

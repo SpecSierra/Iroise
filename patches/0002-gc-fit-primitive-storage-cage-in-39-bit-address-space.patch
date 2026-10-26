@@ -1,5 +1,5 @@
 diff --git a/Libraries/LibGC/PrimitiveStorage.h b/Libraries/LibGC/PrimitiveStorage.h
-index cd71044d..dd57572e 100644
+index cd71044d7..dd57572ee 100644
 --- a/Libraries/LibGC/PrimitiveStorage.h
 +++ b/Libraries/LibGC/PrimitiveStorage.h
 @@ -30,7 +30,13 @@ public:
@@ -17,11 +17,11 @@ index cd71044d..dd57572e 100644
      static constexpr size_t cage_offset_mask = default_cage_size - 1;
      // NB: JIT code accesses typed array elements at a masked offset plus a
 diff --git a/Libraries/LibJS/Rust/build.rs b/Libraries/LibJS/Rust/build.rs
-index 6d6889cc..fc408791 100644
+index 873b1f5c8..cb39f3b1b 100644
 --- a/Libraries/LibJS/Rust/build.rs
 +++ b/Libraries/LibJS/Rust/build.rs
-@@ -110,6 +110,16 @@ fn heap_region_size(target: &Target, thread_sanitizer: bool) -> u64 {
-     }
+@@ -117,6 +117,16 @@ fn fnv1a_64(bytes: &[u8]) -> u64 {
+     })
  }
  
 +/// Mirrors GC::PrimitiveStorage::default_cage_size in Libraries/LibGC/PrimitiveStorage.h.
@@ -37,7 +37,7 @@ index 6d6889cc..fc408791 100644
  fn main() {
      let manifest_directory = PathBuf::from(env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR"));
      let output_directory = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR"));
-@@ -133,7 +143,7 @@ fn main() {
+@@ -153,7 +163,7 @@ fn main() {
      let configuration = layout_table::LayoutConfiguration {
          heap_region_offset_mask: heap_region_size(&target, thread_sanitizer) - 1,
          // Mirrors GC::PrimitiveStorage::default_cage_size.

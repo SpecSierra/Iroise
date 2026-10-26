@@ -1,5 +1,5 @@
 diff --git a/Libraries/LibMedia/FFmpeg/SystemFFmpegDecoders.cpp b/Libraries/LibMedia/FFmpeg/SystemFFmpegDecoders.cpp
-index 19647f7d..e9ccf6aa 100644
+index 19647f7d8..e9ccf6aac 100644
 --- a/Libraries/LibMedia/FFmpeg/SystemFFmpegDecoders.cpp
 +++ b/Libraries/LibMedia/FFmpeg/SystemFFmpegDecoders.cpp
 @@ -11,10 +11,16 @@
@@ -30,7 +30,7 @@ index 19647f7d..e9ccf6aa 100644
      return NonnullOwnPtr<VideoDecoder> { TRY(FFmpegVideoDecoder::try_create(library->functions(), codec_id, codec_initialization_data)) };
  }
 diff --git a/Libraries/LibMediaCodecs/FFmpeg/FFmpegFunctions.h b/Libraries/LibMediaCodecs/FFmpeg/FFmpegFunctions.h
-index 031bf8bd..6a619982 100644
+index 031bf8bdb..6a6199823 100644
 --- a/Libraries/LibMediaCodecs/FFmpeg/FFmpegFunctions.h
 +++ b/Libraries/LibMediaCodecs/FFmpeg/FFmpegFunctions.h
 @@ -21,9 +21,11 @@ extern "C" {
@@ -47,7 +47,7 @@ index 031bf8bd..6a619982 100644
  
  }
 diff --git a/Libraries/LibMediaCodecs/FFmpeg/SystemFFmpeg.cpp b/Libraries/LibMediaCodecs/FFmpeg/SystemFFmpeg.cpp
-index f4997177..7cf54599 100644
+index f49971778..7cf54599c 100644
 --- a/Libraries/LibMediaCodecs/FFmpeg/SystemFFmpeg.cpp
 +++ b/Libraries/LibMediaCodecs/FFmpeg/SystemFFmpeg.cpp
 @@ -59,6 +59,26 @@ static void resolve_codec_ids(FFmpegFunctions& functions)

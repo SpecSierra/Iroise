@@ -1,5 +1,5 @@
 diff --git a/Services/AudioServer/PlaybackStreamPulseAudio.cpp b/Services/AudioServer/PlaybackStreamPulseAudio.cpp
-index c985e53c..02dabf6f 100644
+index c985e53c4..02dabf6fe 100644
 --- a/Services/AudioServer/PlaybackStreamPulseAudio.cpp
 +++ b/Services/AudioServer/PlaybackStreamPulseAudio.cpp
 @@ -50,9 +50,9 @@ NonnullRefPtr<PlaybackStream::CreatePromise> PlaybackStreamPulseAudio::create(Ou

@@ -1,5 +1,5 @@
 diff --git a/Libraries/LibWeb/HTML/Navigator.cpp b/Libraries/LibWeb/HTML/Navigator.cpp
-index 6cf45cc2..405e0db0 100644
+index 6cf45cc2b..405e0db0c 100644
 --- a/Libraries/LibWeb/HTML/Navigator.cpp
 +++ b/Libraries/LibWeb/HTML/Navigator.cpp
 @@ -159,8 +159,8 @@ GC::Ref<WebXR::XRSystem> Navigator::xr()
@@ -14,10 +14,10 @@ index 6cf45cc2..405e0db0 100644
  
  GC::Ref<ServiceWorker::ServiceWorkerContainer> Navigator::service_worker()
 diff --git a/Libraries/LibWeb/HTML/Window.cpp b/Libraries/LibWeb/HTML/Window.cpp
-index ba22e97e..59c1f95e 100644
+index 22a88a965..b423392f1 100644
 --- a/Libraries/LibWeb/HTML/Window.cpp
 +++ b/Libraries/LibWeb/HTML/Window.cpp
-@@ -620,10 +620,11 @@ CSS::Parser::ValueParserFFI::FfiMediaFeatureValue Window::query_media_feature(CS
+@@ -619,10 +619,11 @@ CSS::Parser::ValueParserFFI::FfiMediaFeatureValue Window::query_media_feature(CS
  
      // https://www.w3.org/TR/mediaqueries-5/#media-descriptor-table
      switch (media_feature) {
@@ -31,7 +31,7 @@ index ba22e97e..59c1f95e 100644
      case CSS::MediaFeatureID::AspectRatio:
          return ratio_media_feature_value(inner_width(), inner_height());
      case CSS::MediaFeatureID::Color:
-@@ -656,7 +657,7 @@ CSS::Parser::ValueParserFFI::FfiMediaFeatureValue Window::query_media_feature(CS
+@@ -655,7 +656,7 @@ CSS::Parser::ValueParserFFI::FfiMediaFeatureValue Window::query_media_feature(CS
      case CSS::MediaFeatureID::HorizontalViewportSegments:
          return integer_media_feature_value(1);
      case CSS::MediaFeatureID::Hover:
@@ -40,7 +40,7 @@ index ba22e97e..59c1f95e 100644
      case CSS::MediaFeatureID::InvertedColors:
          return ident_media_feature_value(CSS::Keyword::None);
      case CSS::MediaFeatureID::Monochrome:
-@@ -670,7 +671,7 @@ CSS::Parser::ValueParserFFI::FfiMediaFeatureValue Window::query_media_feature(CS
+@@ -669,7 +670,7 @@ CSS::Parser::ValueParserFFI::FfiMediaFeatureValue Window::query_media_feature(CS
      case CSS::MediaFeatureID::OverflowInline:
          return ident_media_feature_value(CSS::Keyword::Scroll);
      case CSS::MediaFeatureID::Pointer:
@@ -50,7 +50,7 @@ index ba22e97e..59c1f95e 100644
          // https://github.com/w3c/csswg-drafts/issues/7213
          // An SVG used as an image answers with the used `color-scheme` of the element referencing
 diff --git a/Libraries/LibWebCommon/Loader/UserAgent.h b/Libraries/LibWebCommon/Loader/UserAgent.h
-index d2239889..20118343 100644
+index d22398891..c7d4bcaf2 100644
 --- a/Libraries/LibWebCommon/Loader/UserAgent.h
 +++ b/Libraries/LibWebCommon/Loader/UserAgent.h
 @@ -85,7 +85,6 @@ namespace Web {

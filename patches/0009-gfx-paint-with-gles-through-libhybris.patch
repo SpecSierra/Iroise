@@ -1,9 +1,9 @@
 diff --git a/Libraries/LibGfx/CMakeLists.txt b/Libraries/LibGfx/CMakeLists.txt
-index 10e27efc..5643d600 100644
+index ab662ba03..b13a7f3b6 100644
 --- a/Libraries/LibGfx/CMakeLists.txt
 +++ b/Libraries/LibGfx/CMakeLists.txt
-@@ -70,6 +70,10 @@ if (HAS_VULKAN)
-     list(APPEND SOURCES ImportedYCbCrVulkanImage.cpp SkiaVulkanMemoryAllocator.cpp VulkanContext.cpp VulkanImage.cpp)
+@@ -59,6 +59,10 @@ if (HAS_VULKAN)
+     list(APPEND SOURCES ImportedYCbCrVulkanImage.cpp VulkanContext.cpp VulkanImage.cpp)
  endif()
  
 +if (USE_GLES_HYBRIS)
@@ -11,10 +11,10 @@ index 10e27efc..5643d600 100644
 +endif()
 +
  if (HAS_FONTCONFIG)
-     list(APPEND SOURCES Font/GlobalFontConfig.cpp)
- endif()
-@@ -115,6 +119,12 @@ if (HAS_DIRECTX)
-     target_link_libraries(LibGfx PRIVATE d3d12 dxgi d3dcompiler)
+     list(APPEND SOURCES Font/GlobalFontConfig.cpp Font/SystemFontMatcherFontconfig.cpp)
+ elseif (APPLE)
+@@ -114,6 +118,12 @@ if (WIN32)
+     target_link_libraries(LibGfx PRIVATE dwrite)
  endif()
  
 +if (USE_GLES_HYBRIS)
@@ -24,11 +24,11 @@ index 10e27efc..5643d600 100644
 +endif()
 +
  if (HAS_VULKAN)
-     # Public LibGfx headers include <vulkan/vulkan.h>. Only LibGfx calls the Vulkan loader.
+     # Public LibGfx headers include <vulkan/vulkan.h>.
      target_link_libraries(LibGfx PUBLIC Vulkan::Headers)
 diff --git a/Libraries/LibGfx/GLESContext.cpp b/Libraries/LibGfx/GLESContext.cpp
 new file mode 100644
-index 00000000..6e3e6647
+index 000000000..9e4727107
 --- /dev/null
 +++ b/Libraries/LibGfx/GLESContext.cpp
 @@ -0,0 +1,357 @@
@@ -391,7 +391,7 @@ index 00000000..6e3e6647
 +}
 diff --git a/Libraries/LibGfx/GLESContext.h b/Libraries/LibGfx/GLESContext.h
 new file mode 100644
-index 00000000..bcc57698
+index 000000000..84aaf72a8
 --- /dev/null
 +++ b/Libraries/LibGfx/GLESContext.h
 @@ -0,0 +1,62 @@
@@ -458,7 +458,7 @@ index 00000000..bcc57698
 +
 +}
 diff --git a/Libraries/LibGfx/LinuxDmaBufHandle.cpp b/Libraries/LibGfx/LinuxDmaBufHandle.cpp
-index 64ddc9a1..ba44019d 100644
+index 64ddc9a10..ba44019df 100644
 --- a/Libraries/LibGfx/LinuxDmaBufHandle.cpp
 +++ b/Libraries/LibGfx/LinuxDmaBufHandle.cpp
 @@ -25,6 +25,7 @@ ErrorOr<void> encode(Encoder& encoder, Gfx::LinuxDmaBufHandle const& dma_buf)
@@ -478,7 +478,7 @@ index 64ddc9a1..ba44019d 100644
      for (auto const& plane : dma_buf.planes) {
          if (plane.object_index >= dma_buf.objects.size())
 diff --git a/Libraries/LibGfx/LinuxDmaBufHandle.h b/Libraries/LibGfx/LinuxDmaBufHandle.h
-index db366ed9..d3660bf9 100644
+index db366ed9f..d3660bf9c 100644
 --- a/Libraries/LibGfx/LinuxDmaBufHandle.h
 +++ b/Libraries/LibGfx/LinuxDmaBufHandle.h
 @@ -29,6 +29,8 @@ struct LinuxDmaBufHandle {
@@ -490,89 +490,8 @@ index db366ed9..d3660bf9 100644
  };
  
  }
-diff --git a/Libraries/LibGfx/PaintingSurface.cpp b/Libraries/LibGfx/PaintingSurface.cpp
-index c4c70ebf..d53b5b11 100644
---- a/Libraries/LibGfx/PaintingSurface.cpp
-+++ b/Libraries/LibGfx/PaintingSurface.cpp
-@@ -26,6 +26,10 @@
- #    include <LibGfx/VulkanImage.h>
- #    include <gpu/ganesh/vk/GrVkBackendSurface.h>
- #    include <gpu/ganesh/vk/GrVkTypes.h>
-+#elif defined(USE_GLES_HYBRIS)
-+#    include <LibGfx/GLESContext.h>
-+#    include <gpu/ganesh/gl/GrGLBackendSurface.h>
-+#    include <gpu/ganesh/gl/GrGLTypes.h>
- #elif defined(USE_DIRECTX)
- #    include <AK/Windows.h>
- #    include <LibGfx/D3DSharedTexture.h>
-@@ -45,7 +49,7 @@ struct PaintingSurface::Impl {
-     bool wraps_shared_image { false };
- };
- 
--#if defined(AK_OS_MACOS) || defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX)
-+#if defined(AK_OS_MACOS) || defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX) || defined(USE_GLES_HYBRIS)
- static GrSurfaceOrigin origin_to_sk_origin(PaintingSurface::Origin origin)
- {
-     switch (origin) {
-@@ -163,6 +167,26 @@ NonnullRefPtr<PaintingSurface> PaintingSurface::wrap_bitmap(Bitmap& bitmap)
-     return adopt_ref(*new PaintingSurface(make<Impl>(RefPtr<SkiaBackendContext> {}, size, surface, bitmap)));
- }
- 
-+#ifdef USE_GLES_HYBRIS
-+NonnullRefPtr<PaintingSurface> PaintingSurface::create_from_gles_image(NonnullRefPtr<SkiaBackendContext> context, NonnullRefPtr<GLESImage> image, Origin origin)
-+{
-+    // NB: GL sees the BGRA gralloc buffer as an RGBA texture; the driver keeps the bytes in BGRA order in memory.
-+    static constexpr GrGLenum gl_rgba8 = 0x8058;
-+    GrGLFramebufferInfo framebuffer_info {};
-+    framebuffer_info.fFBOID = image->framebuffer;
-+    framebuffer_info.fFormat = gl_rgba8;
-+    auto render_target = GrBackendRenderTargets::MakeGL(image->size.width(), image->size.height(), 0, 8, framebuffer_info);
-+
-+    auto size = image->size;
-+    // Skia holds a reference to the image until it lets go of the surface.
-+    image->ref();
-+    auto surface = SkSurfaces::WrapBackendRenderTarget(context->sk_context(), render_target, origin_to_sk_origin(origin), kRGBA_8888_SkColorType,
-+        SkColorSpace::MakeSRGB(), nullptr, [](void* image) { static_cast<GLESImage*>(image)->unref(); }, image.ptr());
-+    VERIFY(surface);
-+    return adopt_ref(*new PaintingSurface(make<Impl>(context, size, surface, nullptr, true)));
-+}
-+#endif
-+
- #ifdef AK_OS_MACOS
- NonnullRefPtr<PaintingSurface> PaintingSurface::create_from_shared_image_buffer(SharedImageBuffer& shared_image_buffer, NonnullRefPtr<SkiaBackendContext> context, Origin origin)
- {
-diff --git a/Libraries/LibGfx/PaintingSurface.h b/Libraries/LibGfx/PaintingSurface.h
-index 96fa13b9..a1323012 100644
---- a/Libraries/LibGfx/PaintingSurface.h
-+++ b/Libraries/LibGfx/PaintingSurface.h
-@@ -22,6 +22,14 @@ struct VulkanImage;
- }
- #endif
- 
-+#ifdef USE_GLES_HYBRIS
-+namespace Gfx {
-+
-+struct GLESImage;
-+
-+}
-+#endif
-+
- #ifdef USE_DIRECTX
- #    include <AK/Error.h>
- 
-@@ -63,6 +71,10 @@ public:
-     static NonnullRefPtr<PaintingSurface> create_from_vkimage(NonnullRefPtr<SkiaBackendContext> context, NonnullRefPtr<VulkanImage> vulkan_image, Origin origin);
- #endif
- 
-+#ifdef USE_GLES_HYBRIS
-+    static NonnullRefPtr<PaintingSurface> create_from_gles_image(NonnullRefPtr<SkiaBackendContext>, NonnullRefPtr<GLESImage>, Origin = Origin::TopLeft);
-+#endif
-+
- #ifdef USE_DIRECTX
-     static ErrorOr<NonnullRefPtr<PaintingSurface>> create_from_d3d_texture(NonnullRefPtr<SkiaBackendContext>, NonnullRefPtr<D3DSharedTexture>, Origin = Origin::TopLeft);
- #endif
 diff --git a/Libraries/LibGfx/SharedImage.h b/Libraries/LibGfx/SharedImage.h
-index bead7845..a0a0d81b 100644
+index bead78452..a0a0d81b3 100644
 --- a/Libraries/LibGfx/SharedImage.h
 +++ b/Libraries/LibGfx/SharedImage.h
 @@ -32,6 +32,11 @@ struct WindowsD3DHandle {
@@ -588,7 +507,7 @@ index bead7845..a0a0d81b 100644
  struct VulkanImage;
  SharedImage duplicate_shared_image(VulkanImage const&);
 diff --git a/Libraries/LibGfx/SharedImageBuffer.cpp b/Libraries/LibGfx/SharedImageBuffer.cpp
-index 78cffc63..86a79925 100644
+index 78cffc63d..86a79925d 100644
 --- a/Libraries/LibGfx/SharedImageBuffer.cpp
 +++ b/Libraries/LibGfx/SharedImageBuffer.cpp
 @@ -7,7 +7,7 @@
@@ -628,7 +547,7 @@ index 78cffc63..86a79925 100644
              return SharedImageBuffer(move(bitmap), move(dmabuf));
  #    else
 diff --git a/Libraries/LibGfx/SharedImageBuffer.h b/Libraries/LibGfx/SharedImageBuffer.h
-index 6e3fe63a..fa6baad3 100644
+index 6e3fe63a7..fa6baad32 100644
 --- a/Libraries/LibGfx/SharedImageBuffer.h
 +++ b/Libraries/LibGfx/SharedImageBuffer.h
 @@ -42,7 +42,7 @@ public:
@@ -649,10 +568,179 @@ index 6e3fe63a..fa6baad3 100644
      SharedImageBuffer(NonnullRefPtr<Bitmap>, LinuxDmaBufHandle&&);
      Optional<LinuxDmaBufHandle> m_linux_dmabuf_handle;
  #    endif
-diff --git a/Libraries/LibGfx/SkiaBackendContext.cpp b/Libraries/LibGfx/SkiaBackendContext.cpp
-index eca5ca75..6ce6530d 100644
---- a/Libraries/LibGfx/SkiaBackendContext.cpp
-+++ b/Libraries/LibGfx/SkiaBackendContext.cpp
+diff --git a/Meta/CMake/check_for_dependencies.cmake b/Meta/CMake/check_for_dependencies.cmake
+index 208c0e734..7c1813639 100644
+--- a/Meta/CMake/check_for_dependencies.cmake
++++ b/Meta/CMake/check_for_dependencies.cmake
+@@ -40,7 +40,16 @@ if (NOT APPLE AND NOT ANDROID AND NOT WIN32)
+     add_cxx_compile_definitions(USE_FONTCONFIG=1)
+ endif()
+ 
+-if (NOT APPLE AND NOT WIN32)
++# Ladybird for Sailfish OS paints with the system's EGL and GLES (libhybris): the Jolla Store allows those
++# libraries and not Vulkan.
++if (LADYBIRD_UI_SFOS OR DEFINED ENV{LADYBIRD_UI_SFOS})
++    set(USE_GLES_HYBRIS ON CACHE BOOL "" FORCE)
++    add_cxx_compile_definitions(USE_GLES_HYBRIS=1)
++else()
++    set(USE_GLES_HYBRIS OFF CACHE BOOL "" FORCE)
++endif()
++
++if (NOT APPLE AND NOT WIN32 AND NOT USE_GLES_HYBRIS)
+     find_package(VulkanHeaders CONFIG QUIET)
+     find_package(Vulkan QUIET)
+     find_program(GLSLANG_VALIDATOR glslangValidator)
+diff --git a/Services/Compositor/BackingStoreManager.cpp b/Services/Compositor/BackingStoreManager.cpp
+index 5fd9bef56..5916e8b4b 100644
+--- a/Services/Compositor/BackingStoreManager.cpp
++++ b/Services/Compositor/BackingStoreManager.cpp
+@@ -21,9 +21,13 @@
+ #    include <LibGfx/D3DSharedTexture.h>
+ #endif
+ 
++#ifdef USE_GLES_HYBRIS
++#    include <LibGfx/GLESContext.h>
++#endif
++
+ namespace Compositor {
+ 
+-#if defined(USE_DIRECTX) || defined(USE_VULKAN)
++#if defined(USE_DIRECTX) || defined(USE_VULKAN) || defined(USE_GLES_HYBRIS)
+ static NonnullRefPtr<Gfx::PaintingSurface> create_gpu_painting_surface_with_bitmap_flush(Gfx::IntSize size, Gfx::SharedImageBuffer& buffer, RefPtr<Gfx::SkiaBackendContext> const& skia_backend_context)
+ {
+     auto surface = Gfx::PaintingSurface::create_with_size(size, Gfx::BitmapFormat::BGRA8888, Gfx::AlphaType::Premultiplied, skia_backend_context);
+@@ -41,7 +45,7 @@ static NonnullRefPtr<Gfx::PaintingSurface> create_shareable_bitmap_backing_store
+     if (skia_backend_context)
+         return Gfx::PaintingSurface::create_from_shared_image_buffer(buffer, *skia_backend_context);
+ #else
+-#    if defined(USE_DIRECTX) || defined(USE_VULKAN)
++#    if defined(USE_DIRECTX) || defined(USE_VULKAN) || defined(USE_GLES_HYBRIS)
+     if (skia_backend_context)
+         return create_gpu_painting_surface_with_bitmap_flush(size, buffer, skia_backend_context);
+ #    else
+@@ -52,7 +56,7 @@ static NonnullRefPtr<Gfx::PaintingSurface> create_shareable_bitmap_backing_store
+     return Gfx::PaintingSurface::wrap_bitmap(*buffer.bitmap());
+ }
+ 
+-#if defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX)
++#if defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX) || defined(USE_GLES_HYBRIS)
+ struct GpuBackingStore {
+     RefPtr<Gfx::PaintingSurface> surface;
+     Gfx::SharedImage shared_image;
+@@ -74,6 +78,19 @@ static ErrorOr<GpuBackingStore> create_shared_gpu_backing_store(Gfx::IntSize siz
+ }
+ #endif
+ 
++#ifdef USE_GLES_HYBRIS
++static ErrorOr<GpuBackingStore> create_shared_gpu_backing_store(Gfx::IntSize size, Gfx::SkiaBackendContext& skia_backend_context)
++{
++    auto image = TRY(Gfx::GLESImage::create(skia_backend_context.gles_context(), size));
++    auto shared_image = Gfx::duplicate_shared_image(*image);
++
++    return GpuBackingStore {
++        .surface = Gfx::PaintingSurface::create_from_gles_image(skia_backend_context, move(image)),
++        .shared_image = move(shared_image),
++    };
++}
++#endif
++
+ #ifdef USE_DIRECTX
+ static ErrorOr<GpuBackingStore> create_shared_gpu_backing_store(Gfx::IntSize size, Gfx::SkiaBackendContext& skia_backend_context)
+ {
+@@ -165,7 +182,7 @@ Optional<BackingStoreManager::Publication> BackingStoreManager::allocate_backing
+         return index == 0 ? BufferState::Presented : BufferState::Available;
+     };
+ 
+-#if defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX)
++#if defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX) || defined(USE_GLES_HYBRIS)
+     if (skia_backend_context && gpu_sharing == GpuSharing::Allowed) {
+         Vector<Gfx::SharedImage> shared_images;
+         shared_images.ensure_capacity(buffer_count);
+diff --git a/Services/Compositor/PaintingSurface.cpp b/Services/Compositor/PaintingSurface.cpp
+index 8a4ef6807..3cd9ca845 100644
+--- a/Services/Compositor/PaintingSurface.cpp
++++ b/Services/Compositor/PaintingSurface.cpp
+@@ -26,6 +26,10 @@
+ #    include <LibGfx/VulkanImage.h>
+ #    include <gpu/ganesh/vk/GrVkBackendSurface.h>
+ #    include <gpu/ganesh/vk/GrVkTypes.h>
++#elif defined(USE_GLES_HYBRIS)
++#    include <LibGfx/GLESContext.h>
++#    include <gpu/ganesh/gl/GrGLBackendSurface.h>
++#    include <gpu/ganesh/gl/GrGLTypes.h>
+ #elif defined(USE_DIRECTX)
+ #    include <AK/Windows.h>
+ #    include <LibGfx/D3DSharedTexture.h>
+@@ -45,7 +49,7 @@ struct PaintingSurface::Impl {
+     bool wraps_shared_image { false };
+ };
+ 
+-#if defined(AK_OS_MACOS) || defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX)
++#if defined(AK_OS_MACOS) || defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX) || defined(USE_GLES_HYBRIS)
+ static GrSurfaceOrigin origin_to_sk_origin(PaintingSurface::Origin origin)
+ {
+     switch (origin) {
+@@ -171,6 +175,26 @@ NonnullRefPtr<PaintingSurface> PaintingSurface::wrap_bitmap(Bitmap& bitmap)
+     return adopt_ref(*new PaintingSurface(make<Impl>(RefPtr<SkiaBackendContext> {}, size, surface, bitmap)));
+ }
+ 
++#ifdef USE_GLES_HYBRIS
++NonnullRefPtr<PaintingSurface> PaintingSurface::create_from_gles_image(NonnullRefPtr<SkiaBackendContext> context, NonnullRefPtr<GLESImage> image, Origin origin)
++{
++    // NB: GL sees the BGRA gralloc buffer as an RGBA texture; the driver keeps the bytes in BGRA order in memory.
++    static constexpr GrGLenum gl_rgba8 = 0x8058;
++    GrGLFramebufferInfo framebuffer_info {};
++    framebuffer_info.fFBOID = image->framebuffer;
++    framebuffer_info.fFormat = gl_rgba8;
++    auto render_target = GrBackendRenderTargets::MakeGL(image->size.width(), image->size.height(), 0, 8, framebuffer_info);
++
++    auto size = image->size;
++    // Skia holds a reference to the image until it lets go of the surface.
++    image->ref();
++    auto surface = SkSurfaces::WrapBackendRenderTarget(context->sk_context(), render_target, origin_to_sk_origin(origin), kRGBA_8888_SkColorType,
++        SkColorSpace::MakeSRGB(), nullptr, [](void* image) { static_cast<GLESImage*>(image)->unref(); }, image.ptr());
++    VERIFY(surface);
++    return adopt_ref(*new PaintingSurface(make<Impl>(context, size, surface, nullptr, true)));
++}
++#endif
++
+ #ifdef AK_OS_MACOS
+ NonnullRefPtr<PaintingSurface> PaintingSurface::create_from_shared_image_buffer(SharedImageBuffer& shared_image_buffer, NonnullRefPtr<SkiaBackendContext> context, Origin origin)
+ {
+diff --git a/Services/Compositor/PaintingSurface.h b/Services/Compositor/PaintingSurface.h
+index 09b34ac6a..7d5996d41 100644
+--- a/Services/Compositor/PaintingSurface.h
++++ b/Services/Compositor/PaintingSurface.h
+@@ -23,6 +23,14 @@ struct VulkanImage;
+ }
+ #endif
+ 
++#ifdef USE_GLES_HYBRIS
++namespace Gfx {
++
++struct GLESImage;
++
++}
++#endif
++
+ #ifdef USE_DIRECTX
+ #    include <AK/Error.h>
+ 
+@@ -65,6 +73,10 @@ public:
+     static NonnullRefPtr<PaintingSurface> create_from_vkimage(NonnullRefPtr<SkiaBackendContext> context, NonnullRefPtr<VulkanImage> vulkan_image, Origin origin);
+ #endif
+ 
++#ifdef USE_GLES_HYBRIS
++    static NonnullRefPtr<PaintingSurface> create_from_gles_image(NonnullRefPtr<SkiaBackendContext>, NonnullRefPtr<GLESImage>, Origin = Origin::TopLeft);
++#endif
++
+ #ifdef USE_DIRECTX
+     static ErrorOr<NonnullRefPtr<PaintingSurface>> create_from_d3d_texture(NonnullRefPtr<SkiaBackendContext>, NonnullRefPtr<D3DSharedTexture>, Origin = Origin::TopLeft);
+ #endif
+diff --git a/Services/Compositor/SkiaBackendContext.cpp b/Services/Compositor/SkiaBackendContext.cpp
+index 428973bdd..84c6babe8 100644
+--- a/Services/Compositor/SkiaBackendContext.cpp
++++ b/Services/Compositor/SkiaBackendContext.cpp
 @@ -35,6 +35,12 @@ template<>
  constexpr bool AllocatedWithSystemAllocator<skgpu::VulkanExtensions> = true;
  #endif
@@ -749,10 +837,10 @@ index eca5ca75..6ce6530d 100644
 +#endif
 +
  }
-diff --git a/Libraries/LibGfx/SkiaBackendContext.h b/Libraries/LibGfx/SkiaBackendContext.h
-index 806529ba..6e4d6634 100644
---- a/Libraries/LibGfx/SkiaBackendContext.h
-+++ b/Libraries/LibGfx/SkiaBackendContext.h
+diff --git a/Services/Compositor/SkiaBackendContext.h b/Services/Compositor/SkiaBackendContext.h
+index 806529ba1..6e4d6634f 100644
+--- a/Services/Compositor/SkiaBackendContext.h
++++ b/Services/Compositor/SkiaBackendContext.h
 @@ -22,6 +22,10 @@
  #    include <LibGfx/MetalContext.h>
  #endif
@@ -785,96 +873,8 @@ index 806529ba..6e4d6634 100644
  
  private:
      void perform_post_flush_cleanup();
-diff --git a/Meta/CMake/check_for_dependencies.cmake b/Meta/CMake/check_for_dependencies.cmake
-index 208c0e73..7c181363 100644
---- a/Meta/CMake/check_for_dependencies.cmake
-+++ b/Meta/CMake/check_for_dependencies.cmake
-@@ -40,7 +40,16 @@ if (NOT APPLE AND NOT ANDROID AND NOT WIN32)
-     add_cxx_compile_definitions(USE_FONTCONFIG=1)
- endif()
- 
--if (NOT APPLE AND NOT WIN32)
-+# Ladybird for Sailfish OS paints with the system's EGL and GLES (libhybris): the Jolla Store allows those
-+# libraries and not Vulkan.
-+if (LADYBIRD_UI_SFOS OR DEFINED ENV{LADYBIRD_UI_SFOS})
-+    set(USE_GLES_HYBRIS ON CACHE BOOL "" FORCE)
-+    add_cxx_compile_definitions(USE_GLES_HYBRIS=1)
-+else()
-+    set(USE_GLES_HYBRIS OFF CACHE BOOL "" FORCE)
-+endif()
-+
-+if (NOT APPLE AND NOT WIN32 AND NOT USE_GLES_HYBRIS)
-     find_package(VulkanHeaders CONFIG QUIET)
-     find_package(Vulkan QUIET)
-     find_program(GLSLANG_VALIDATOR glslangValidator)
-diff --git a/Services/Compositor/BackingStoreManager.cpp b/Services/Compositor/BackingStoreManager.cpp
-index 4a2cd467..52eedc07 100644
---- a/Services/Compositor/BackingStoreManager.cpp
-+++ b/Services/Compositor/BackingStoreManager.cpp
-@@ -21,9 +21,13 @@
- #    include <LibGfx/D3DSharedTexture.h>
- #endif
- 
-+#ifdef USE_GLES_HYBRIS
-+#    include <LibGfx/GLESContext.h>
-+#endif
-+
- namespace Compositor {
- 
--#if defined(USE_DIRECTX) || defined(USE_VULKAN)
-+#if defined(USE_DIRECTX) || defined(USE_VULKAN) || defined(USE_GLES_HYBRIS)
- static NonnullRefPtr<Gfx::PaintingSurface> create_gpu_painting_surface_with_bitmap_flush(Gfx::IntSize size, Gfx::SharedImageBuffer& buffer, RefPtr<Gfx::SkiaBackendContext> const& skia_backend_context)
- {
-     auto surface = Gfx::PaintingSurface::create_with_size(size, Gfx::BitmapFormat::BGRA8888, Gfx::AlphaType::Premultiplied, skia_backend_context);
-@@ -41,7 +45,7 @@ static NonnullRefPtr<Gfx::PaintingSurface> create_shareable_bitmap_backing_store
-     if (skia_backend_context)
-         return Gfx::PaintingSurface::create_from_shared_image_buffer(buffer, *skia_backend_context);
- #else
--#    if defined(USE_DIRECTX) || defined(USE_VULKAN)
-+#    if defined(USE_DIRECTX) || defined(USE_VULKAN) || defined(USE_GLES_HYBRIS)
-     if (skia_backend_context)
-         return create_gpu_painting_surface_with_bitmap_flush(size, buffer, skia_backend_context);
- #    else
-@@ -52,7 +56,7 @@ static NonnullRefPtr<Gfx::PaintingSurface> create_shareable_bitmap_backing_store
-     return Gfx::PaintingSurface::wrap_bitmap(*buffer.bitmap());
- }
- 
--#if defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX)
-+#if defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX) || defined(USE_GLES_HYBRIS)
- struct GpuBackingStore {
-     RefPtr<Gfx::PaintingSurface> surface;
-     Gfx::SharedImage shared_image;
-@@ -74,6 +78,19 @@ static ErrorOr<GpuBackingStore> create_shared_gpu_backing_store(Gfx::IntSize siz
- }
- #endif
- 
-+#ifdef USE_GLES_HYBRIS
-+static ErrorOr<GpuBackingStore> create_shared_gpu_backing_store(Gfx::IntSize size, Gfx::SkiaBackendContext& skia_backend_context)
-+{
-+    auto image = TRY(Gfx::GLESImage::create(skia_backend_context.gles_context(), size));
-+    auto shared_image = Gfx::duplicate_shared_image(*image);
-+
-+    return GpuBackingStore {
-+        .surface = Gfx::PaintingSurface::create_from_gles_image(skia_backend_context, move(image)),
-+        .shared_image = move(shared_image),
-+    };
-+}
-+#endif
-+
- #ifdef USE_DIRECTX
- static ErrorOr<GpuBackingStore> create_shared_gpu_backing_store(Gfx::IntSize size, Gfx::SkiaBackendContext& skia_backend_context)
- {
-@@ -164,7 +181,7 @@ Optional<BackingStoreManager::Publication> BackingStoreManager::allocate_backing
-         return index == 0 ? BufferState::Presented : BufferState::Available;
-     };
- 
--#if defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX)
-+#if defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX) || defined(USE_GLES_HYBRIS)
-     if (skia_backend_context && gpu_sharing == GpuSharing::Allowed) {
-         Vector<Gfx::SharedImage> shared_images;
-         shared_images.ensure_capacity(buffer_count);
 diff --git a/vcpkg.json b/vcpkg.json
-index 59783e69..0e3952d9 100644
+index da8c0ef6a..96f1d2eea 100644
 --- a/vcpkg.json
 +++ b/vcpkg.json
 @@ -47,11 +47,7 @@
@@ -890,7 +890,7 @@ index 59783e69..0e3952d9 100644
        ]
      },
      {
-@@ -214,6 +210,7 @@
+@@ -236,6 +232,7 @@
          "fontconfig",
          "harfbuzz",
          "icu",

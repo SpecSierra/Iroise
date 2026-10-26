@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibWebView/HelperProcess.cpp b/Libraries/LibWebView/HelperProcess.cpp
-index 1e2c00a9..9df9033e 100644
+index b5218376d..5e6ec12e2 100644
 --- a/Libraries/LibWebView/HelperProcess.cpp
 +++ b/Libraries/LibWebView/HelperProcess.cpp
-@@ -594,6 +594,17 @@ ErrorOr<NonnullRefPtr<WebWorkerClient>> launch_web_worker_process(Web::HTML::Age
+@@ -579,6 +579,17 @@ ErrorOr<NonnullRefPtr<WebWorkerClient>> launch_web_worker_process(Web::HTML::Age
      return client;
  }
  
@@ -20,7 +20,7 @@ index 1e2c00a9..9df9033e 100644
  void apply_dns_settings(Requests::RequestControlClient& client)
  {
      Application::settings().dns_settings().visit(
-@@ -657,6 +668,8 @@ ErrorOr<NonnullRefPtr<Requests::RequestControlClient>> launch_request_server_pro
+@@ -642,6 +653,8 @@ ErrorOr<NonnullRefPtr<Requests::RequestControlClient>> launch_request_server_pro
      auto const& browsing_data_settings = Application::settings().browsing_data_settings();
      client->async_set_disk_cache_settings(browsing_data_settings.disk_cache_settings);
      client->async_set_proxy_configuration(request_server_options.proxy_configuration);
@@ -30,20 +30,20 @@ index 1e2c00a9..9df9033e 100644
          apply_dns_settings(*client);
  
 diff --git a/Libraries/LibWebView/HelperProcess.h b/Libraries/LibWebView/HelperProcess.h
-index 92933390..cfc5c843 100644
+index 900f12be4..1de7d17da 100644
 --- a/Libraries/LibWebView/HelperProcess.h
 +++ b/Libraries/LibWebView/HelperProcess.h
-@@ -37,6 +37,8 @@ WEBVIEW_API ErrorOr<NonnullRefPtr<WebView::CompositorClient>> launch_compositor_
+@@ -33,6 +33,8 @@ WEBVIEW_API ErrorOr<NonnullRefPtr<WebView::CompositorClient>> launch_compositor_
  WEBVIEW_API ErrorOr<NonnullRefPtr<WebView::WebWorkerClient>> launch_web_worker_process(Web::HTML::AgentType, IsPrivate, Web::HTML::WorkerAgentId);
  WEBVIEW_API ErrorOr<NonnullRefPtr<Requests::RequestControlClient>> launch_request_server_process(ByteString const& cache_path, Optional<Utf16String> const& site, HTTPDiskCacheMode);
  WEBVIEW_API void apply_dns_settings(Requests::RequestControlClient&);
 +// Hosts whose unverifiable certificates the user chose to trust, for every RequestServer, also ones started later.
 +WEBVIEW_API void set_certificate_exceptions(Vector<ByteString>);
- #if defined(HAVE_WASM_COMPILER_SERVICE)
- WEBVIEW_API ErrorOr<NonnullRefPtr<WasmCompilerClient::Client>> launch_wasm_compiler_process();
- #endif
+ 
+ struct ImageDecoderConnection {
+     IPC::TransportHandle handle;
 diff --git a/Services/RequestServer/ControlConnectionFromClient.cpp b/Services/RequestServer/ControlConnectionFromClient.cpp
-index e4415a4e..5d77a636 100644
+index e4415a4eb..5d77a6367 100644
 --- a/Services/RequestServer/ControlConnectionFromClient.cpp
 +++ b/Services/RequestServer/ControlConnectionFromClient.cpp
 @@ -160,6 +160,11 @@ void ControlConnectionFromClient::set_proxy_configuration(HTTP::ProxyConfigurati
@@ -59,7 +59,7 @@ index e4415a4e..5d77a636 100644
  {
      Request::set_performance_monitor_enabled(enabled);
 diff --git a/Services/RequestServer/ControlConnectionFromClient.h b/Services/RequestServer/ControlConnectionFromClient.h
-index 60af7871..4b17916c 100644
+index 60af7871e..4b17916ce 100644
 --- a/Services/RequestServer/ControlConnectionFromClient.h
 +++ b/Services/RequestServer/ControlConnectionFromClient.h
 @@ -46,6 +46,7 @@ private:
@@ -71,10 +71,10 @@ index 60af7871..4b17916c 100644
      virtual void set_performance_monitor_enabled(bool) override;
  
 diff --git a/Services/RequestServer/Request.cpp b/Services/RequestServer/Request.cpp
-index c8d0ad7c..ae3c4feb 100644
+index b8053954b..f38d61a37 100644
 --- a/Services/RequestServer/Request.cpp
 +++ b/Services/RequestServer/Request.cpp
-@@ -40,6 +40,20 @@ static AK::Duration s_maximum_wait_for_cache = AK::Duration::from_seconds(30);
+@@ -41,6 +41,20 @@ static AK::Duration s_maximum_wait_for_cache = AK::Duration::from_seconds(30);
  static AK::Duration s_revalidation_stall_timeout = AK::Duration::from_seconds(30);
  
  // Let Fetch authorize credentials; otherwise curl sends URL credentials itself.
@@ -95,7 +95,7 @@ index c8d0ad7c..ae3c4feb 100644
  static ByteString url_without_credentials(URL::URL url)
  {
      url.set_username(""sv);
-@@ -1394,6 +1408,10 @@ void Request::handle_connect_state()
+@@ -1395,6 +1409,10 @@ void Request::handle_connect_state()
      set_option(CURLOPT_NOSIGNAL, 1L);
  
      set_option(CURLOPT_SSL_CTX_FUNCTION, configure_ssl_context);
@@ -106,7 +106,7 @@ index c8d0ad7c..ae3c4feb 100644
  
      set_option(CURLOPT_URL, url_without_credentials(m_url).characters());
      set_option(CURLOPT_DISALLOW_USERNAME_IN_URL, 1L);
-@@ -1452,11 +1470,18 @@ void Request::handle_fetch_state()
+@@ -1453,11 +1471,18 @@ void Request::handle_fetch_state()
          set_option(CURLOPT_CAINFO, path.characters());
  
      set_option(CURLOPT_SSL_CTX_FUNCTION, configure_ssl_context);
@@ -129,7 +129,7 @@ index c8d0ad7c..ae3c4feb 100644
      if (m_content_decoding_disabled) {
          set_option(CURLOPT_ACCEPT_ENCODING, "identity");
 diff --git a/Services/RequestServer/Request.h b/Services/RequestServer/Request.h
-index 63fd505c..ad5a3b6d 100644
+index 63fd505c1..ad5a3b6dc 100644
 --- a/Services/RequestServer/Request.h
 +++ b/Services/RequestServer/Request.h
 @@ -409,4 +409,8 @@ private:
@@ -142,7 +142,7 @@ index 63fd505c..ad5a3b6d 100644
 +
  }
 diff --git a/Services/RequestServer/RequestServerControl.ipc b/Services/RequestServer/RequestServerControl.ipc
-index 321e419c..d0c316fb 100644
+index 321e419c7..d0c316fb1 100644
 --- a/Services/RequestServer/RequestServerControl.ipc
 +++ b/Services/RequestServer/RequestServerControl.ipc
 @@ -25,6 +25,9 @@ endpoint RequestServerControl

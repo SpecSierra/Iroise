@@ -8,7 +8,7 @@ endif()
 # The whole engine as one library, every process in it: the Jolla Store allows an app a single executable, which
 # calls iroise_engine_main() with the role to play (see EngineMain.cpp). Each process's main.cpp is compiled in
 # with its ladybird_main() renamed after the role.
-set(IROISE_HELPERS AudioServer Compositor ImageDecoder MediaServer RequestServer VideoDecoderServer WasmCompiler WebContent WebWorker)
+set(IROISE_HELPERS AudioServer Compositor ImageDecoder MediaServer RequestServer VideoDecoderServer WebContent WebWorker)
 add_library(iroiseengine SHARED EngineMain.cpp main.cpp EmbeddedHost.cpp MemoryGuard.cpp)
 # EngineMain.cpp picks a role from this list; it is written from the one above so that the two cannot differ.
 set(iroise_helper_roles "")
@@ -25,7 +25,7 @@ foreach (helper IN LISTS IROISE_HELPERS)
     set_source_files_properties("${helper_main}" PROPERTIES COMPILE_DEFINITIONS "ladybird_main=ladybird_main_${helper}")
 endforeach()
 # And each one's sandbox, which those executables also add themselves.
-foreach (helper IN ITEMS AudioServer Compositor ImageDecoder MediaServer VideoDecoderServer WasmCompiler)
+foreach (helper IN ITEMS AudioServer Compositor ImageDecoder MediaServer VideoDecoderServer)
     target_sources(iroiseengine PRIVATE "${LADYBIRD_SOURCE_DIR}/Services/${helper}/SandboxLinux.cpp")
 endforeach()
 target_sources(iroiseengine PRIVATE "${LADYBIRD_SOURCE_DIR}/Services/RendererSandboxLinux.cpp")
@@ -34,7 +34,7 @@ target_include_directories(iroiseengine PRIVATE ${LADYBIRD_SOURCE_DIR} ${LADYBIR
 target_link_libraries(iroiseengine PRIVATE
     LibWebView LibCore LibSandbox LibThreading LibFileSystem LibURL LibAudio LibMedia LibMediaCodecs LibUnicode
     audioserverservice compositorservice imagedecoderservice mediaserverservice requestserverservice
-    videodecoderserverservice wasmcompilerservice webcontentservice webworkerservice
+    videodecoderserverservice webcontentservice webworkerservice
     OpenSSL::Crypto OpenSSL::SSL)
 
 add_executable(ladybird EngineLauncher.cpp)

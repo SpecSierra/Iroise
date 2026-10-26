@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp b/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp
-index e0481e7e..5ff59c33 100644
+index 41095ec0c..ba2e2be89 100644
 --- a/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp
 +++ b/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp
-@@ -456,10 +456,12 @@ void EventLoop::process_input_events() const
+@@ -461,10 +461,12 @@ void EventLoop::process_input_events() const
              auto const* handled_mouse_event = event.event.get_pointer<Web::MouseEvent>();
              root->event_handler().set_handling_input_event_id(handled_mouse_event ? handled_mouse_event->id : 0);
              page.set_handling_touch_scroll(handled_mouse_event && handled_mouse_event->is_touch_scroll);
@@ -16,10 +16,10 @@ index e0481e7e..5ff59c33 100644
  
              Optional<RemoteInputEventTarget> remote_target;
 diff --git a/Libraries/LibWeb/Page/EventHandler.cpp b/Libraries/LibWeb/Page/EventHandler.cpp
-index c3bb326c..b4a7d508 100644
+index 49f44808e..409207de0 100644
 --- a/Libraries/LibWeb/Page/EventHandler.cpp
 +++ b/Libraries/LibWeb/Page/EventHandler.cpp
-@@ -16,11 +16,14 @@
+@@ -17,11 +17,14 @@
  #include <LibGfx/Bitmap.h>
  #include <LibUnicode/CharacterTypes.h>
  #include <LibUnicode/Segmenter.h>
@@ -42,7 +42,7 @@ index c3bb326c..b4a7d508 100644
  #include <LibWeb/UIEvents/TextEvent.h>
  #include <LibWeb/UIEvents/TouchEvent.h>
  #include <LibWeb/UIEvents/WheelEvent.h>
-@@ -1077,6 +1081,14 @@ EventResult EventHandler::handle_mousewheel(CSSPixelPoint visual_viewport_positi
+@@ -1080,6 +1084,14 @@ EventResult EventHandler::handle_mousewheel(CSSPixelPoint visual_viewport_positi
  
      auto device_pixels_per_css_pixel = static_cast<float>(m_navigable->page().client().device_pixels_per_css_pixel());
      auto async_scroll_delta_in_device_pixels = Gfx::FloatPoint { static_cast<float>(wheel_delta_x), static_cast<float>(wheel_delta_y) }.scaled(device_pixels_per_css_pixel);
@@ -57,7 +57,7 @@ index c3bb326c..b4a7d508 100644
      if (can_attempt_async_scroll && async_scroll_performed_default_action) {
          dbgln_if(COMPOSITOR_DEBUG, "[Compositor] Not attempting wheel async scroll: default action already performed");
          record_input_routing(InputRoutingDecision::DefaultActionPerformedByCompositor);
-@@ -1258,10 +1270,9 @@ EventResult EventHandler::handle_mousewheel(CSSPixelPoint visual_viewport_positi
+@@ -1261,10 +1273,9 @@ EventResult EventHandler::handle_mousewheel(CSSPixelPoint visual_viewport_positi
          }
  
          auto is_cancelable = async_scroll_performed_default_action ? UIEvents::WheelEventIsCancelable::No : UIEvents::WheelEventIsCancelable::Yes;
@@ -70,7 +70,7 @@ index c3bb326c..b4a7d508 100644
              : dispatch_wheel_event(read, *wheel_event_target_layout_node, visual_viewport_position, screen_position, button, buttons, modifiers, wheel_delta_x, wheel_delta_y, wheel_tick_120ths_x, wheel_tick_120ths_y, is_cancelable == UIEvents::WheelEventIsCancelable::Yes);
          if (dispatch_result == EventResult::Accepted)
              record_input_routing(InputRoutingDecision::DispatchedWheelEvent, {}, wheel_event_target_node);
-@@ -4412,7 +4423,12 @@ EventHandler::DispatchedPointerEvent EventHandler::dispatch_a_pointer_event_for_
+@@ -4565,7 +4576,12 @@ EventHandler::DispatchedPointerEvent EventHandler::dispatch_a_pointer_event_for_
      // 3. Dispatch the pointer event.
      m_last_dispatched_pointer_event_position = PointerEventPosition { coordinates, screen_position };
      m_buttons_of_last_dispatched_pointer_event = type == PointerEventType::PointerCancel ? 0 : buttons;
@@ -84,7 +84,7 @@ index c3bb326c..b4a7d508 100644
  
      // 4. If the pointer event dispatched was pointerdown and event's canceled flag is set, then set the PREVENT MOUSE
      //    EVENT flag for this pointerType.
-@@ -4742,11 +4758,15 @@ EventResult EventHandler::handle_touch(Web::MouseEvent::Type type, CSSPixelPoint
+@@ -4896,11 +4912,15 @@ EventResult EventHandler::handle_touch(Web::MouseEvent::Type type, CSSPixelPoint
              *remote_target = RemoteInputEventTarget { *touch.remote_navigable_id, visual_viewport_position.translated(touch.nested_offset) };
              return EventResult::Handled;
          }
@@ -101,7 +101,7 @@ index c3bb326c..b4a7d508 100644
      m_touch = {};
  
      Layout::ForcedReadScope read { *document };
-@@ -4794,6 +4814,76 @@ EventResult EventHandler::handle_touch(Web::MouseEvent::Type type, CSSPixelPoint
+@@ -4948,6 +4968,76 @@ EventResult EventHandler::handle_touch(Web::MouseEvent::Type type, CSSPixelPoint
      return dispatch_touch_event(type, visual_viewport_position, screen_position, modifiers);
  }
  
@@ -178,7 +178,7 @@ index c3bb326c..b4a7d508 100644
  static bool has_touch_event_listener(DOM::EventTarget const& target)
  {
      return target.has_event_listener(UIEvents::EventNames::touchstart) || target.has_event_listener(UIEvents::EventNames::touchmove)
-@@ -4805,9 +4895,15 @@ EventResult EventHandler::dispatch_touch_event(Web::MouseEvent::Type type, CSSPi
+@@ -4959,9 +5049,15 @@ EventResult EventHandler::dispatch_touch_event(Web::MouseEvent::Type type, CSSPi
      using enum Web::MouseEvent::Type;
  
      auto document = m_navigable->active_document();
@@ -196,7 +196,7 @@ index c3bb326c..b4a7d508 100644
      auto& page = m_navigable->page();
  
      auto event_name = [&]() -> Utf16FlyString const& {
-@@ -4827,7 +4923,51 @@ EventResult EventHandler::dispatch_touch_event(Web::MouseEvent::Type type, CSSPi
+@@ -4981,7 +5077,51 @@ EventResult EventHandler::dispatch_touch_event(Web::MouseEvent::Type type, CSSPi
      bool cancelable = type == TouchStart || type == TouchEnd || (type == TouchMove && !page.touch_scrolls());
  
      auto viewport_position = document->visual_viewport()->map_to_layout_viewport(visual_viewport_position);
@@ -249,7 +249,7 @@ index c3bb326c..b4a7d508 100644
      Vector<GC::Ref<UIEvents::Touch>> touches;
      if (type != TouchEnd && type != TouchCancel)
          touches.append(touch);
-@@ -4844,6 +4984,10 @@ EventResult EventHandler::dispatch_touch_event(Web::MouseEvent::Type type, CSSPi
+@@ -4998,6 +5138,10 @@ EventResult EventHandler::dispatch_touch_event(Web::MouseEvent::Type type, CSSPi
          m_touch.start_cancelled = true;
      if (cancelled || (type == TouchEnd && m_touch.start_cancelled))
          return EventResult::Cancelled;
@@ -261,10 +261,10 @@ index c3bb326c..b4a7d508 100644
      // Whether the page listens for touches where this one is, which a UI may want to know (to make a mouse of the finger
      // where nothing listens, say).
 diff --git a/Libraries/LibWeb/Page/EventHandler.h b/Libraries/LibWeb/Page/EventHandler.h
-index ad76485a..a45d010b 100644
+index 4cff29f23..2bf84c680 100644
 --- a/Libraries/LibWeb/Page/EventHandler.h
 +++ b/Libraries/LibWeb/Page/EventHandler.h
-@@ -272,6 +272,8 @@ private:
+@@ -285,6 +285,8 @@ private:
          CSSPixelPoint nested_offset;
          bool start_cancelled { false };
          i32 identifier { 0 };
@@ -274,10 +274,10 @@ index ad76485a..a45d010b 100644
      TouchInProgress m_touch;
      i32 m_next_touch_identifier { 0 };
 diff --git a/Libraries/LibWeb/Page/Page.cpp b/Libraries/LibWeb/Page/Page.cpp
-index 4fccae92..4905fe06 100644
+index cf435400a..f841bac9e 100644
 --- a/Libraries/LibWeb/Page/Page.cpp
 +++ b/Libraries/LibWeb/Page/Page.cpp
-@@ -565,10 +565,20 @@ EventResult Page::handle_touch(HTML::LocalNavigable& root, Web::MouseEvent::Type
+@@ -572,10 +572,20 @@ EventResult Page::handle_touch(HTML::LocalNavigable& root, Web::MouseEvent::Type
      return root.event_handler().handle_touch(type, device_to_css_point(position), device_to_css_point(screen_position), modifiers, remote_target);
  }
  
@@ -303,10 +303,10 @@ index 4fccae92..4905fe06 100644
      return EventResult::Accepted;
  }
 diff --git a/Libraries/LibWeb/Page/Page.h b/Libraries/LibWeb/Page/Page.h
-index a0100cc5..86f6d69a 100644
+index 37bb6fd07..23113a63f 100644
 --- a/Libraries/LibWeb/Page/Page.h
 +++ b/Libraries/LibWeb/Page/Page.h
-@@ -205,12 +205,31 @@ public:
+@@ -206,12 +206,31 @@ public:
      bool handling_touch_scroll() const { return m_handling_touch_scroll; }
      // What becomes of a step of a finger's scroll: the page's touch events decide it, as a wheel event would. A step
      // that already scrolled, or that the page did not stop, means the touch scrolls from now on.
@@ -339,7 +339,7 @@ index a0100cc5..86f6d69a 100644
      void touch_prevented_scrolling() { m_touch_prevents_scrolling = true; }
      bool touch_scrolls() const { return m_touch_scrolls; }
  
-@@ -515,6 +534,11 @@ private:
+@@ -529,6 +548,11 @@ private:
      bool m_handling_touch_scroll { false };
      bool m_touch_prevents_scrolling { false };
      bool m_touch_scrolls { false };
@@ -352,7 +352,7 @@ index a0100cc5..86f6d69a 100644
      // that handler ends the hover when its document is replaced; another navigable's replacement (an iframe the pointer
      // once passed through, e.g.) leaves the report standing.
 diff --git a/Libraries/LibWebCommon/Page/InputEvent.cpp b/Libraries/LibWebCommon/Page/InputEvent.cpp
-index 101b9a88..c059f570 100644
+index 101b9a88b..c059f570d 100644
 --- a/Libraries/LibWebCommon/Page/InputEvent.cpp
 +++ b/Libraries/LibWebCommon/Page/InputEvent.cpp
 @@ -15,7 +15,7 @@ KeyEvent KeyEvent::clone_without_browser_data() const
@@ -365,7 +365,7 @@ index 101b9a88..c059f570 100644
  
  }
 diff --git a/Libraries/LibWebCommon/Page/InputEvent.h b/Libraries/LibWebCommon/Page/InputEvent.h
-index 4f6a1e20..7b804718 100644
+index 8cab25130..1075f87ee 100644
 --- a/Libraries/LibWebCommon/Page/InputEvent.h
 +++ b/Libraries/LibWebCommon/Page/InputEvent.h
 @@ -139,6 +139,8 @@ struct WEBCOMMON_API MouseEvent {
@@ -378,7 +378,7 @@ index 4f6a1e20..7b804718 100644
  
  struct WEBCOMMON_API PinchEvent {
 diff --git a/Libraries/LibWebCommon/Page/InputEvent.ipc b/Libraries/LibWebCommon/Page/InputEvent.ipc
-index 7bec846b..7d355198 100644
+index 7bec846b5..7d355198a 100644
 --- a/Libraries/LibWebCommon/Page/InputEvent.ipc
 +++ b/Libraries/LibWebCommon/Page/InputEvent.ipc
 @@ -72,6 +72,7 @@ struct Web::MouseEvent {

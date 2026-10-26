@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibWebView/WebContentPage.cpp b/Libraries/LibWebView/WebContentPage.cpp
-index 5dddf54e..d7b9136b 100644
+index 884a2fc4f..c50847882 100644
 --- a/Libraries/LibWebView/WebContentPage.cpp
 +++ b/Libraries/LibWebView/WebContentPage.cpp
-@@ -2212,7 +2212,16 @@ Messages::WebContentClient::DidStartDownloadResponse WebContentPage::did_start_d
+@@ -2286,7 +2286,16 @@ Messages::WebContentClient::DidStartDownloadResponse WebContentPage::did_start_d
      // identifiers preserve the original RequestServer transfer lease, so only the process and navigation that
      // received that response may claim it, and only while its population is in flight.
      bool matches_in_flight_navigation = false;
