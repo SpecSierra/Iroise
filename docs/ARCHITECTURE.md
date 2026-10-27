@@ -143,9 +143,10 @@ on the secure site it was saved for, which is always taken from the tab's addres
 
 **Certificates.** A site whose certificate cannot be checked ends on the engine's error page, and the interface
 offers to continue anyway. Since a page could pretend to be that error page, the interface first checks the
-site's certificate with a connection of its own. If you accept, the site is trusted for the rest of the run;
-the interface remembers which certificate you accepted and withdraws the trust if the site later shows a different
-one. Clearing site data forgets it, and so does closing the last private tab for what was accepted there.
+site's certificate with a connection of its own. If you accept, the engine trusts that certificate's public key
+for the site, and no other, for the rest of the run: a different certificate is refused before anything is sent,
+and the interface asks again about it. What is accepted in a private tab holds for private tabs only. Clearing
+site data forgets it, and so does closing the last private tab for what was accepted there.
 
 **The camera notch.** The page is kept out of the strip of screen the notch is in, and that strip is painted in
 the page's own colour, so the page still seems to reach the edge.
@@ -171,7 +172,7 @@ Each patch in `patches/` does one thing:
 | 0007 | lets the compositor's sandbox talk to the phone's GPU and buffer drivers |
 | 0008 | lets a download from a link to another site be saved |
 | 0009 | paints with OpenGL ES through libhybris instead of Vulkan |
-| 0010 | trusts a certificate the user accepted, for that site only |
+| 0010 | trusts a certificate the user accepted, for that site and that public key only |
 | 0011 | runs every engine process from the one executable |
 | 0012 | presents the engine as a touch phone |
 | 0013 | tells sites the user's colour scheme up front, so they can send their dark pages |

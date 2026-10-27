@@ -1328,9 +1328,9 @@ private:
             return;
         }
         if (header.type == LB_EMBED_SET_CERTIFICATE_EXCEPTIONS) {
-            Vector<ByteString> hosts;
-            text.for_each_split_view('\n', SplitBehavior::Nothing, [&](StringView host) { hosts.append(host); });
-            WebView::set_certificate_exceptions(move(hosts));
+            Vector<ByteString> exceptions;
+            text.for_each_split_view('\n', SplitBehavior::Nothing, [&](StringView line) { exceptions.append(line); });
+            WebView::set_certificate_exceptions(move(exceptions));
             return;
         }
         if (header.type == LB_EMBED_SET_SITE_OPTIONS) {

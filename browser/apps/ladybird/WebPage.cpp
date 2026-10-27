@@ -940,23 +940,91 @@ void WebPage::fillLoginForFocusedForm()
 
 namespace {
 
-// A certificate the user chose to trust although the engine could not verify it, for this run: the engine trusts its
-// host from then on, whatever certificate the host shows, so the interface checks that it is still this one.
+// A certificate the user chose to trust although the engine could not verify it, for this run. The engine takes
+// only that certificate's public key for the host from then on, and private tabs keep theirs apart.
 struct CertificateException {
-    QByteArray fingerprint;
+    QString host;
+    QByteArray pin;
     bool fromPrivateTab = false;
 };
 
+// Keyed by certificateExceptionKey().
 QHash<QString, CertificateException> &certificateExceptions()
 {
-    static QHash<QString, CertificateException> hosts;
-    return hosts;
+    static QHash<QString, CertificateException> exceptions;
+    return exceptions;
+}
+
+QString certificateExceptionKey(const QString &host, bool privateTab)
+{
+    return privateTab ? host + QStringLiteral("\tprivate") : host;
 }
 
 void sendCertificateExceptions()
 {
-    LadybirdEngine::instance()->send(0, LB_EMBED_SET_CERTIFICATE_EXCEPTIONS, 0, 0, 0, 0, 0,
-        QStringList(certificateExceptions().keys()).join(QLatin1Char('\n')).toUtf8());
+    QByteArray lines;
+    for (const CertificateException &exception : certificateExceptions()) {
+        lines += exception.host.toUtf8() + '\t' + exception.pin + '\t' + (exception.fromPrivateTab ? "private" : "") + '\n';
+    }
+    LadybirdEngine::instance()->send(0, LB_EMBED_SET_CERTIFICATE_EXCEPTIONS, 0, 0, 0, 0, 0, lines);
+}
+
+// Reads the DER element at offset: its tag and where its contents start and end, and moves offset past it.
+bool readDerElement(const QByteArray &der, int &offset, quint8 &tag, int &contentStart, int &contentEnd)
+{
+    if (offset < 0 || offset + 2 > der.size())
+        return false;
+    tag = static_cast<quint8>(der.at(offset));
+    int position = offset + 1;
+    quint32 length = static_cast<quint8>(der.at(position++));
+    if (length & 0x80) {
+        const int count = length & 0x7f;
+        if (count == 0 || count > 3 || position + count > der.size())
+            return false;
+        length = 0;
+        for (int i = 0; i < count; ++i)
+            length = (length << 8) | static_cast<quint8>(der.at(position++));
+    }
+    if (length > static_cast<quint32>(der.size() - position))
+        return false;
+    contentStart = position;
+    contentEnd = position + static_cast<int>(length);
+    offset = contentEnd;
+    return true;
+}
+
+// The certificate's public key the way curl pins it: "sha256//" and the base64 of the SHA-256 of the DER
+// SubjectPublicKeyInfo. Empty if the certificate cannot be read.
+QByteArray publicKeyPin(const QSslCertificate &certificate)
+{
+    // Certificate ::= SEQUENCE { tbsCertificate ::= SEQUENCE { [0] version OPTIONAL, serialNumber, signature,
+    //                 issuer, validity, subject, subjectPublicKeyInfo, ... }, ... }
+    const QByteArray der = certificate.toDer();
+    int offset = 0, start = 0, end = 0;
+    quint8 tag = 0;
+    if (!readDerElement(der, offset, tag, start, end) || tag != 0x30)
+        return QByteArray();
+    offset = start;
+    if (!readDerElement(der, offset, tag, start, end) || tag != 0x30)
+        return QByteArray();
+    const int tbsEnd = end;
+    offset = start;
+    int field = 0;
+    while (offset < tbsEnd) {
+        const int elementStart = offset;
+        if (!readDerElement(der, offset, tag, start, end) || offset > tbsEnd)
+            return QByteArray();
+        if (field == 0 && tag == 0xa0)
+            continue;
+        if (field == 5) {
+            if (tag != 0x30)
+                return QByteArray();
+            return QByteArrayLiteral("sha256//")
+                + QCryptographicHash::hash(der.mid(elementStart, offset - elementStart), QCryptographicHash::Sha256).toBase64();
+        }
+        ++field;
+    }
+    return QByteArray();
 }
 
 // What the security panel shows about a host's certificate. The engine does not hand out the certificates it
@@ -975,7 +1043,7 @@ struct CertificateCheck {
     // False only when there was no answer (no connection, no handshake): nothing is known then.
     bool answered = false;
     bool verified = false;
-    QByteArray fingerprint;
+    QByteArray pin; // publicKeyPin() of the host's certificate
     CertificateDetails details;
 };
 
@@ -1014,7 +1082,7 @@ void checkCertificate(QObject *context, const QString &host, int port, std::func
         CertificateDetails &details = check.details;
         if (!chain.isEmpty()) {
             const QSslCertificate &leaf = chain.first();
-            check.fingerprint = leaf.digest(QCryptographicHash::Sha256);
+            check.pin = publicKeyPin(leaf);
             details.subject = leaf.subjectInfo(QSslCertificate::CommonName).value(0, host);
             details.subjectOrganization = leaf.subjectInfo(QSslCertificate::Organization).value(0);
             details.issuerCommonName = leaf.issuerInfo(QSslCertificate::CommonName).value(0);
@@ -1052,7 +1120,7 @@ void WebPage::confirmTlsError(bool claimed)
             updateSecurity();
             return;
         }
-        m_tlsErrorFingerprint = check.fingerprint;
+        m_tlsErrorPin = check.pin;
         setTlsError(true);
         updateSecurity();
     });
@@ -1066,7 +1134,7 @@ void WebPage::setTlsError(bool failed)
     m_tlsErrorFailingUri = failed ? url().toString() : QString();
     m_tlsErrorHost = failed ? url().host() : QString();
     if (!failed)
-        m_tlsErrorFingerprint.clear();
+        m_tlsErrorPin.clear();
     m_tlsErrorMessage.clear();
     emit tlsErrorChanged();
 }
@@ -1075,10 +1143,16 @@ void WebPage::acceptTlsCertificate()
 {
     if (!m_tlsErrorPending)
         return;
+    // NB: The engine trusts only the key it is given: without one there is nothing it could safely trust.
+    if (m_tlsErrorPin.isEmpty()) {
+        qWarning("WebPage: no certificate of %s to trust", qPrintable(m_tlsErrorHost));
+        return;
+    }
     CertificateException exception;
-    exception.fingerprint = m_tlsErrorFingerprint;
+    exception.host = m_tlsErrorHost;
+    exception.pin = m_tlsErrorPin;
     exception.fromPrivateTab = privateBrowsing();
-    certificateExceptions().insert(m_tlsErrorHost, exception);
+    certificateExceptions().insert(certificateExceptionKey(m_tlsErrorHost, exception.fromPrivateTab), exception);
     certificateDetails().remove(m_tlsErrorHost);
     sendCertificateExceptions();
     const QByteArray failing = m_tlsErrorFailingUri.toUtf8();
@@ -1086,26 +1160,27 @@ void WebPage::acceptTlsCertificate()
     sendToEngine(LB_EMBED_LOAD, 0, 0, 0, 0, failing);
 }
 
-// A host the user trusted shows another certificate than the one trusted: the trust is withdrawn and the user asked
-// again. NB: The engine has already sent what it was loading by the time we know; this only stops it going on.
+// A host the user trusted shows a certificate with another key than the one trusted. The engine refuses it by
+// itself; this withdraws the trust and asks the user again, about the new certificate.
 void WebPage::recheckCertificateException()
 {
     const QUrl pageUrl = url();
     const QString host = pageUrl.host();
-    if (pageUrl.scheme() != QLatin1String("https") || !certificateExceptions().contains(host))
+    const QString key = certificateExceptionKey(host, privateBrowsing());
+    if (pageUrl.scheme() != QLatin1String("https") || !certificateExceptions().contains(key))
         return;
-    checkCertificate(this, host, pageUrl.port(443), [this, host, pageUrl](const CertificateCheck &check) {
-        auto exception = certificateExceptions().constFind(host);
-        if (!check.answered || exception == certificateExceptions().constEnd() || check.fingerprint == exception->fingerprint)
+    checkCertificate(this, host, pageUrl.port(443), [this, host, key, pageUrl](const CertificateCheck &check) {
+        auto exception = certificateExceptions().constFind(key);
+        if (!check.answered || exception == certificateExceptions().constEnd() || check.pin == exception->pin)
             return;
         qWarning("WebPage: %s shows another certificate than the one trusted; trust withdrawn", qPrintable(host));
-        certificateExceptions().remove(host);
+        certificateExceptions().remove(key);
         certificateDetails().remove(host);
         sendCertificateExceptions();
         if (url().host() != host)
             return;
         sendToEngine(LB_EMBED_STOP);
-        m_tlsErrorFingerprint = check.fingerprint;
+        m_tlsErrorPin = check.pin;
         m_tlsErrorPending = false;
         setTlsError(true);
         m_tlsErrorFailingUri = pageUrl.toString();
@@ -1124,7 +1199,7 @@ void WebPage::forgetCertificateExceptions(bool privateOnly)
     bool changed = false;
     for (auto it = certificateExceptions().begin(); it != certificateExceptions().end();) {
         if (!privateOnly || it->fromPrivateTab) {
-            certificateDetails().remove(it.key());
+            certificateDetails().remove(it->host);
             it = certificateExceptions().erase(it);
             changed = true;
         } else {
@@ -1146,7 +1221,7 @@ void WebPage::updateSecurity()
     auto show = [this, host](const CertificateDetails &details) {
         if (url().host() != host)
             return;
-        const bool accepted = certificateExceptions().contains(host);
+        const bool accepted = certificateExceptions().contains(certificateExceptionKey(host, privateBrowsing()));
         m_security->update(true, accepted, details.subject, details.issuer, details.cipher, details.notBefore, details.notAfter,
             details.pem, details.issuerOrganization, details.issuerCommonName, details.subjectOrganization, details.errors);
     };

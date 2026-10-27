@@ -500,7 +500,7 @@ private:
     QString m_tlsErrorFailingUri;
     QString m_tlsErrorHost;
     QString m_tlsErrorMessage;
-    QByteArray m_tlsErrorFingerprint;
+    QByteArray m_tlsErrorPin; // the certificate's key, for the engine to trust if the user accepts
     void setTlsError(bool failed);
     void updateSecurity();
     QString m_permissionHost;

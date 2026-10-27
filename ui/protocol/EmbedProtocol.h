@@ -55,8 +55,11 @@ enum lb_embed_message_type {
     LB_EMBED_SET_SITE_OPTIONS = 30,           /* text = JSON {"userAgents": {host: name of one of the engine's
                                                  user agent presets}, "noScript": [hosts]}; a host also covers
                                                  its subdomains */
-    LB_EMBED_SET_CERTIFICATE_EXCEPTIONS = 33, /* text = hosts, one per line, whose certificates the user chose
-                                                 to trust although they could not be verified */
+    LB_EMBED_SET_CERTIFICATE_EXCEPTIONS = 33, /* text = the certificates the user chose to trust although they
+                                                 could not be verified, one per line: host, tab, the public
+                                                 key's pin ("sha256//" and the base64 SHA-256 of the DER
+                                                 SubjectPublicKeyInfo), tab, then "private" if it was accepted
+                                                 in a private tab (it holds for private tabs only) or nothing */
     LB_EMBED_GEOLOCATION_POSITION = 29,       /* a = the request's id (LB_EMBED_GEOLOCATION_START); b = 0, or why
                                                  there is no position (1 denied, 2 unavailable, 3 timed out);
                                                  text = JSON {"latitude", "longitude", "accuracy" (metres), and

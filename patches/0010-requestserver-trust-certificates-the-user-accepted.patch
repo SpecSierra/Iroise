@@ -71,50 +71,72 @@ index 60af7871e..4b17916ce 100644
      virtual void set_performance_monitor_enabled(bool) override;
  
 diff --git a/Services/RequestServer/Request.cpp b/Services/RequestServer/Request.cpp
-index b8053954b..f38d61a37 100644
+index b8053954b..90d830353 100644
 --- a/Services/RequestServer/Request.cpp
 +++ b/Services/RequestServer/Request.cpp
-@@ -41,6 +41,20 @@ static AK::Duration s_maximum_wait_for_cache = AK::Duration::from_seconds(30);
+@@ -40,6 +40,39 @@ static AK::Duration s_wait_for_cache_timeout = AK::Duration::from_seconds(10);
+ static AK::Duration s_maximum_wait_for_cache = AK::Duration::from_seconds(30);
  static AK::Duration s_revalidation_stall_timeout = AK::Duration::from_seconds(30);
  
- // Let Fetch authorize credentials; otherwise curl sends URL credentials itself.
-+static HashTable<ByteString> s_certificate_exceptions;
++// A host whose certificate the user chose to trust although it could not be verified: only the public key of the
++// certificate the user saw is accepted for it (curl's "sha256//<base64>" pin). Private requests keep their own.
++struct CertificateException {
++    ByteString host;
++    ByteString pinned_public_key;
++    IsPrivate is_private { IsPrivate::No };
++};
++static Vector<CertificateException> s_certificate_exceptions;
 +
-+void set_certificate_exceptions(Vector<ByteString> hosts)
++void set_certificate_exceptions(Vector<ByteString> exceptions)
 +{
 +    s_certificate_exceptions.clear();
-+    for (auto& host : hosts)
-+        s_certificate_exceptions.set(move(host));
++    for (auto const& exception : exceptions) {
++        // "<host>\t<pin>\t" for ordinary requests, "<host>\t<pin>\tprivate" for private ones.
++        auto fields = exception.split('\t', SplitBehavior::KeepEmpty);
++        if (fields.size() != 3 || fields[0].is_empty() || !fields[1].starts_with("sha256//"sv))
++            continue;
++        s_certificate_exceptions.append({ fields[0], fields[1], fields[2] == "private"sv ? IsPrivate::Yes : IsPrivate::No });
++    }
 +}
 +
-+static bool has_certificate_exception(URL::URL const& url)
++static CertificateException const* find_certificate_exception(URL::URL const& url, IsPrivate is_private)
 +{
-+    return url.scheme() == "https"sv && s_certificate_exceptions.contains(url.serialized_host().to_byte_string());
++    if (url.scheme() != "https"sv)
++        return nullptr;
++    auto host = url.serialized_host().to_byte_string();
++    for (auto const& exception : s_certificate_exceptions) {
++        if (exception.host == host && exception.is_private == is_private)
++            return &exception;
++    }
++    return nullptr;
 +}
 +
+ // Let Fetch authorize credentials; otherwise curl sends URL credentials itself.
  static ByteString url_without_credentials(URL::URL url)
  {
-     url.set_username(""sv);
-@@ -1395,6 +1409,10 @@ void Request::handle_connect_state()
+@@ -1395,6 +1428,11 @@ void Request::handle_connect_state()
      set_option(CURLOPT_NOSIGNAL, 1L);
  
      set_option(CURLOPT_SSL_CTX_FUNCTION, configure_ssl_context);
-+    if (has_certificate_exception(m_url)) {
++    if (auto const* exception = find_certificate_exception(m_url, m_client->is_private())) {
 +        set_option(CURLOPT_SSL_VERIFYPEER, 0L);
 +        set_option(CURLOPT_SSL_VERIFYHOST, 0L);
++        set_option(CURLOPT_PINNEDPUBLICKEY, exception->pinned_public_key.characters());
 +    }
  
      set_option(CURLOPT_URL, url_without_credentials(m_url).characters());
      set_option(CURLOPT_DISALLOW_USERNAME_IN_URL, 1L);
-@@ -1453,11 +1471,18 @@ void Request::handle_fetch_state()
+@@ -1453,11 +1491,20 @@ void Request::handle_fetch_state()
          set_option(CURLOPT_CAINFO, path.characters());
  
      set_option(CURLOPT_SSL_CTX_FUNCTION, configure_ssl_context);
-+    // NB: curl keeps connections made without verification apart from verified ones, so these are only reused for
-+    //     the host they were made for. Fetching missing intermediates (AIA) would verify after all, so it is left out.
-+    if (has_certificate_exception(m_url)) {
++    // NB: curl checks the pinned key even without verification, and keeps such connections apart from verified
++    //     ones, so they are only reused for the host they were made for. Fetching missing intermediates (AIA) would
++    //     verify after all, so it is left out.
++    if (auto const* exception = find_certificate_exception(m_url, m_client->is_private())) {
 +        set_option(CURLOPT_SSL_VERIFYPEER, 0L);
 +        set_option(CURLOPT_SSL_VERIFYHOST, 0L);
++        set_option(CURLOPT_PINNEDPUBLICKEY, exception->pinned_public_key.characters());
 +    } else {
  #ifndef AK_OS_MACOS
 -    if (!m_aia_collector)
@@ -129,27 +151,29 @@ index b8053954b..f38d61a37 100644
      if (m_content_decoding_disabled) {
          set_option(CURLOPT_ACCEPT_ENCODING, "identity");
 diff --git a/Services/RequestServer/Request.h b/Services/RequestServer/Request.h
-index 63fd505c1..ad5a3b6dc 100644
+index 63fd505c1..5745254fe 100644
 --- a/Services/RequestServer/Request.h
 +++ b/Services/RequestServer/Request.h
-@@ -409,4 +409,8 @@ private:
+@@ -409,4 +409,9 @@ private:
      Optional<Import> m_import;
  };
  
 +
-+// Hosts whose certificates are not verified, because the user chose to trust them.
-+void set_certificate_exceptions(Vector<ByteString> hosts);
++// Hosts whose certificates the user chose to trust, each pinned to the public key the user saw: one per line,
++// "<host>\t<sha256//base64 pin>\t" or with "private" last for private requests.
++void set_certificate_exceptions(Vector<ByteString> exceptions);
 +
  }
 diff --git a/Services/RequestServer/RequestServerControl.ipc b/Services/RequestServer/RequestServerControl.ipc
-index 321e419c7..d0c316fb1 100644
+index 321e419c7..4b7c87064 100644
 --- a/Services/RequestServer/RequestServerControl.ipc
 +++ b/Services/RequestServer/RequestServerControl.ipc
-@@ -25,6 +25,9 @@ endpoint RequestServerControl
+@@ -25,6 +25,10 @@ endpoint RequestServerControl
  
      set_proxy_configuration(HTTP::ProxyConfiguration proxy_configuration) =|
  
-+    // Hosts whose certificates the user chose to trust although they could not be verified.
++    // Hosts whose certificates the user chose to trust although they could not be verified, each pinned to the
++    // certificate's public key (see Request.h).
 +    set_certificate_exceptions(Vector<ByteString> hosts) =|
 +
      set_performance_monitor_enabled(bool enabled) =|
