@@ -45,6 +45,8 @@ enum lb_embed_message_type {
     LB_EMBED_SET_AD_BLOCKING = 14,            /* a = 1 to block advertising and trackers */
     LB_EMBED_SET_COOKIE_BANNER_BLOCKING = 15, /* a = 1 to block cookie banners */
     LB_EMBED_SET_DARK_MODE = 16,              /* a = 1 for pages to prefer their dark colours */
+    LB_EMBED_SET_GLOBAL_PRIVACY_CONTROL = 34, /* a = 1 to tell sites not to sell or share the user's data
+                                                 (Sec-GPC header, navigator.globalPrivacyControl) */
     LB_EMBED_CLEAR_DATA = 24,                 /* a = lb_embed_clear bits */
     LB_EMBED_DOWNLOAD_START = 25,             /* text = URL of a file to save into the downloads folder; a = from a private tab */
     LB_EMBED_DOWNLOAD_CANCEL = 26,            /* a = the download's id */

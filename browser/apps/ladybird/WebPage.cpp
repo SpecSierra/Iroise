@@ -707,6 +707,11 @@ void WebPage::applyCookieBannerBlockingGlobally(bool enabled)
     LadybirdEngine::instance()->send(0, LB_EMBED_SET_COOKIE_BANNER_BLOCKING, enabled ? 1 : 0);
 }
 
+void WebPage::applyGlobalPrivacyControlGlobally(bool enabled)
+{
+    LadybirdEngine::instance()->send(0, LB_EMBED_SET_GLOBAL_PRIVACY_CONTROL, enabled ? 1 : 0);
+}
+
 // The site options the engine applies itself, as it learns where a tab is going (LB_EMBED_SET_SITE_OPTIONS).
 static QJsonObject s_siteUserAgents;
 static QJsonArray s_noScriptSites;

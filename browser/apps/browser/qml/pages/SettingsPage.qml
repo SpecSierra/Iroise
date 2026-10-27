@@ -36,6 +36,7 @@ Page {
     }
     ConfigurationValue { id: adBlockConf; key: "/apps/harbour-iroise/settings/adblock_enabled"; defaultValue: true }
     ConfigurationValue { id: cookieBannerConf; key: "/apps/harbour-iroise/settings/cookie_banner_blocking"; defaultValue: true }
+    ConfigurationValue { id: gpcConf; key: "/apps/harbour-iroise/settings/global_privacy_control"; defaultValue: true }
     // 0 = light, 1 = dark, 2 = follow ambience (applied by SettingManager)
     ConfigurationValue { id: colorSchemeConf; key: "/apps/harbour-iroise/settings/color_scheme"; defaultValue: page._followsAmbience }
 
@@ -312,6 +313,20 @@ Page {
                 // dconf is the single source of truth; BrowserPage's
                 // ConfigurationValue pushes the change process-wide.
                 onClicked: cookieBannerConf.value = !cookieBannerConf.value
+            }
+
+            TextSwitch {
+                //% "Ask sites not to sell my data"
+                text: qsTrId("iroise-la-global_privacy_control")
+                //% "Sends the Global Privacy Control signal, a legal opt-out in some places"
+                description: qsTrId("iroise-la-global_privacy_control_description")
+                checked: gpcConf.value
+                automaticCheck: false
+                leftMargin: Theme.horizontalPageMargin + Theme.paddingLarge + _textSwitchIconCenter
+                _label.anchors.leftMargin: Theme.paddingMedium + _textSwitchIconCenter
+                // dconf is the single source of truth; BrowserPage's
+                // ConfigurationValue pushes the change process-wide.
+                onClicked: gpcConf.value = !gpcConf.value
             }
 
             SectionHeader {

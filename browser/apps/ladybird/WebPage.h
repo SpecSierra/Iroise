@@ -212,6 +212,7 @@ public:
     static bool adBlockEnabledGlobally();
     static void applyAdBlockAllowlistGlobally(const QString &json);
     static void applyCookieBannerBlockingGlobally(bool enabled);
+    static void applyGlobalPrivacyControlGlobally(bool enabled);
     // Per-site user agents (JSON object host → profile id, the site_ua_overrides key) and the hosts JavaScript is
     // off for (JSON array, the javascript_blocklist key). The engine applies both as tabs navigate.
     static void applySiteUaOverridesGlobally(const QString &json);

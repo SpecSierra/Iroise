@@ -1245,6 +1245,11 @@ private:
             }
             return;
         }
+        if (header.type == LB_EMBED_SET_GLOBAL_PRIVACY_CONTROL) {
+            // NB: Open pages pick the change up through the settings' observers.
+            WebView::Application::settings().set_global_privacy_control(header.a ? WebView::GlobalPrivacyControl::Yes : WebView::GlobalPrivacyControl::No);
+            return;
+        }
         if (header.type == LB_EMBED_SET_DARK_MODE) {
             m_dark_mode = header.a != 0;
             // NB: Every page that comes to host a tab gets the application's colour scheme again

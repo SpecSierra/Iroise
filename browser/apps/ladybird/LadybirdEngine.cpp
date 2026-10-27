@@ -261,6 +261,7 @@ bool LadybirdEngine::isSetting(lb_embed_message_type type)
     case LB_EMBED_SET_SITE_OPTIONS:
     case LB_EMBED_SET_CERTIFICATE_EXCEPTIONS:
     case LB_EMBED_SET_DARK_MODE:
+    case LB_EMBED_SET_GLOBAL_PRIVACY_CONTROL:
         return true;
     default:
         return false;

@@ -572,6 +572,11 @@ void WebContainer::setCookieBannerBlockingEnabled(bool enabled)
     WebPage::applyCookieBannerBlockingGlobally(enabled);
 }
 
+void WebContainer::setGlobalPrivacyControlEnabled(bool enabled)
+{
+    WebPage::applyGlobalPrivacyControlGlobally(enabled);
+}
+
 void WebContainer::setAdBlockAllowlist(const QString &json)
 {
     WebPage::applyAdBlockAllowlistGlobally(json);

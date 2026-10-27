@@ -157,6 +157,14 @@ Page {
     }
 
     ConfigurationValue {
+        id: globalPrivacyControl
+        key: "/apps/harbour-iroise/settings/global_privacy_control"
+        defaultValue: true
+        onValueChanged: webView.setGlobalPrivacyControlEnabled(value)
+        Component.onCompleted: webView.setGlobalPrivacyControlEnabled(value)
+    }
+
+    ConfigurationValue {
         id: siteUaOverrides
         key: "/apps/harbour-iroise/settings/site_ua_overrides"
         defaultValue: "{}"
