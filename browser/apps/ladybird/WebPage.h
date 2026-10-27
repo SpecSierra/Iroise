@@ -204,6 +204,8 @@ public:
     // pushed down by WebContainer. Combined with the per-tab active flag
     // to decide whether the engine should treat the page as visible.
     void setAppForeground(bool foreground);
+    // Frees the JavaScript objects the page no longer reaches (WebContainer, when memory is short).
+    void collectGarbage();
 
     // Ad blocking for the whole engine, on or off: the engine blocks requests and hides elements for every page.
     // Driven by the setting in BrowserPage.qml (via WebContainer::setAdBlockEnabled), so it holds with any

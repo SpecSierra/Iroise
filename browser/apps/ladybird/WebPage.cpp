@@ -321,6 +321,11 @@ void WebPage::setActive(bool active)
     emit activeChanged();
 }
 
+void WebPage::collectGarbage()
+{
+    sendToEngine(LB_EMBED_COLLECT_GARBAGE);
+}
+
 void WebPage::setAppForeground(bool foreground)
 {
     if (m_appForeground == foreground)

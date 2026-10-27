@@ -745,7 +745,7 @@ void WebContainer::collectGarbage(bool backgroundOnly)
     for (WebPage *page : m_pages) {
         if (!page || (backgroundOnly && page == m_contentItem && m_foreground))
             continue;
-        page->sendToEngine(LB_EMBED_COLLECT_GARBAGE);
+        page->collectGarbage();
     }
 }
 
