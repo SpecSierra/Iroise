@@ -121,10 +121,16 @@ void LadybirdEngine::start()
         environment.insert(QStringLiteral("XDG_CONFIG_HOME"), data + QStringLiteral("/config"));
         environment.insert(QStringLiteral("XDG_CACHE_HOME"), cache);
     }
-    // The engine saves downloads into this folder without asking, and gives up if it is not there.
+    // The engine saves every download by itself, without asking, and gives up if its folder is not there. So it
+    // saves into a folder of the app's, and a file reaches the Downloads folder only once the user said to save it
+    // (DownloadModel).
     QString downloads = engineHome.isEmpty() ? BrowserPaths::downloadLocation() : engineHome + QStringLiteral("/Downloads");
+    QString incoming = (engineHome.isEmpty() ? BrowserPaths::cacheLocation() : engineHome + QStringLiteral("/.cache"))
+        + QStringLiteral("/incoming-downloads");
     QDir().mkpath(downloads);
-    environment.insert(QStringLiteral("XDG_DOWNLOAD_DIR"), downloads);
+    QDir().mkpath(incoming);
+    DownloadModel::instance()->setFolders(incoming, downloads);
+    environment.insert(QStringLiteral("XDG_DOWNLOAD_DIR"), incoming);
     // The engine paces its pages at 60 frames a second unless told the screen's rate (the Jolla Phone 2's is 90).
     if (QScreen* screen = QGuiApplication::primaryScreen()) {
         if (!qgetenv("IROISE_LOG_ENGINE").isEmpty())

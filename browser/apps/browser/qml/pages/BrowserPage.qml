@@ -277,8 +277,8 @@ Page {
         property int value: 3
     }
 
-    // Downloads go to the Downloads folder by themselves (see the Downloads page); these say when one starts
-    // and when it is done.
+    // A download the user chose to save goes to the Downloads folder (see DownloadBanner and the Downloads page);
+    // these say when one starts and when it is done.
     Nemo.Notification {
         id: downloadNotification
         appName: "Iroise"
@@ -888,6 +888,9 @@ Page {
 
     // "Save password?" prompt after a login form is submitted.
     Browser.SaveLoginBanner { webView: webView }
+
+    // "Save this file?" for a download a page started.
+    Browser.DownloadBanner { webView: webView }
 
     Browser.SelectMenuOverlay { webView: webView }
 

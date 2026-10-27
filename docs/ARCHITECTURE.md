@@ -105,9 +105,12 @@ drag.
 are the engine's own requests, shown with Silica's dialogs and pickers. Date and time fields have no engine
 request, so a tap on one opens the Silica picker and the chosen value is written back into the page.
 
-**Downloads.** The engine saves every download itself into the Downloads folder and reports its progress; the
-interface lists the run's downloads and sends a notification when one starts and ends. There is no "Save as":
-the store's permission covers the Downloads folder only. PDFs open in the engine's own viewer.
+**Downloads.** The engine saves every download itself, as soon as a page starts one, and reports its progress.
+So it saves into a folder in the app's cache, and the interface asks first: "Save this file?", with the site and
+the size. Saved, the file goes into the Downloads folder once complete; cancelled, the download stops and the file
+is deleted. A download the user started from the interface ("Save link") is not asked about. The interface lists
+the run's saved downloads and sends a notification when one starts and ends. There is no "Save as": the store's
+permission covers the Downloads folder only. PDFs open in the engine's own viewer.
 
 **Permissions.** A page asking for the microphone or the location is asked about with a banner, and the answer
 holds for that site until the browser closes. Location requests from frames of other sites are refused. Positions
