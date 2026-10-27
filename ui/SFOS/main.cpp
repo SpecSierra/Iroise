@@ -1371,6 +1371,10 @@ private:
         case LB_EMBED_STOP:
             view.stop_loading();
             break;
+        case LB_EMBED_COLLECT_GARBAGE:
+            // NB: The same request as upstream's debug menu, so no patch to carry.
+            view.debug_request("collect-garbage"sv);
+            break;
         case LB_EMBED_SET_VISIBLE:
             view.set_system_visibility_state(header.a ? Web::HTML::VisibilityState::Visible : Web::HTML::VisibilityState::Hidden);
             view.set_has_system_focus(header.a != 0);

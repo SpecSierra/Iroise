@@ -77,6 +77,8 @@ enum lb_embed_message_type {
     LB_EMBED_EXIT_FULLSCREEN = 32,    /* the user left fullscreen (LB_EMBED_FULLSCREEN) from the app's side */
     LB_EMBED_SET_DESKTOP_MODE = 31,   /* a = 1 for the view to present itself as a desktop browser, where no site
                                          option says otherwise */
+    LB_EMBED_COLLECT_GARBAGE = 35,    /* free the JavaScript objects the view's page no longer reaches (memory is
+                                         short, or the app went to the background) */
 
     /* engine -> Silica app */
     LB_EMBED_FRAME = 101,   /* a, b = painted size; c, d = buffer size; e = row pitch in bytes; fd = dma-buf (BGRA);

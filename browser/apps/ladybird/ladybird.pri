@@ -10,6 +10,7 @@ HEADERS += \
     $$PWD/EngineView.h \
     $$PWD/LadybirdEngine.h \
     $$PWD/LadybirdGeolocation.h \
+    $$PWD/MemoryMonitor.h \
     $$PWD/WebContainer.h \
     $$PWD/WebPage.h
 
@@ -19,5 +20,6 @@ SOURCES += \
     $$PWD/EngineView.cpp \
     $$PWD/LadybirdEngine.cpp \
     $$PWD/LadybirdGeolocation.cpp \
+    $$PWD/MemoryMonitor.cpp \
     $$PWD/WebContainer.cpp \
     $$PWD/WebPage.cpp

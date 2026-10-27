@@ -12,6 +12,9 @@
 #include <QMap>
 #include <QList>
 #include <QPointer>
+#include <QElapsedTimer>
+
+#include "MemoryMonitor.h"
 
 
 class QTimer;
@@ -181,8 +184,11 @@ private:
     void touchMru(int tabId);              // mark tabId most-recently-used
     void discardPage(int tabId);           // tear down the page, keep the tab
     void enforceLiveTabBudget();           // discard tabs beyond the MRU cap
-    void checkMemoryPressure();            // poll MemFree, tighten cap if low
     int effectiveLiveTabCap() const;       // current cap (shrinks under pressure)
+
+    // --- Memory: MemoryMonitor says how short memory is; this decides what to give back. ---
+    void memoryLevelChanged(MemoryMonitor::Level level);
+    void collectGarbage(bool backgroundOnly); // ask live pages' engines to free unreachable JS objects
 
     WebPage *m_contentItem = nullptr;
     PersistentTabModel *m_persistentTabModel = nullptr;
@@ -192,11 +198,10 @@ private:
     QMap<int, WebPage *> m_pages;
     qreal m_bottomInset = 0.0;              // reserved bottom URL-bar strip (dip); see setContentBottomInset
     QList<int> m_mruTabs;                   // most-recently-used first; front = active
-    QTimer *m_memoryPressureTimer = nullptr;
+    MemoryMonitor *m_memoryMonitor = nullptr;
+    QElapsedTimer m_sinceGarbageCollection;
     bool m_tabDiscardEnabled = true;        // IROISE_TAB_DISCARD (default on)
     int m_pressureKeepMin = 2;              // IROISE_TAB_DISCARD_KEEP_MIN
-    int m_memFreeThresholdMb = 400;         // IROISE_TAB_DISCARD_MEMFREE_MB
-    bool m_underMemoryPressure = false;
     QPointer<QObject> m_chromeWindow;
     QPointer<QQuickWindow> m_foregroundWindow;
     bool m_completed = false;

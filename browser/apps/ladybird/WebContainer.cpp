@@ -76,34 +76,15 @@ WebContainer::WebContainer(QQuickItem *parent)
     if (qEnvironmentVariableIsSet("IROISE_TAB_DISCARD"))
         m_tabDiscardEnabled = qgetenv("IROISE_TAB_DISCARD").trimmed() != "0";
     // A tab is a whole page process: phones with less memory keep fewer of them alive.
-    {
-        QFile meminfo(QStringLiteral("/proc/meminfo"));
-        if (meminfo.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            const QByteArray line = meminfo.readLine();
-            if (line.startsWith("MemTotal:")) {
-                const long totalMb = line.mid(9).trimmed().split(' ').first().toLong() / 1024;
-                m_maxLiveTabCount = totalMb <= 4096 ? 3 : totalMb <= 6144 ? 4 : 5;
-            }
-        }
-    }
-    if (qEnvironmentVariableIsSet("IROISE_MAX_LIVE_TABS"))
-        m_maxLiveTabCount = qMax(1, qEnvironmentVariableIntValue("IROISE_MAX_LIVE_TABS"));
+    m_memoryMonitor = new MemoryMonitor(this);
+    m_maxLiveTabCount = m_memoryMonitor->liveTabBudget();
     if (qEnvironmentVariableIsSet("IROISE_TAB_DISCARD_KEEP_MIN"))
         m_pressureKeepMin = qMax(1, qEnvironmentVariableIntValue("IROISE_TAB_DISCARD_KEEP_MIN"));
-    if (qEnvironmentVariableIsSet("IROISE_TAB_DISCARD_MEMFREE_MB"))
-        m_memFreeThresholdMb = qMax(0, qEnvironmentVariableIntValue("IROISE_TAB_DISCARD_MEMFREE_MB"));
+    m_pressureKeepMin = qMin(m_pressureKeepMin, m_maxLiveTabCount);
+    connect(m_memoryMonitor, &MemoryMonitor::levelChanged, this, &WebContainer::memoryLevelChanged);
     qInfo() << "[DISCARD] enabled=" << m_tabDiscardEnabled
             << "maxLive=" << m_maxLiveTabCount
-            << "keepMin=" << m_pressureKeepMin
-            << "memFreeThreshMB=" << m_memFreeThresholdMb;
-
-    // Poll MemFree so we can shed tabs under pressure even without tab switches.
-    m_memoryPressureTimer = new QTimer(this);
-    m_memoryPressureTimer->setInterval(8000);
-    connect(m_memoryPressureTimer, &QTimer::timeout,
-            this, &WebContainer::checkMemoryPressure);
-    if (m_tabDiscardEnabled)
-        m_memoryPressureTimer->start();
+            << "keepMin=" << m_pressureKeepMin;
 
     // Foreground tracking follows the Wayland window visibility: lipstick
     // marks the window Minimized when the app is covered/on the home screen
@@ -385,6 +366,9 @@ void WebContainer::setForeground(bool f)
                 it.value()->setAppForeground(f);
             }
         }
+        // Out of sight, the pages' garbage can go: nobody waits on a pause now.
+        if (!f)
+            collectGarbage(false);
         emit foregroundChanged();
     }
 }
@@ -680,10 +664,16 @@ void WebContainer::touchMru(int tabId)
 
 int WebContainer::effectiveLiveTabCap() const
 {
-    // Normally keep the active tab + (m_maxLiveTabCount-1) MRU tabs. Under
-    // memory pressure, shrink toward m_pressureKeepMin so we shed aggressively.
-    if (m_underMemoryPressure)
-        return qMin(m_maxLiveTabCount, m_pressureKeepMin);
+    // Normally keep the active tab + (m_maxLiveTabCount-1) MRU tabs. Short of
+    // memory, shrink toward m_pressureKeepMin; out of it, keep only the active tab.
+    switch (m_memoryMonitor->level()) {
+    case MemoryMonitor::Critical:
+        return 1;
+    case MemoryMonitor::Low:
+        return m_pressureKeepMin;
+    case MemoryMonitor::Normal:
+        break;
+    }
     return m_maxLiveTabCount;
 }
 
@@ -737,35 +727,26 @@ void WebContainer::enforceLiveTabBudget()
     }
 }
 
-void WebContainer::checkMemoryPressure()
+void WebContainer::memoryLevelChanged(MemoryMonitor::Level level)
 {
-    if (!m_tabDiscardEnabled)
+    if (level == MemoryMonitor::Normal)
         return;
+    // Background tabs beyond the budget go first: a page is a whole process. Then what the rest no longer reach.
+    enforceLiveTabBudget();
+    collectGarbage(level == MemoryMonitor::Low);
+}
 
-    // MemAvailable is bogus on this vendor kernel; trust MemFree.
-    QFile f(QStringLiteral("/proc/meminfo"));
-    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+void WebContainer::collectGarbage(bool backgroundOnly)
+{
+    // A collection pauses the page's scripts for a moment: at most one round per half minute.
+    if (m_sinceGarbageCollection.isValid() && m_sinceGarbageCollection.elapsed() < 30000)
         return;
-    long memFreeKb = -1;
-    while (!f.atEnd()) {
-        const QByteArray line = f.readLine();
-        if (line.startsWith("MemFree:")) {
-            memFreeKb = line.mid(8).trimmed().split(' ').first().toLong();
-            break;
-        }
+    m_sinceGarbageCollection.start();
+    for (WebPage *page : m_pages) {
+        if (!page || (backgroundOnly && page == m_contentItem && m_foreground))
+            continue;
+        page->sendToEngine(LB_EMBED_COLLECT_GARBAGE);
     }
-    f.close();
-    if (memFreeKb < 0)
-        return;
-
-    const bool nowPressure = (memFreeKb / 1024) < m_memFreeThresholdMb;
-    if (nowPressure != m_underMemoryPressure) {
-        m_underMemoryPressure = nowPressure;
-        qInfo() << "[DISCARD] memory pressure" << (nowPressure ? "ON" : "OFF")
-                << "MemFree=" << (memFreeKb / 1024) << "MB cap=" << effectiveLiveTabCap();
-    }
-    if (nowPressure)
-        enforceLiveTabBudget();
 }
 
 WebPage *WebContainer::getOrCreatePage(int tabId)

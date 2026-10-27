@@ -68,6 +68,18 @@ Three classes carry the engine into it. `EngineView` is one engine view as a Qt 
 sends input, size and navigation. `WebPage` builds a tab's page on top of it, which is what the QML uses.
 `WebContainer` keeps the tabs' pages, and discards background ones when memory runs short.
 
+**Memory.** All of it lives in the interface, on engine features upstream already has, so there is nothing to
+rebase:
+
+| Part | What it does |
+|---|---|
+| `MemoryMonitor` | every 5 s, a level: Normal, Low or Critical. Kernel pressure stall info when there is some, else free memory plus droppable file cache against 10% / 5% of RAM |
+| live-tab budget | 2 tabs keep their page up to 3 GB of RAM, 3 up to 4 GB, 4 up to 6 GB, else 5; Low keeps 2, Critical only the tab on screen |
+| garbage collection | `LB_EMBED_COLLECT_GARBAGE` (upstream's `collect-garbage` debug request) to the background tabs on Low, every tab on Critical and when the app leaves the screen; once per 30 s at most |
+| `MemoryGuard` | ends any page process past 30% of RAM; pages are first in line for the kernel's out-of-memory killer |
+
+Overrides for testing: `IROISE_MAX_LIVE_TABS`, `IROISE_TAB_DISCARD_KEEP_MIN`, `IROISE_TAB_DISCARD=0`.
+
 ## Talking to pages
 
 The engine does not tell a front end everything a browser interface needs: where a page is scrolled to, what is
