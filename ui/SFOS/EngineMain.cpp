@@ -71,6 +71,11 @@ int iroise_engine_main(char const* role, int argc, char** argv)
     Main::Arguments arguments { .argc = argc, .argv = argv, .strings = strings.span() };
 
     auto role_name = StringView { role, strlen(role) };
+    // The audio client names itself "Ladybird" (pa_context_new in PulseAudioWrappers.cpp); the system shows the app's
+    // name instead. libpulse applies PULSE_PROP_OVERRIDE over the client's own properties. The engine passes only an
+    // allowlist of variables to its helpers, so this is set here, in the helper itself.
+    if (role_name == "AudioServer"sv)
+        setenv("PULSE_PROP_OVERRIDE", "application.name=\"Iroise\" application.icon_name=\"harbour-iroise\"", 1);
     // NB: Before the role's sandbox, which may keep it from /proc/self.
     Ladybird::raise_out_of_memory_priority(role_name);
     ErrorOr<int> result = Error::from_string_literal("Unknown engine role");
