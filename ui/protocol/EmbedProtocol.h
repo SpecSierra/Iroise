@@ -105,8 +105,9 @@ enum lb_embed_message_type {
     LB_EMBED_COLOR_PICKER = 113,  /* text = the colour an <input type=color> has now, as #rrggbb. Answered
                                      with LB_EMBED_COLOR_PICKED. */
     LB_EMBED_PAGE_MESSAGE = 116,  /* text = what a script of the app's posted from the page, by calling
-                                     console.log(LB_EMBED_PAGE_MESSAGE_MARKER, text). Any script in the page can
-                                     post one too, so the app treats these as hints, never as proof. */
+                                     console.log(LB_EMBED_PAGE_MESSAGE_MARKER, text). Only the view's top document
+                                     is heard, not its frames, but any script that document runs can post one
+                                     too, so the app treats these as hints, never as proof. */
     LB_EMBED_PAGE_COLOR = 115,    /* a = lb_embed_page_color; text = the colour as #rrggbb, empty when the page
                                      no longer names one */
     LB_EMBED_NEW_VIEW = 122,      /* the engine opened this view for a page (a link with a target, window.open);

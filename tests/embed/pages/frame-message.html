@@ -1,0 +1,10 @@
+<!doctype html><title>Frame message</title>
+<script>
+// The frame comes from another site (localhost, where this page is on 127.0.0.1): its own process.
+addEventListener("message", event => {
+    if (event.data === "ran")
+        console.log("\u0001iroise", "the frame ran");
+});
+</script>
+<iframe id="frame"></iframe>
+<script>document.getElementById("frame").src = "http://localhost:" + location.port + "/message-frame.html";</script>

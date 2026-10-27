@@ -84,11 +84,13 @@ Overrides for testing: `IROISE_MAX_LIVE_TABS`, `IROISE_TAB_DISCARD_KEEP_MIN`, `I
 
 The engine does not tell a front end everything a browser interface needs: where a page is scrolled to, what is
 selected, whether a video is playing. So a small script of ours runs in every page and reports those as messages,
-at most once a frame. Ladybird has no separate world for scripts like ours, so it runs in the page's own, and any
-script on the page, including a frame from another site, could send the same messages. The interface treats them
-as hints (where to put the toolbar, where to draw the selection handles) and never as proof. Things only the user
-can cause, such as a login form being sent or a selection being started, count only within a few seconds of the
-user's own touch or key press.
+at most once a frame. They travel through the console, and the engine passes on the console of the tab's own
+document only: a frame cannot send them, not even one from another site with a process of its own (a test
+checks that). Ladybird has no separate world for scripts like ours, though, so any script the page itself runs,
+an advertiser's included, could send the same messages. The interface treats them as hints about that page (where
+to put the toolbar, where to draw the selection handles) and never as proof. Things only the user can cause, such
+as a login form being sent or a selection being started, count only within a few seconds of the user's own touch
+or key press.
 
 The interface can also ask the page a question: it runs an expression through the engine's console and gets the
 answer back as JSON, numbered so that each answer finds its question.

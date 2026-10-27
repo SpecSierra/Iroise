@@ -53,6 +53,18 @@ class Loading(EngineTest):
         self.engine.load(page('message.html'))
         self.engine.wait_for('PAGE_MESSAGE', lambda message: message.text == 'hello from the page')
 
+    def test_a_frame_from_another_site_cannot_post_a_page_message(self):
+        # NB: The interface trusts page messages a little (logins, selections): only the tab's own document may
+        #     post them, never an advert in a frame. Upstream relays the top document's console only.
+        server = Server()
+        try:
+            self.engine.load(server.url('frame-message.html'))
+            self.engine.wait_for('PAGE_MESSAGE', lambda message: message.text == 'the frame ran')
+            self.engine.pump(1)
+            self.assertFalse(self.engine.received('PAGE_MESSAGE', lambda message: message.text == 'hello from a frame'))
+        finally:
+            server.close()
+
 
 class Taps(EngineTest):
     def test_a_tap_follows_a_link(self):

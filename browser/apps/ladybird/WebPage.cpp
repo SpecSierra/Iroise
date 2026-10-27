@@ -1538,9 +1538,9 @@ void WebPage::pageMessage(const QString &kind, const QJsonValue &data)
         m_playsVideo = data.toBool();
         updateMediaState();
     } else if (kind == QLatin1String("login")) {
-        // NB: The site is the one the tab is at, never anything the page says. And any frame in the page can post
-        //     this (its console reaches us as the page's does), an advert's included, so a login only counts right
-        //     after the user touched or typed: a frame cannot have us offer to save credentials of its own unasked.
+        // NB: The site is the one the tab is at, never anything the page says. Only the tab's top document is heard,
+        //     not its frames, but any script it runs can post this (an advertiser's included), so a login only
+        //     counts right after the user touched or typed: no script can have us offer to save credentials unasked.
         if (url().scheme() != QLatin1String("https") || privateBrowsing() || !userActedRecently())
             return;
         m_capturedLogin = data.toObject().toVariantMap();
@@ -1550,7 +1550,8 @@ void WebPage::pageMessage(const QString &kind, const QJsonValue &data)
         // NB: The interface places the handles in its own pixels, which are the device's; the page answers in
         //     CSS pixels.
         QJsonObject selection = data.toObject();
-        // NB: As with logins, any frame can post this; a selection only starts from the user's own long press.
+        // NB: As with logins, any script of the page can post this; a selection only starts from the user's own
+        //     long press.
         if (!m_textSelectionActive && !userActedRecently())
             return;
         const qreal scale = deviceScaleFactor();
