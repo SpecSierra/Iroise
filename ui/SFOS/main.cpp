@@ -539,6 +539,7 @@ public:
         , m_theme(move(theme))
     {
         m_host.on_message = [this](lb_embed_header const& header, StringView text) { handle(header, text); };
+        apply_user_scripts();
     }
 
 private:
@@ -922,9 +923,105 @@ private:
         return source;
     }
 
+    // An open audio stream keeps the phone from sleeping: PulseAudio holds a CPU keepalive for as long as any
+    // stream plays, silent or not. Pages open one without meaning to, so this script, run like autoconsent:
+    // - holds a Web Audio context made before the user's first tap suspended until that tap, as Chrome and
+    //   Firefox do (upstream's AudioContext is "always allowed to start", see its FIXME);
+    // - pauses muted media while the page is hidden and plays it again when the page shows. The engine plays
+    //   muted media at volume 0, so the stream stays open.
+    static constexpr auto audio_gate_source = R"js((function () {
+    "use strict";
+    if (window.__iroiseAudioGate)
+        return;
+    try { Object.defineProperty(window, "__iroiseAudioGate", { value: true }); } catch (e) {}
+
+    var NativeContext = window.AudioContext;
+    if (typeof NativeContext === "function") {
+        var proto = NativeContext.prototype;
+        var nativeSuspend = proto.suspend, nativeResume = proto.resume, nativeClose = proto.close;
+        var held = new Set(), waiting = [], tapped = false;
+        var tapEvents = ["pointerup", "touchend", "mousedown", "keydown", "click"];
+
+        var activated = function () {
+            return tapped || !!(navigator.userActivation && navigator.userActivation.hasBeenActive);
+        };
+        var release = function () {
+            if (tapped)
+                return;
+            tapped = true;
+            tapEvents.forEach(function (type) { removeEventListener(type, onTap, true); });
+            held.forEach(function (context) {
+                if (context.state === "suspended")
+                    nativeResume.call(context).catch(function () {});
+            });
+            held.clear();
+            waiting.splice(0).forEach(function (w) { nativeResume.call(w[0]).then(w[1], w[2]); });
+        };
+        var onTap = function (event) {
+            if (event.isTrusted)
+                release();
+        };
+        tapEvents.forEach(function (type) { addEventListener(type, onTap, true); });
+
+        var AudioContext = function AudioContext() {
+            if (!new.target)
+                return NativeContext.apply(this, arguments);
+            var context = Reflect.construct(NativeContext, arguments, new.target);
+            if (!activated()) {
+                held.add(context);
+                nativeSuspend.call(context).catch(function () {});
+            }
+            return context;
+        };
+        AudioContext.prototype = proto;
+        Object.setPrototypeOf(AudioContext, NativeContext);
+        try { Object.defineProperty(proto, "constructor", { value: AudioContext, writable: true, configurable: true }); } catch (e) {}
+
+        // Like Chrome: a page's resume() before the first tap settles once the tap lets the context run.
+        proto.resume = function () {
+            if (held.has(this) && !activated()) {
+                var context = this;
+                return new Promise(function (resolve, reject) { waiting.push([context, resolve, reject]); });
+            }
+            held.delete(this);
+            return nativeResume.apply(this, arguments);
+        };
+        proto.suspend = function () {
+            held.delete(this);
+            return nativeSuspend.apply(this, arguments);
+        };
+        proto.close = function () {
+            held.delete(this);
+            return nativeClose.apply(this, arguments);
+        };
+
+        if (window.webkitAudioContext === NativeContext)
+            window.webkitAudioContext = AudioContext;
+        window.AudioContext = AudioContext;
+    }
+
+    var pausedWhileHidden = [];
+    document.addEventListener("visibilitychange", function () {
+        if (document.visibilityState === "hidden") {
+            document.querySelectorAll("video, audio").forEach(function (media) {
+                if (!media.paused && (media.muted || media.volume === 0)) {
+                    media.pause();
+                    pausedWhileHidden.push(media);
+                }
+            });
+        } else {
+            pausedWhileHidden.splice(0).forEach(function (media) {
+                if (media.isConnected && media.paused)
+                    media.play().catch(function () {});
+            });
+        }
+    }, true);
+})();)js"sv;
+
     void apply_user_scripts()
     {
         Vector<ByteString> scripts;
+        scripts.append(ByteString { audio_gate_source });
         if (m_block_cookie_banners && !autoconsent_source().is_empty())
             scripts.append(autoconsent_source());
         WebView::Application::the().set_user_scripts(move(scripts));
