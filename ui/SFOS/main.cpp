@@ -927,71 +927,104 @@ private:
     // stream plays, silent or not. Pages open one without meaning to, so this script, run like autoconsent:
     // - holds a Web Audio context made before the user's first tap suspended until that tap, as Chrome and
     //   Firefox do (upstream's AudioContext is "always allowed to start", see its FIXME);
-    // - pauses muted media while the page is hidden and plays it again when the page shows. The engine plays
-    //   muted media at volume 0, so the stream stays open.
+    // - while the page is hidden (screen off, app or tab in the background), suspends its Web Audio contexts, as
+    //   iOS does, and pauses its muted media (the engine plays muted media at volume 0, so the stream stays
+    //   open); both come back when the page shows. Audible media keeps playing: that is the user's music.
     static constexpr auto audio_gate_source = R"js((function () {
     "use strict";
     if (window.__iroiseAudioGate)
         return;
     try { Object.defineProperty(window, "__iroiseAudioGate", { value: true }); } catch (e) {}
 
+    var hidden = function () { return document.visibilityState === "hidden"; };
+    var onHide = [], onShow = [];
+
     var NativeContext = window.AudioContext;
     if (typeof NativeContext === "function") {
         var proto = NativeContext.prototype;
         var nativeSuspend = proto.suspend, nativeResume = proto.resume, nativeClose = proto.close;
-        var held = new Set(), waiting = [], tapped = false;
+        var contexts = new Set();   // every open context of this document
+        var held = new Set();       // suspended until the first tap
+        var asleep = new Set();     // suspended while the page is hidden
+        var waiting = [];           // a page's resume() calls, settled once the context may run
+        var pageSuspended = new WeakSet(); // suspended by the page itself: not ours to resume
+        var tapped = false;
         var tapEvents = ["pointerup", "touchend", "mousedown", "keydown", "click"];
 
         var activated = function () {
             return tapped || !!(navigator.userActivation && navigator.userActivation.hasBeenActive);
         };
-        var release = function () {
-            if (tapped)
+        var mayRun = function (context) { return !held.has(context) && !asleep.has(context); };
+        var wake = function () {
+            contexts.forEach(function (context) {
+                if (mayRun(context) && context.state === "suspended" && !pageSuspended.has(context))
+                    nativeResume.call(context).catch(function () {});
+            });
+            waiting = waiting.filter(function (w) {
+                if (!mayRun(w[0]))
+                    return true;
+                nativeResume.call(w[0]).then(w[1], w[2]);
+                return false;
+            });
+        };
+        var onTap = function (event) {
+            if (!event.isTrusted || tapped)
                 return;
             tapped = true;
             tapEvents.forEach(function (type) { removeEventListener(type, onTap, true); });
-            held.forEach(function (context) {
-                if (context.state === "suspended")
-                    nativeResume.call(context).catch(function () {});
-            });
             held.clear();
-            waiting.splice(0).forEach(function (w) { nativeResume.call(w[0]).then(w[1], w[2]); });
-        };
-        var onTap = function (event) {
-            if (event.isTrusted)
-                release();
+            wake();
         };
         tapEvents.forEach(function (type) { addEventListener(type, onTap, true); });
+
+        onHide.push(function () {
+            contexts.forEach(function (context) {
+                if (context.state === "running") {
+                    asleep.add(context);
+                    nativeSuspend.call(context).catch(function () {});
+                }
+            });
+        });
+        onShow.push(function () {
+            asleep.clear();
+            wake();
+        });
 
         var AudioContext = function AudioContext() {
             if (!new.target)
                 return NativeContext.apply(this, arguments);
             var context = Reflect.construct(NativeContext, arguments, new.target);
-            if (!activated()) {
+            contexts.add(context);
+            if (!activated())
                 held.add(context);
+            if (hidden())
+                asleep.add(context);
+            if (!mayRun(context))
                 nativeSuspend.call(context).catch(function () {});
-            }
             return context;
         };
         AudioContext.prototype = proto;
         Object.setPrototypeOf(AudioContext, NativeContext);
         try { Object.defineProperty(proto, "constructor", { value: AudioContext, writable: true, configurable: true }); } catch (e) {}
 
-        // Like Chrome: a page's resume() before the first tap settles once the tap lets the context run.
+        // Like Chrome: a page's resume() before the first tap (or, here, while hidden) settles once the context runs.
         proto.resume = function () {
-            if (held.has(this) && !activated()) {
+            pageSuspended.delete(this);
+            if (contexts.has(this) && !mayRun(this)) {
                 var context = this;
                 return new Promise(function (resolve, reject) { waiting.push([context, resolve, reject]); });
             }
-            held.delete(this);
             return nativeResume.apply(this, arguments);
         };
         proto.suspend = function () {
-            held.delete(this);
+            pageSuspended.add(this);
+            asleep.delete(this);
             return nativeSuspend.apply(this, arguments);
         };
         proto.close = function () {
+            contexts.delete(this);
             held.delete(this);
+            asleep.delete(this);
             return nativeClose.apply(this, arguments);
         };
 
@@ -1001,20 +1034,23 @@ private:
     }
 
     var pausedWhileHidden = [];
+    onHide.push(function () {
+        document.querySelectorAll("video, audio").forEach(function (media) {
+            if (!media.paused && (media.muted || media.volume === 0)) {
+                media.pause();
+                pausedWhileHidden.push(media);
+            }
+        });
+    });
+    onShow.push(function () {
+        pausedWhileHidden.splice(0).forEach(function (media) {
+            if (media.isConnected && media.paused)
+                media.play().catch(function () {});
+        });
+    });
+
     document.addEventListener("visibilitychange", function () {
-        if (document.visibilityState === "hidden") {
-            document.querySelectorAll("video, audio").forEach(function (media) {
-                if (!media.paused && (media.muted || media.volume === 0)) {
-                    media.pause();
-                    pausedWhileHidden.push(media);
-                }
-            });
-        } else {
-            pausedWhileHidden.splice(0).forEach(function (media) {
-                if (media.isConnected && media.paused)
-                    media.play().catch(function () {});
-            });
-        }
+        (hidden() ? onHide : onShow).forEach(function (f) { f(); });
     }, true);
 })();)js"sv;
 
