@@ -14,6 +14,7 @@
 #include <AK/LexicalPath.h>
 #include <AK/StringBuilder.h>
 #include <AK/Time.h>
+#include <LibAudio/Audibility.h>
 #include <LibCore/ElapsedTimer.h>
 #include <LibCore/File.h>
 #include <LibCore/Environment.h>
@@ -27,7 +28,6 @@
 #include <LibUnicode/Locale.h>
 #include <LibWebCommon/CSS/PreferredColorScheme.h>
 #include <LibWebCommon/Geolocation/GeolocationPositionErrorCode.h>
-#include <LibWebCommon/HTML/AudioPlayState.h>
 #include <LibWebCommon/HTML/ColorPickerUpdateState.h>
 #include <LibWebCommon/HTML/FileFilter.h>
 #include <LibWebCommon/HTML/SelectItem.h>
@@ -785,8 +785,9 @@ private:
             raw_view->is_page_fullscreen = false;
             m_host.send_flags(id, LB_EMBED_FULLSCREEN, false);
         };
-        view->on_audio_play_state_changed = [this, id, raw_view](Web::HTML::AudioPlayState state) {
-            raw_view->plays_audio = state == Web::HTML::AudioPlayState::Playing;
+        // NB: The AudioServer tells which pages it hears, Web Audio and other processes' frames included.
+        view->on_audibility_changed = [this, id, raw_view](Audio::Audibility audibility) {
+            raw_view->plays_audio = audibility == Audio::Audibility::Audible;
             if (raw_view->plays_audio)
                 raw_view->keep_full_frame_rate();
             m_host.send_flags(id, LB_EMBED_MEDIA, raw_view->plays_audio, raw_view->holds_wake_lock);
