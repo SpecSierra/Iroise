@@ -27,7 +27,6 @@
 #include <LibMain/Main.h>
 #include <LibUnicode/Locale.h>
 #include <LibWebCommon/CSS/PreferredColorScheme.h>
-#include <LibWebCommon/Geolocation/GeolocationPositionErrorCode.h>
 #include <LibWebCommon/HTML/ColorPickerUpdateState.h>
 #include <LibWebCommon/HTML/FileFilter.h>
 #include <LibWebCommon/HTML/SelectItem.h>
@@ -35,7 +34,9 @@
 #include <LibWebCommon/Page/EventResult.h>
 #include <LibWebCommon/Page/InputEvent.h>
 #include <LibWebCommon/Page/ScreenWakeLockState.h>
+#include <LibWebCommon/Permissions/Permissions.h>
 #include <LibWebCommon/WebView/ConsoleOutput.h>
+#include <LibWebCommon/WebView/Debugger.h>
 #include <LibURL/Parser.h>
 #include <LibWebView/Application.h>
 #include <LibWebView/FileDownloader.h>
@@ -83,8 +84,6 @@ private:
 
     // Never hand off to an already running instance: an embedded engine belongs to the app that started it.
     virtual bool should_coordinate_browser_process() const override { return false; }
-    // The engine is somebody's browser: its settings, its filter lists and its site data have to be there next time.
-    virtual bool should_use_temporary_profile_by_default() const override { return false; }
 
     // We only say how far the finger moved and when it lifted; the compositor makes the fling.
     virtual bool platform_reports_scroll_momentum() const override { return false; }
@@ -694,9 +693,9 @@ private:
         view->on_finish_handling_mouse_event = [raw_view](Web::MouseEvent const& event, Web::EventResult result) {
             raw_view->touch_event_finished(event, result);
         };
-        view->on_received_js_console_result = [this, id](JsonValue result) {
-            if (result.is_string())
-                m_host.send_text(id, LB_EMBED_SCRIPT_RESULT, result.as_string().bytes_as_string_view());
+        view->on_received_js_console_result = [this, id](WebView::DebuggerValue result) {
+            if (result.type == WebView::DebuggerValueType::String)
+                m_host.send_text(id, LB_EMBED_SCRIPT_RESULT, result.text.to_utf8().bytes_as_string_view());
         };
         view->on_find_in_page = [this, id](size_t current_match_index, Optional<size_t> const& total_match_count) {
             auto total = total_match_count.has_value() ? static_cast<i32>(*total_match_count) : -1;
@@ -797,46 +796,15 @@ private:
             m_host.send_flags(id, LB_EMBED_MEDIA, raw_view->plays_audio, raw_view->holds_wake_lock);
         };
 
-        view->on_request_permission = [this, id](Utf16String const& name, URL::Origin const& origin, Function<void(bool)> on_decided) {
-            ask_permission(id, name.to_utf8(), origin, move(on_decided));
+        // NB: The engine keeps to its own rules who may ask (the tab's site, from a secure page, and a frame only where
+        //     the page lets it), and hands a position only to a page the user let have one. The app remembers the
+        //     user's answer for the session, so the engine keeps none: a yes counts for now, a no is a dismissal.
+        view->on_request_permission = [this, id](WebView::PermissionPromptRequest const& request, WebView::PermissionPromptCallback on_outcome) {
+            auto name = MUST(String::from_utf8(Web::Permissions::to_string(request.name)));
+            ask_permission(id, name, request.top_level_origin, [on_outcome = move(on_outcome)](bool granted) mutable {
+                on_outcome(granted ? Web::Permissions::PromptOutcome::AllowOnce : Web::Permissions::PromptOutcome::Dismissed);
+            });
         };
-
-        // NB: The engine grants geolocation to any page that asks, and the view then wants a position from the
-        //     provider. So the user is asked here, before the view's own handler runs.
-        //     The question is about the tab's site, so a request from another page, which is a frame of another site
-        //     (they have processes of their own), is refused: it would get what the user granted the tab's site.
-        //     And a request the page took back while the user was being asked stays taken back.
-        auto gate_geolocation = [this, id, raw_view](Function<void(WebView::WebContentPage&, u64)>& handler, Function<void(WebView::WebContentPage&, u64)>& cancel_handler) {
-            auto native = adopt_ref(*new SharedGeolocationHandler(move(handler)));
-            handler = [this, id, raw_view, native](WebView::WebContentPage& page, u64 request_id) {
-                auto deny = [](WebView::WebContentPage& page, u64 request_id) {
-                    page.async_geolocation_position_response(request_id, {}, to_underlying(Web::Geolocation::GeolocationPositionErrorCode::PermissionDenied));
-                };
-                if (&page != &raw_view->page()) {
-                    deny(page, request_id);
-                    return;
-                }
-                auto key = PendingGeolocation { &page, request_id };
-                m_pending_geolocation.set(key);
-                ask_permission(id, "geolocation"_string, raw_view->url().origin(), [this, native, deny, key, page = NonnullRefPtr(page), request_id](bool granted) {
-                    if (!m_pending_geolocation.remove(key) || !page->is_open())
-                        return;
-                    if (granted)
-                        native->call(*page, request_id);
-                    else
-                        deny(*page, request_id);
-                });
-            };
-            auto native_cancel = adopt_ref(*new SharedGeolocationHandler(move(cancel_handler)));
-            cancel_handler = [this, native_cancel](WebView::WebContentPage& page, u64 request_id) {
-                if (m_pending_geolocation.remove(PendingGeolocation { &page, request_id }))
-                    return;
-                if (native_cancel->call)
-                    native_cancel->call(page, request_id);
-            };
-        };
-        gate_geolocation(view->on_request_geolocation_position, view->on_cancel_geolocation_position_request);
-        gate_geolocation(view->on_start_geolocation_position_watch, view->on_stop_geolocation_position_watch);
 
         // NB: As early as we learn where the tab is going. A link to another site has asked for its document
         //     by then, so that one request goes out with the previous site's options.
@@ -856,26 +824,6 @@ private:
         m_views.set(id, move(view));
         return *raw_view;
     }
-
-    // A geolocation request waiting for the user's answer.
-    struct PendingGeolocation {
-        WebView::WebContentPage* page { nullptr };
-        u64 request_id { 0 };
-        bool operator==(PendingGeolocation const&) const = default;
-    };
-    struct PendingGeolocationTraits : public DefaultTraits<PendingGeolocation> {
-        static unsigned hash(PendingGeolocation const& key) { return pair_int_hash(ptr_hash(key.page), u64_hash(key.request_id)); }
-    };
-    HashTable<PendingGeolocation, PendingGeolocationTraits> m_pending_geolocation;
-
-    // The view's own handler for a geolocation request, kept for when the user said yes.
-    struct SharedGeolocationHandler final : RefCounted<SharedGeolocationHandler> {
-        explicit SharedGeolocationHandler(Function<void(WebView::WebContentPage&, u64)> handler)
-            : call(move(handler))
-        {
-        }
-        Function<void(WebView::WebContentPage&, u64)> call;
-    };
 
     void ask_permission(u32 view, String const& name, URL::Origin const& origin, Function<void(bool)> on_decided)
     {
@@ -1380,7 +1328,6 @@ private:
         case LB_EMBED_DESTROY_VIEW:
             // NB: Questions it still had will not be answered; their pages go with it.
             m_permission_answers.remove_all_matching([&](auto, auto const& question) { return question.view == header.view; });
-            m_pending_geolocation.remove_all_matching([&](auto const& pending) { return pending.page == &view.page(); });
             m_views.remove(header.view);
             break;
         case LB_EMBED_LOAD:
@@ -1587,8 +1534,6 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
     // engine asked for the phone's languages (those say English) and after the user changes the phone's language.
     if (auto languages = Ladybird::phone_languages(); !languages.is_empty() && languages != WebView::Application::settings().languages())
         WebView::Application::settings().set_languages(move(languages));
-    // Pages still ask the user first, each time (see the gate in create_view).
-    WebView::Application::settings().set_geolocation_enabled(true);
     // NB: The engine fetches a large download over several connections at once, in byte ranges. On a phone that
     //     gains little, and the last range sometimes never completes, which leaves the file unfinished for good.
     WebView::Application::settings().set_config_variable(WebView::ConfigVariableID::MaximumConnectionsPerDownload, 1);
