@@ -694,8 +694,10 @@ private:
             raw_view->touch_event_finished(event, result);
         };
         view->on_received_js_console_result = [this, id](WebView::DebuggerValue result) {
-            if (result.type == WebView::DebuggerValueType::String)
-                m_host.send_text(id, LB_EMBED_SCRIPT_RESULT, result.text.to_utf8().bytes_as_string_view());
+            if (result.type != WebView::DebuggerValueType::String)
+                return;
+            auto text = result.text.to_utf8();
+            m_host.send_text(id, LB_EMBED_SCRIPT_RESULT, text.bytes_as_string_view());
         };
         view->on_find_in_page = [this, id](size_t current_match_index, Optional<size_t> const& total_match_count) {
             auto total = total_match_count.has_value() ? static_cast<i32>(*total_match_count) : -1;
