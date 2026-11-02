@@ -54,3 +54,16 @@ index 3829acc0e..5cf70fcc7 100644
  libweb_js_bindings(UIEvents/TextEvent)
  libweb_js_bindings(UIEvents/Touch)
  libweb_js_bindings(UIEvents/TouchEvent)
+diff --git a/Tests/LibWeb/Text/expected/UIEvents/touch-event-delivery.txt b/Tests/LibWeb/Text/expected/UIEvents/touch-event-delivery.txt
+index 26785d1ed..e0de3ee35 100644
+--- a/Tests/LibWeb/Text/expected/UIEvents/touch-event-delivery.txt
++++ b/Tests/LibWeb/Text/expected/UIEvents/touch-event-delivery.txt
+@@ -1,6 +1,6 @@
+ interfaces: function, function, function
+-desktop handlers: false, false, false
+-legacy event factory: NotSupportedError
++desktop handlers: true, true, true
++legacy event factory unexpectedly enabled
+ touchstart@a: touches=1, target=1, changed=1, trusted=true, composed=true
+   original target=a, x=20, force=0.75, radius=6,9, control=true
+ touchmove@a: touches=1, target=1, changed=1, trusted=true, composed=true

@@ -246,3 +246,18 @@ index b5c8d83b5..7c1a3b5aa 100644
  }
  
  [ExistingCpp]
+diff --git a/Services/Compositor/ContextState.cpp b/Services/Compositor/ContextState.cpp
+index 5b8ba52d8..1ea09d275 100644
+--- a/Services/Compositor/ContextState.cpp
++++ b/Services/Compositor/ContextState.cpp
+@@ -1580,6 +1580,10 @@ ContextState::ContextUpdateResult ContextState::scroll_for_wheel_event(Web::Mous
+         if (auto hit = nested_context_for_wheel_at(step.position); hit.has_value())
+             return { .nested_context_wheel_step = NestedContextWheelStep { .context_id = hit->child_context_id, .hit = hit } };
+     }
++    // NB: The page decides the first step of a finger: its touch events and touch-action may keep the finger, which no
++    //     listener of the compositor's knows of (Iroise, patches/0021). Once it lets a step through, the rest do not wait.
++    if (event.is_touch_scroll)
++        return ContextUpdateResult::declined(Web::InputRoutingDecision::BlockingWheelEventListeners);
+     return scroll_for_wheel_step_in_this_context(step, {}, nested_context_regions, WheelStepAdmission::ByThisPage, {}, now);
+ }
+ 

@@ -76,7 +76,7 @@ class Taps(EngineTest):
         self.engine.load(page('events.html'))
         self.engine.tap(*self.middle)
         self.assertEqual(self.engine.eval('order'), [
-            'pointerdown:touch', 'touchstart', 'pointerup:touch', 'touchend', 'mousedown', 'mouseup', 'click'])
+            'pointerdown:touch', 'touchstart', 'pointerup:touch', 'touchend', 'mousedown', 'mouseup', 'click:touch'])
 
     def test_a_cancelled_touchend_is_no_click(self):
         self.engine.load(page('events.html#cancel-touchend'))

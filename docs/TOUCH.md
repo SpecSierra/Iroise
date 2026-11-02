@@ -19,22 +19,24 @@ the front end also sends scroll steps marked `is_touch_scroll`. Such a step:
   direction the finger first moved;
 - leaves no mouse position behind, so nothing that scrolls under it is hovered.
 
-Non-passive `touchstart` and `touchmove` listeners hold steps back in the compositor until the page has decided them,
-as a non-passive `wheel` listener does. Listeners on the window, the document and the body are passive unless they
-say otherwise.
+The compositor holds a finger's first step back until the page has decided it, since it does not know `touch-action`.
+Once the page lets a step through, the rest scroll without waiting. Non-passive `touchstart` and `touchmove`
+listeners also hold steps back, as a non-passive `wheel` listener does. Listeners on the window, the document and
+the body are passive unless they say otherwise.
 
 **The first step's answer decides.** If the page lets the step through, the front end cancels the finger's pointer
 (`pointercancel` and `touchcancel`, as in Chrome), so it makes no tap. If the page refuses it, the finger stays the
 page's and scrolls nothing. A finger that lifts while it scrolls, before the page has answered, is cancelled too.
 
 **Pages find the touch screen (patch 0022).** `ontouchstart` and the rest are on every element, the document and the
-window. Ladybird leaves them out on purpose, so that desktop sites do not think there is a touch screen. Patch 0012
+window. Ladybird leaves them out on purpose, so that desktop sites do not think there is a touch screen; the patch
+updates Ladybird's test of that. Patch 0012
 reports `maxTouchPoints` 5 and a coarse pointer that cannot hover.
 
 ## Not yet
 
-- `touch-action` is only checked by WebContent. Where no blocking listener holds the steps back, the compositor
-  scrolls them before the page can refuse them.
+- A finger's scroll starts only once the page's main thread has decided its first step: a busy page starts late.
+  The compositor would need `touch-action` areas to start without it.
 - The touch's pointer events go straight to WebContent and its scroll steps go through the compositor. A step can
   only follow its `touchstart` because a finger has to move first.
 - One finger: a second one cancels the touch and pinches.

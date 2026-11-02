@@ -682,6 +682,9 @@ private:
         view->on_web_content_crashed = [this, id](auto) { m_host.send_flags(id, LB_EMBED_CRASHED, true); };
 
         // The app's scripts in the page talk back through the console, the one way a page reaches us unasked.
+        // NB: The engine sends a page's console messages only to a view that takes them, as DevTools does; the view
+        //     takes them again from each process that comes to show the tab. Errors stay in the page.
+        view->start_sending_console_output(true, false);
         view->on_console_message = [this, id](WebView::ConsoleOutput output) {
             auto const* log = output.output.get_pointer<WebView::ConsoleLog>();
             if (!log || log->arguments.size() != 2 || !log->arguments[0].is_string() || !log->arguments[1].is_string())
