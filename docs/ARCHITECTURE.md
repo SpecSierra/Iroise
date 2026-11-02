@@ -190,6 +190,7 @@ Each patch in `patches/` does one thing:
 | 0020 | refuses a sandboxed process's unexpected `connect()` rather than killing the process |
 | 0021 | lets a finger's touch events and `touch-action` decide its scroll, which fires no `wheel` event ([TOUCH.md](TOUCH.md)) |
 | 0022 | adds `ontouchstart` and the rest, by which a phone's pages find the touch screen ([TOUCH.md](TOUCH.md)) |
+| 0023 | closes the connections a network change stranded (a VPN going up or down), so that they reconnect |
 
 `patches/vcpkg-skia-gl-without-system-libraries.patch` builds Skia's OpenGL backend without linking a GL library,
 for the reason above.

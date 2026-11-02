@@ -1,0 +1,293 @@
+diff --git a/Services/RequestServer/CMakeLists.txt b/Services/RequestServer/CMakeLists.txt
+index c206faca3..591e17126 100644
+--- a/Services/RequestServer/CMakeLists.txt
++++ b/Services/RequestServer/CMakeLists.txt
+@@ -4,6 +4,7 @@ set(SOURCES
+     ConnectionFromClient.cpp
+     ControlConnectionFromClient.cpp
+     CURL.cpp
++    NetworkChange.cpp
+     Request.cpp
+     RequestPipe.cpp
+     Resolver.cpp
+diff --git a/Services/RequestServer/NetworkChange.cpp b/Services/RequestServer/NetworkChange.cpp
+new file mode 100644
+index 000000000..df3785dfd
+--- /dev/null
++++ b/Services/RequestServer/NetworkChange.cpp
+@@ -0,0 +1,174 @@
++/*
++ * Copyright (c) 2026, the Iroise authors
++ *
++ * SPDX-License-Identifier: BSD-2-Clause
++ */
++
++#include <AK/Format.h>
++#include <AK/HashTable.h>
++#include <AK/Optional.h>
++#include <AK/String.h>
++#include <LibCore/Notifier.h>
++#include <LibCore/Timer.h>
++#include <RequestServer/NetworkChange.h>
++
++#if defined(AK_OS_LINUX)
++#    include <errno.h>
++#    include <ifaddrs.h>
++#    include <linux/netlink.h>
++#    include <linux/rtnetlink.h>
++#    include <netinet/in.h>
++#    include <string.h>
++#    include <sys/socket.h>
++#    include <unistd.h>
++#endif
++
++namespace RequestServer {
++
++static HashTable<int>& sockets_of_curl()
++{
++    static HashTable<int> sockets;
++    return sockets;
++}
++
++curl_socket_t open_socket_for_curl(void*, curlsocktype, curl_sockaddr* address)
++{
++#if defined(AK_OS_LINUX)
++    auto fd = socket(address->family, address->socktype | SOCK_CLOEXEC, address->protocol);
++#else
++    auto fd = socket(address->family, address->socktype, address->protocol);
++#endif
++    if (fd < 0)
++        return CURL_SOCKET_BAD;
++    sockets_of_curl().set(fd);
++    return fd;
++}
++
++int close_socket_for_curl(void*, curl_socket_t fd)
++{
++    sockets_of_curl().remove(fd);
++    return close(fd);
++}
++
++#if defined(AK_OS_LINUX)
++
++static bool same_address(sockaddr_storage const& a, sockaddr_storage const& b)
++{
++    if (a.ss_family != b.ss_family)
++        return false;
++    if (a.ss_family == AF_INET)
++        return reinterpret_cast<sockaddr_in const&>(a).sin_addr.s_addr == reinterpret_cast<sockaddr_in const&>(b).sin_addr.s_addr;
++    if (a.ss_family == AF_INET6)
++        return memcmp(&reinterpret_cast<sockaddr_in6 const&>(a).sin6_addr, &reinterpret_cast<sockaddr_in6 const&>(b).sin6_addr, sizeof(in6_addr)) == 0;
++    return false;
++}
++
++// The interface that has the address, if any still has it.
++static Optional<String> interface_with_address(ifaddrs const* interfaces, sockaddr_storage const& address)
++{
++    for (auto const* interface = interfaces; interface; interface = interface->ifa_next) {
++        if (!interface->ifa_addr || interface->ifa_addr->sa_family != address.ss_family)
++            continue;
++        sockaddr_storage candidate {};
++        memcpy(&candidate, interface->ifa_addr, address.ss_family == AF_INET ? sizeof(sockaddr_in) : sizeof(sockaddr_in6));
++        if (same_address(candidate, address))
++            return MUST(String::from_utf8(StringView { interface->ifa_name, strlen(interface->ifa_name) }));
++    }
++    return {};
++}
++
++// A connection is stranded once its address is gone, or once the way to its peer leaves by another interface than the
++// one its address is on: a VPN that came up takes the traffic of connections opened before it, and one that went down
++// takes its address with it. A new address on the same interface, as IPv6 privacy addresses come and go, strands
++// nothing.
++static bool is_stranded(int fd, ifaddrs const* interfaces)
++{
++    sockaddr_storage local {};
++    sockaddr_storage peer {};
++    socklen_t length = sizeof(local);
++    if (getsockname(fd, reinterpret_cast<sockaddr*>(&local), &length) < 0 || (local.ss_family != AF_INET && local.ss_family != AF_INET6))
++        return false;
++    length = sizeof(peer);
++    if (getpeername(fd, reinterpret_cast<sockaddr*>(&peer), &length) < 0)
++        return false;
++
++    auto interface_of_connection = interface_with_address(interfaces, local);
++    if (!interface_of_connection.has_value())
++        return true;
++
++    // Connecting a datagram socket sends nothing; it asks the kernel for the route, and with it the address a new
++    // connection to the peer would come from.
++    auto probe = socket(peer.ss_family, SOCK_DGRAM | SOCK_CLOEXEC, 0);
++    if (probe < 0)
++        return false;
++    sockaddr_storage source {};
++    length = sizeof(source);
++    bool has_route = connect(probe, reinterpret_cast<sockaddr*>(&peer), peer.ss_family == AF_INET ? sizeof(sockaddr_in) : sizeof(sockaddr_in6)) == 0
++        && getsockname(probe, reinterpret_cast<sockaddr*>(&source), &length) == 0;
++    close(probe);
++    if (!has_route)
++        return true;
++    if (same_address(source, local))
++        return false;
++    return interface_with_address(interfaces, source) != interface_of_connection;
++}
++
++static void close_stranded_connections()
++{
++    ifaddrs* interfaces = nullptr;
++    if (getifaddrs(&interfaces) < 0)
++        return;
++    size_t closed = 0;
++    for (auto fd : sockets_of_curl()) {
++        if (!is_stranded(fd, interfaces))
++            continue;
++        // libcurl owns the socket and closes it: shutting it down wakes whatever waits on it, and libcurl finds it at
++        // its end, as it does a cached connection it would reuse.
++        shutdown(fd, SHUT_RDWR);
++        ++closed;
++    }
++    freeifaddrs(interfaces);
++    if (closed > 0)
++        dbgln("RequestServer: the network changed; closed {} stranded connection(s)", closed);
++}
++
++void watch_for_network_changes()
++{
++    auto fd = socket(AF_NETLINK, SOCK_RAW | SOCK_CLOEXEC | SOCK_NONBLOCK, NETLINK_ROUTE);
++    if (fd < 0) {
++        dbgln("RequestServer: cannot watch for network changes: {}", strerror(errno));
++        return;
++    }
++    sockaddr_nl address {};
++    address.nl_family = AF_NETLINK;
++    // A VPN may change only the routing rules, as WireGuard's does, so those are listened to as well.
++    address.nl_groups = RTMGRP_LINK | RTMGRP_IPV4_IFADDR | RTMGRP_IPV6_IFADDR | RTMGRP_IPV4_ROUTE | RTMGRP_IPV6_ROUTE
++        | (1u << (RTNLGRP_IPV4_RULE - 1)) | (1u << (RTNLGRP_IPV6_RULE - 1));
++    if (bind(fd, reinterpret_cast<sockaddr*>(&address), sizeof(address)) < 0) {
++        dbgln("RequestServer: cannot watch for network changes: {}", strerror(errno));
++        close(fd);
++        return;
++    }
++
++    // A change comes as a burst of messages; the connections are looked at once it has settled. The timer and the
++    // notifier live as long as the process, and are left to its exit rather than destroyed after the event loop.
++    auto* settle_timer = &Core::Timer::create_single_shot(AK::Duration::from_milliseconds(300), [] {
++        close_stranded_connections();
++    }).leak_ref();
++    auto* notifier = &Core::Notifier::construct(fd, Core::NotificationType::Read).leak_ref();
++    notifier->on_activation = [fd, settle_timer] {
++        char buffer[8192];
++        while (recv(fd, buffer, sizeof(buffer), 0) > 0) { }
++        settle_timer->restart();
++    };
++}
++
++#else
++
++void watch_for_network_changes()
++{
++}
++
++#endif
++
++}
+diff --git a/Services/RequestServer/NetworkChange.h b/Services/RequestServer/NetworkChange.h
+new file mode 100644
+index 000000000..acada4dce
+--- /dev/null
++++ b/Services/RequestServer/NetworkChange.h
+@@ -0,0 +1,23 @@
++/*
++ * Copyright (c) 2026, the Iroise authors
++ *
++ * SPDX-License-Identifier: BSD-2-Clause
++ */
++
++#pragma once
++
++#include <RequestServer/CURL.h>
++
++namespace RequestServer {
++
++// NB: A connection keeps the address and the way out that it was opened with. When the network changes under it, such
++//     as when a VPN comes up or goes down, its packets go nowhere, and libcurl goes on reusing it for its host until the
++//     kernel gives up on it, minutes later. Every socket libcurl opens is known here, so that a change of the network
++//     can close the ones it stranded, and libcurl connects again (Iroise, patches/0023).
++curl_socket_t open_socket_for_curl(void*, curlsocktype, curl_sockaddr*);
++int close_socket_for_curl(void*, curl_socket_t);
++
++// Starts listening to the kernel for changes of addresses, links, routes and routing rules.
++void watch_for_network_changes();
++
++}
+diff --git a/Services/RequestServer/Request.cpp b/Services/RequestServer/Request.cpp
+index 38321758b..0c1f68e99 100644
+--- a/Services/RequestServer/Request.cpp
++++ b/Services/RequestServer/Request.cpp
+@@ -26,6 +26,7 @@
+ #include <RequestServer/Request.h>
+ #include <RequestServer/Resolver.h>
+ #include <RequestServer/ResourceSubstitutionMap.h>
++#include <RequestServer/NetworkChange.h>
+ #include <openssl/ssl.h>
+ #include <string.h>
+ 
+@@ -1451,6 +1452,8 @@ void Request::handle_connect_state()
+     set_option(CURLOPT_PROTOCOLS_STR, "http,https");
+     set_option(CURLOPT_REDIR_PROTOCOLS_STR, "http,https");
+     set_option(CURLOPT_CONNECTTIMEOUT, s_connect_timeout_seconds);
++    set_option(CURLOPT_OPENSOCKETFUNCTION, open_socket_for_curl);
++    set_option(CURLOPT_CLOSESOCKETFUNCTION, close_socket_for_curl);
+     set_option(CURLOPT_CONNECT_ONLY, 1L);
+     set_option(CURLOPT_PROXY, m_proxy.has_value() ? m_proxy->to_curl_url().characters() : "");
+ 
+@@ -1530,6 +1533,8 @@ void Request::handle_fetch_state()
+     set_option(CURLOPT_PROTOCOLS_STR, "http,https");
+     set_option(CURLOPT_REDIR_PROTOCOLS_STR, "http,https");
+     set_option(CURLOPT_CONNECTTIMEOUT, s_connect_timeout_seconds);
++    set_option(CURLOPT_OPENSOCKETFUNCTION, open_socket_for_curl);
++    set_option(CURLOPT_CLOSESOCKETFUNCTION, close_socket_for_curl);
+ 
+     if (m_alternative_service.has_value()) {
+         // https://www.rfc-editor.org/rfc/rfc7838#section-2.4
+diff --git a/Services/RequestServer/WebSocketImplCurl.cpp b/Services/RequestServer/WebSocketImplCurl.cpp
+index cd87053b5..0379fbf3d 100644
+--- a/Services/RequestServer/WebSocketImplCurl.cpp
++++ b/Services/RequestServer/WebSocketImplCurl.cpp
+@@ -7,6 +7,7 @@
+ #include <LibCore/Notifier.h>
+ #include <RequestServer/CURL.h>
+ #include <RequestServer/ConnectionFromClient.h>
++#include <RequestServer/NetworkChange.h>
+ #include <RequestServer/WebSocketImplCurl.h>
+ 
+ namespace RequestServer {
+@@ -77,6 +78,9 @@ void WebSocketImplCurl::connect(WebSocket::ConnectionInfo const& info)
+     set_option(CURLOPT_PORT, url.port_or_default());
+     set_option(CURLOPT_PROTOCOLS_STR, "ws,wss");
+     set_option(CURLOPT_CONNECTTIMEOUT, s_connect_timeout_seconds);
++    // NB: Set directly: set_option() formats the value it is given, which a function is not (Iroise, patches/0023).
++    curl_easy_setopt(m_easy_handle, CURLOPT_OPENSOCKETFUNCTION, open_socket_for_curl);
++    curl_easy_setopt(m_easy_handle, CURLOPT_CLOSESOCKETFUNCTION, close_socket_for_curl);
+     set_option(CURLOPT_PROXY, m_proxy.has_value() ? m_proxy->to_curl_url().characters() : "");
+ 
+     if (auto root_certs = info.root_certificates_path(); root_certs.has_value())
+diff --git a/Services/RequestServer/main.cpp b/Services/RequestServer/main.cpp
+index 9ff9a60fc..d3b78d0f8 100644
+--- a/Services/RequestServer/main.cpp
++++ b/Services/RequestServer/main.cpp
+@@ -26,6 +26,7 @@
+ #include <RequestServer/ControlConnectionFromClient.h>
+ #include <RequestServer/Resolver.h>
+ #include <RequestServer/ResourceSubstitutionMap.h>
++#include <RequestServer/NetworkChange.h>
+ #include <RequestServer/Sandbox.h>
+ 
+ namespace RequestServer {
+@@ -142,6 +143,7 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
+         RequestServer::set_process_sites_have_their_own();
+ 
+     TRY(RequestServer::initialize_libcurl());
++    RequestServer::watch_for_network_changes();
+ 
+     if (!disable_sandbox)
+         TRY(RequestServer::apply_sandbox(mach_server_name, certificates, cache_path));
