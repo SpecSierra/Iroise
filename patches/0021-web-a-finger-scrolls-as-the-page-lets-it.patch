@@ -1,3 +1,62 @@
+diff --git a/Libraries/LibWeb/DOM/Element.cpp b/Libraries/LibWeb/DOM/Element.cpp
+index 6e9c49386..1e0eda16c 100644
+--- a/Libraries/LibWeb/DOM/Element.cpp
++++ b/Libraries/LibWeb/DOM/Element.cpp
+@@ -2016,8 +2016,42 @@ static void apply_display_contents_style_to_text_boxes(Element& element, CSS::Re
+         Layout::RustFFI::render_state_reinherit_display_contents_text(arena->host(), element.style_node_id().value());
+ }
+ 
++// https://w3c.github.io/pointerevents/#determining-supported-direct-manipulation-behavior
++// Whether touch-action keeps a finger on the element from panning both ways (Iroise, patches/0021).
++static bool touch_action_restricts_panning(Element const& element)
++{
++    auto style = element.computed_style();
++    if (!style)
++        return false;
++    auto value = style->computed_style_value(CSS::PropertyID::TouchAction);
++    if (!value || value->to_keyword() == CSS::Keyword::Auto || value->to_keyword() == CSS::Keyword::Manipulation)
++        return false;
++    auto text = value->to_string(CSS::SerializationMode::Normal);
++    bool pans_x = text.contains("pan-x"sv) || text.contains("pan-left"sv) || text.contains("pan-right"sv);
++    bool pans_y = text.contains("pan-y"sv) || text.contains("pan-up"sv) || text.contains("pan-down"sv);
++    return !(pans_x && pans_y);
++}
++
++// NB: The compositor scrolls a finger without the page, except where touch-action may keep the finger: there, as over
++//     a blocking touch listener, it leaves the finger's first step to the page.
++void Element::update_restricts_touch_panning()
++{
++    bool restricts = touch_action_restricts_panning(*this);
++    if (restricts == restricts_touch_panning())
++        return;
++    set_restricts_touch_panning(restricts);
++    auto& document = this->document();
++    if (restricts)
++        document.set_may_have_blocking_wheel_event_listener();
++    update_inside_blocking_wheel_event_handler_state_for_subtree();
++    set_needs_repaint();
++    document.set_needs_to_record_display_list();
++    document.page().invalidate_compositor_wheel_event_listener_state(document);
++}
++
+ void Element::apply_computed_style_to_layout_node_if_needed(Layout::BegunRead const& read, CSS::RequiredInvalidationAfterStyleChange const& invalidation)
+ {
++    update_restricts_touch_panning();
+     auto* layout_node = unsafe_layout_node(read);
+     if (auto* svg_element = as_if<SVG::SVGElement>(*this))
+         svg_element->note_svg_paint_resource_description_may_have_changed();
+diff --git a/Libraries/LibWeb/DOM/Element.h b/Libraries/LibWeb/DOM/Element.h
+index 42d7b01b1..79c15ab2c 100644
+--- a/Libraries/LibWeb/DOM/Element.h
++++ b/Libraries/LibWeb/DOM/Element.h
+@@ -1068,6 +1068,7 @@ private:
+     void exit_fullscreen_on_element_removal();
+     CSS::RequiredInvalidationAfterStyleChange recompute_pseudo_element_styles(Layout::BegunRead const& read, bool& did_change_custom_properties, bool had_list_marker, CSS::ComputedValues const* old_originating_style, EnginePseudoElementRecords const* = nullptr, EngineRecordDamages const* = nullptr);
+     void apply_computed_style_to_layout_node_if_needed(Layout::BegunRead const& read, CSS::RequiredInvalidationAfterStyleChange const&);
++    void update_restricts_touch_panning();
+     void apply_computed_pseudo_element_styles_to_layout_nodes_if_needed(Layout::BegunRead const& read, CSS::RequiredInvalidationAfterStyleChange const&);
+     void publish_custom_property_names();
+     void update_anchor_name_registry(CSS::ComputedValues const* old_computed_values, CSS::ComputedValues const& new_computed_values);
 diff --git a/Libraries/LibWeb/DOM/EventTarget.cpp b/Libraries/LibWeb/DOM/EventTarget.cpp
 index 1965aac12..e1af916ae 100644
 --- a/Libraries/LibWeb/DOM/EventTarget.cpp
@@ -13,6 +72,42 @@ index 1965aac12..e1af916ae 100644
  }
  
  static void invalidate_compositor_wheel_event_listener_state(EventTarget& event_target, DOMEventListener const& listener)
+diff --git a/Libraries/LibWeb/DOM/Node.cpp b/Libraries/LibWeb/DOM/Node.cpp
+index f93547c06..e4f55dbb6 100644
+--- a/Libraries/LibWeb/DOM/Node.cpp
++++ b/Libraries/LibWeb/DOM/Node.cpp
+@@ -2963,7 +2963,7 @@ bool Node::update_inside_blocking_wheel_event_handler_state()
+         m_inside_blocking_wheel_event_handler = parent->inside_blocking_wheel_event_handler();
+     }
+ 
+-    if (!m_inside_blocking_wheel_event_handler && !is_root_wheel_event_target(*this) && has_blocking_wheel_event_listener())
++    if (!m_inside_blocking_wheel_event_handler && !is_root_wheel_event_target(*this) && (has_blocking_wheel_event_listener() || restricts_touch_panning()))
+         m_inside_blocking_wheel_event_handler = true;
+ 
+     bool const flipped = was_inside_blocking_wheel_event_handler != m_inside_blocking_wheel_event_handler;
+diff --git a/Libraries/LibWeb/DOM/Node.h b/Libraries/LibWeb/DOM/Node.h
+index 4e2c00547..5741b044b 100644
+--- a/Libraries/LibWeb/DOM/Node.h
++++ b/Libraries/LibWeb/DOM/Node.h
+@@ -406,6 +406,10 @@ public:
+     void set_has_assigned_slot(Badge<SlottableMixin>, bool value) { m_has_assigned_slot = value; }
+ 
+     bool inside_blocking_wheel_event_handler() const { return m_inside_blocking_wheel_event_handler; }
++    // Whether the element's touch-action keeps a finger from panning some way, which holds its scroll back for the page
++    // as a blocking touch listener does (Iroise, patches/0021).
++    bool restricts_touch_panning() const { return m_restricts_touch_panning; }
++    void set_restricts_touch_panning(bool restricts) { m_restricts_touch_panning = restricts; }
+     bool update_inside_blocking_wheel_event_handler_state();
+     void update_inside_blocking_wheel_event_handler_state_for_subtree();
+ 
+@@ -726,6 +730,7 @@ protected:
+     // NB: These share a byte, which keeps every node from growing.
+     bool m_has_assigned_slot : 1 { false };
+     bool m_inside_blocking_wheel_event_handler : 1 { false };
++    bool m_restricts_touch_panning : 1 { false };
+     bool m_style_arrival_pending : 1 { false };
+     bool m_descendant_style_arrival_pending : 1 { false };
+     bool m_child_style_arrivals_wait : 1 { false };
 diff --git a/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp b/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp
 index f0bf76eda..f46ba1e21 100644
 --- a/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp
@@ -207,6 +302,23 @@ index 22337dbb5..60caa572f 100644
      // The navigable whose event handler reported the hovered link or tooltip the client shows, while it shows one. Only
      // that handler ends the hover when its document is replaced; another navigable's replacement (an iframe the pointer
      // once passed through, e.g.) leaves the report standing.
+diff --git a/Libraries/LibWeb/Painting/DocumentPaintState.cpp b/Libraries/LibWeb/Painting/DocumentPaintState.cpp
+index 90fae02e4..c16a1114d 100644
+--- a/Libraries/LibWeb/Painting/DocumentPaintState.cpp
++++ b/Libraries/LibWeb/Painting/DocumentPaintState.cpp
+@@ -62,7 +62,11 @@ BlockingWheelEventRegionState DocumentPaintState::collect_root_blocking_wheel_ev
+         document.body(),
+     };
+     for (auto target : roots) {
+-        if (target && target->has_blocking_wheel_event_listener()) {
++        if (!target)
++            continue;
++        // NB: As does a touch-action that keeps a finger from panning (Iroise, patches/0021).
++        auto restricts_touch_panning = is<DOM::Node>(*target) && static_cast<DOM::Node const&>(*target).restricts_touch_panning();
++        if (target->has_blocking_wheel_event_listener() || restricts_touch_panning) {
+             return {
+                 .has_blocking_wheel_event_listeners = true,
+                 .has_blocking_wheel_event_region_covering_viewport = true,
 diff --git a/Libraries/LibWebCommon/Page/InputEvent.cpp b/Libraries/LibWebCommon/Page/InputEvent.cpp
 index 0177ed88d..d02bf79b8 100644
 --- a/Libraries/LibWebCommon/Page/InputEvent.cpp
@@ -246,18 +358,3 @@ index b5c8d83b5..7c1a3b5aa 100644
  }
  
  [ExistingCpp]
-diff --git a/Services/Compositor/ContextState.cpp b/Services/Compositor/ContextState.cpp
-index 5b8ba52d8..1ea09d275 100644
---- a/Services/Compositor/ContextState.cpp
-+++ b/Services/Compositor/ContextState.cpp
-@@ -1580,6 +1580,10 @@ ContextState::ContextUpdateResult ContextState::scroll_for_wheel_event(Web::Mous
-         if (auto hit = nested_context_for_wheel_at(step.position); hit.has_value())
-             return { .nested_context_wheel_step = NestedContextWheelStep { .context_id = hit->child_context_id, .hit = hit } };
-     }
-+    // NB: The page decides the first step of a finger: its touch events and touch-action may keep the finger, which no
-+    //     listener of the compositor's knows of (Iroise, patches/0021). Once it lets a step through, the rest do not wait.
-+    if (event.is_touch_scroll)
-+        return ContextUpdateResult::declined(Web::InputRoutingDecision::BlockingWheelEventListeners);
-     return scroll_for_wheel_step_in_this_context(step, {}, nested_context_regions, WheelStepAdmission::ByThisPage, {}, now);
- }
- 

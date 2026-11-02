@@ -19,10 +19,11 @@ the front end also sends scroll steps marked `is_touch_scroll`. Such a step:
   direction the finger first moved;
 - leaves no mouse position behind, so nothing that scrolls under it is hovered.
 
-The compositor holds a finger's first step back until the page has decided it, since it does not know `touch-action`.
-Once the page lets a step through, the rest scroll without waiting. Non-passive `touchstart` and `touchmove`
-listeners also hold steps back, as a non-passive `wheel` listener does. Listeners on the window, the document and
-the body are passive unless they say otherwise.
+The compositor scrolls a finger by itself, without the page, so a busy page still scrolls at once. It leaves the
+finger's first step to the page only where the page may keep the finger: over an element whose `touch-action` limits
+panning, or one with a non-passive `touchstart` or `touchmove` listener, as it does for a non-passive `wheel`
+listener. Listeners on the window, the document and the body are passive unless they say otherwise. Once the page
+lets a step through, the rest scroll without waiting.
 
 **The first step's answer decides.** If the page lets the step through, the front end cancels the finger's pointer
 (`pointercancel` and `touchcancel`, as in Chrome), so it makes no tap. If the page refuses it, the finger stays the
@@ -35,8 +36,9 @@ reports `maxTouchPoints` 5 and a coarse pointer that cannot hover.
 
 ## Not yet
 
-- A finger's scroll starts only once the page's main thread has decided its first step: a busy page starts late.
-  The compositor would need `touch-action` areas to start without it.
+- Over a `touch-action` area or a blocking touch listener, a finger's scroll starts only once the page's main thread
+  has decided its first step: a busy page starts late there.
+- A `touch-action` that limits panning also holds back a real mouse wheel over it.
 - The touch's pointer events go straight to WebContent and its scroll steps go through the compositor. A step can
   only follow its `touchstart` because a finger has to move first.
 - One finger: a second one cancels the touch and pinches.
