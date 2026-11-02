@@ -14,7 +14,7 @@ index 6cf45cc2b..405e0db0c 100644
  
  GC::Ref<ServiceWorker::ServiceWorkerContainer> Navigator::service_worker()
 diff --git a/Libraries/LibWeb/HTML/Window.cpp b/Libraries/LibWeb/HTML/Window.cpp
-index 22a88a965..b423392f1 100644
+index 39d79f443..d15860eaf 100644
 --- a/Libraries/LibWeb/HTML/Window.cpp
 +++ b/Libraries/LibWeb/HTML/Window.cpp
 @@ -619,10 +619,11 @@ CSS::Parser::ValueParserFFI::FfiMediaFeatureValue Window::query_media_feature(CS

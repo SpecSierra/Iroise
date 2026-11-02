@@ -1,10 +1,10 @@
 diff --git a/Libraries/LibWebView/WebContentPage.cpp b/Libraries/LibWebView/WebContentPage.cpp
-index 884a2fc4f..c50847882 100644
+index d1ad4e1c9..b91952aaf 100644
 --- a/Libraries/LibWebView/WebContentPage.cpp
 +++ b/Libraries/LibWebView/WebContentPage.cpp
-@@ -2286,7 +2286,16 @@ Messages::WebContentClient::DidStartDownloadResponse WebContentPage::did_start_d
-     // identifiers preserve the original RequestServer transfer lease, so only the process and navigation that
+@@ -2714,7 +2714,16 @@ Messages::WebContentClient::DidStartDownloadResponse WebContentPage::did_start_d
      // received that response may claim it, and only while its population is in flight.
+     FileDownloader::ResponseFinished on_response_finished;
      bool matches_in_flight_navigation = false;
 -    if (auto navigable = population_worker_navigable(navigable_id); navigable.has_value()) {
 +    auto navigable = population_worker_navigable(navigable_id);
@@ -17,6 +17,6 @@ index 884a2fc4f..c50847882 100644
 +            navigable = candidate;
 +    }
 +    if (navigable.has_value()) {
-         auto ongoing_navigation = navigation_id.has_value() ? navigable->navigation_with_id(*navigation_id) : nullptr;
-         if (ongoing_navigation
-             && (ongoing_navigation->state.has<CanonicalNavigation::CreatingNavigationParams>() || ongoing_navigation->state.has<CanonicalNavigation::Populating>())
+         if (auto* bidi = WebDriverBiDi::the();
+             bidi && network_response.is_object()) {
+             on_response_finished = [weak_bidi = bidi->make_weak_ptr(),

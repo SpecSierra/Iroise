@@ -1,8 +1,8 @@
 diff --git a/Meta/CMake/cmake_options.cmake b/Meta/CMake/cmake_options.cmake
-index 2db24e0ca..54a7aea60 100644
+index c4d529da2..bd4492b64 100644
 --- a/Meta/CMake/cmake_options.cmake
 +++ b/Meta/CMake/cmake_options.cmake
-@@ -39,6 +39,7 @@ if (LADYBIRD_GENERATE_SYMBOL_FILES AND MSVC)
+@@ -40,6 +40,7 @@ if (LADYBIRD_GENERATE_SYMBOL_FILES AND MSVC)
      message(FATAL_ERROR "LADYBIRD_GENERATE_SYMBOL_FILES is not supported with MSVC-style toolchains")
  endif()
  option(ENABLE_CI_BASELINE_CPU "Use a common CPU baseline for portable binaries and ccache sharing" OFF)

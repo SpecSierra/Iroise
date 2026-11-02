@@ -84,10 +84,15 @@ esac
 cd "$UP"
 python3 Meta/ladybird.py vcpkg --preset Release -j "$JOBS"
 # Skia's GL backend would link the desktop GL; ours gets its entry points from GLESContext (patch 0009). vcpkg picks
-# up an overlay of its own skia port with that one change.
+# up an overlay of the skia port with that one change: Ladybird's own overlay where it keeps one (since a3f8b572),
+# restored first so that a second build patches it once, or else vcpkg's port.
 OVERLAY="$UP/Meta/CMake/vcpkg/overlay-ports/skia"
-rm -rf "$OVERLAY"
-cp -r "$VCPKG_ROOT/ports/skia" "$OVERLAY"
+if git -C "$UP" ls-files --error-unmatch Meta/CMake/vcpkg/overlay-ports/skia/portfile.cmake > /dev/null 2>&1; then
+    git -C "$UP" checkout -- Meta/CMake/vcpkg/overlay-ports/skia
+else
+    rm -rf "$OVERLAY"
+    cp -r "$VCPKG_ROOT/ports/skia" "$OVERLAY"
+fi
 patch -d "$OVERLAY" -p1 -s < "$ROOT/patches/vcpkg-skia-gl-without-system-libraries.patch"
 # mimalloc compiles itself for ARMv8.1 (its MI_OPT_ARCH) on arm64, which the Xperia 10 II's cores do not have.
 OVERLAY="$UP/Meta/CMake/vcpkg/overlay-ports/mimalloc"

@@ -1,8 +1,8 @@
 diff --git a/UI/CMakeLists.txt b/UI/CMakeLists.txt
-index f79827cf8..552b16377 100644
+index 29ffaa944..e87d50e18 100644
 --- a/UI/CMakeLists.txt
 +++ b/UI/CMakeLists.txt
-@@ -49,6 +49,8 @@ endfunction()
+@@ -97,6 +97,8 @@ endfunction()
  
  if (ANDROID OR VCPKG_TARGET_ANDROID)
      add_subdirectory("Android")

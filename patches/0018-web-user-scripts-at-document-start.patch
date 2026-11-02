@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibWeb/DOM/Document.cpp b/Libraries/LibWeb/DOM/Document.cpp
-index d4d7cd02a..84ee5083f 100644
+index da5df620c..d9aab23e2 100644
 --- a/Libraries/LibWeb/DOM/Document.cpp
 +++ b/Libraries/LibWeb/DOM/Document.cpp
-@@ -7998,12 +7998,31 @@ void Document::update_for_history_step_application(NonnullRefPtr<HTML::SessionHi
+@@ -8120,12 +8120,31 @@ void Document::update_for_history_step_application(NonnullRefPtr<HTML::SessionHi
  void Document::set_ready_to_run_scripts()
  {
      m_ready_to_run_scripts = true;
@@ -35,10 +35,10 @@ index d4d7cd02a..84ee5083f 100644
  {
      VERIFY(!m_deferred_parser_start);
 diff --git a/Libraries/LibWeb/DOM/Document.h b/Libraries/LibWeb/DOM/Document.h
-index a25a036f6..9b141843a 100644
+index 71289bb40..d97000b63 100644
 --- a/Libraries/LibWeb/DOM/Document.h
 +++ b/Libraries/LibWeb/DOM/Document.h
-@@ -1254,6 +1254,7 @@ public:
+@@ -1296,6 +1296,7 @@ public:
      bool ready_to_run_scripts() const { return m_ready_to_run_scripts; }
      void set_ready_to_run_scripts();
      void set_deferred_parser_start(GC::Ref<GC::Function<void()>>);
@@ -47,10 +47,10 @@ index a25a036f6..9b141843a 100644
  
      RefPtr<HTML::SessionHistoryEntry> latest_entry() const { return m_latest_entry; }
 diff --git a/Libraries/LibWeb/Page/Page.h b/Libraries/LibWeb/Page/Page.h
-index c56fc8107..9e431711c 100644
+index f3f022c45..22337dbb5 100644
 --- a/Libraries/LibWeb/Page/Page.h
 +++ b/Libraries/LibWeb/Page/Page.h
-@@ -232,6 +232,12 @@ public:
+@@ -238,6 +238,12 @@ public:
      bool is_scripting_enabled() const { return m_is_scripting_enabled; }
      void set_is_scripting_enabled(bool b) { m_is_scripting_enabled = b; }
  
@@ -63,7 +63,7 @@ index c56fc8107..9e431711c 100644
      bool should_block_pop_ups() const { return m_should_block_pop_ups; }
      void set_should_block_pop_ups(bool b) { m_should_block_pop_ups = b; }
  
-@@ -523,6 +529,7 @@ private:
+@@ -544,6 +550,7 @@ private:
      Queue<ScreenshotTask> m_screenshot_tasks;
  
      bool m_is_scripting_enabled { true };
@@ -72,12 +72,12 @@ index c56fc8107..9e431711c 100644
      bool m_enable_autoscroll { true };
      bool m_enable_primary_paste { true };
 diff --git a/Libraries/LibWebView/Application.cpp b/Libraries/LibWebView/Application.cpp
-index 938fda09f..a040bf4bd 100644
+index 4ae323c5a..8989a8e49 100644
 --- a/Libraries/LibWebView/Application.cpp
 +++ b/Libraries/LibWebView/Application.cpp
-@@ -2978,6 +2978,28 @@ void Application::apply_content_blocking_policy(WebContentPage& page)
+@@ -3201,6 +3201,28 @@ void Application::apply_content_blocking_policy(WebContentPage& page)
  {
-     auto disabled_sites = m_web_content_options.is_test_mode == IsTestMode::Yes ? Vector<String> {} : m_settings->content_blocker_disabled_sites().values();
+     auto disabled_sites = m_settings->content_blocker_disabled_sites().values();
      page.async_set_content_blocking_policy(content_blocking_enabled(), disabled_sites);
 +    send_user_scripts(page);
 +}
@@ -105,10 +105,10 @@ index 938fda09f..a040bf4bd 100644
  
  void Application::content_blocker_settings_changed(Badge<ApplicationSettingsObserver>)
 diff --git a/Libraries/LibWebView/Application.h b/Libraries/LibWebView/Application.h
-index 97855467b..bd6b09043 100644
+index a9ae33435..067f5cacc 100644
 --- a/Libraries/LibWebView/Application.h
 +++ b/Libraries/LibWebView/Application.h
-@@ -165,6 +165,11 @@ public:
+@@ -190,6 +190,11 @@ public:
      bool content_blocking_enabled() const;
      bool has_content_blocking_rules() const;
      void apply_content_blocking_policy(WebContentPage&);
@@ -120,7 +120,7 @@ index 97855467b..bd6b09043 100644
      void content_blocker_settings_changed(Badge<ApplicationSettingsObserver>);
  
      bool content_blocker_list_update_in_progress() const;
-@@ -601,6 +606,7 @@ private:
+@@ -645,6 +650,7 @@ private:
      OwnPtr<FontServiceHost> m_font_service_host;
      JsonValue m_site_compatibility_data;
      Optional<Core::AnonymousBuffer> m_content_blocker_list_buffer;
@@ -129,10 +129,10 @@ index 97855467b..bd6b09043 100644
      struct PendingContentBlockerListUpdate {
          String identifier;
 diff --git a/Services/WebContent/ConnectionFromClient.cpp b/Services/WebContent/ConnectionFromClient.cpp
-index e223da21f..524bc692d 100644
+index 745a6bc54..42ddd2c19 100644
 --- a/Services/WebContent/ConnectionFromClient.cpp
 +++ b/Services/WebContent/ConnectionFromClient.cpp
-@@ -1159,6 +1159,16 @@ void ConnectionFromClient::debug_request(Web::PageId page_id, ByteString request
+@@ -1204,6 +1204,16 @@ void ConnectionFromClient::debug_request(Web::PageId page_id, ByteString request
          return;
      }
  

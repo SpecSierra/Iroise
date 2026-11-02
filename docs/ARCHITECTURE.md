@@ -188,11 +188,8 @@ Each patch in `patches/` does one thing:
 | 0018 | runs the embedder's scripts in every document, frames included, before the document's own (autoconsent) |
 | 0019 | leaves the volume of an audio stream to the system |
 | 0020 | refuses a sandboxed process's unexpected `connect()` rather than killing the process |
-| 0021 | adds `Touch`, `TouchList`, `TouchEvent` and `ontouchstart` and the rest ([TOUCH.md](TOUCH.md)) |
-| 0022 | carries touches from the front end to the page, and lets touch listeners decide a finger's scroll ([TOUCH.md](TOUCH.md)) |
-| 0023 | fires a touch's pointer events, of type `"touch"`, and honours `touch-action` ([TOUCH.md](TOUCH.md)) |
-| 0024 | keeps the hover a tap moves from firing pointer events of type `"mouse"` ([TOUCH.md](TOUCH.md)) |
-| 0025 | tests the touch patches, with `internals` helpers that drive a finger (`scripts/test-engine.sh`) |
+| 0021 | lets a finger's touch events and `touch-action` decide its scroll, which fires no `wheel` event ([TOUCH.md](TOUCH.md)) |
+| 0022 | adds `ontouchstart` and the rest, by which a phone's pages find the touch screen ([TOUCH.md](TOUCH.md)) |
 
 `patches/vcpkg-skia-gl-without-system-libraries.patch` builds Skia's OpenGL backend without linking a GL library,
 for the reason above.

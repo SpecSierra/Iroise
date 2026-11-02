@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibGfx/CMakeLists.txt b/Libraries/LibGfx/CMakeLists.txt
-index ab662ba03..b13a7f3b6 100644
+index 70a06646b..e41614eae 100644
 --- a/Libraries/LibGfx/CMakeLists.txt
 +++ b/Libraries/LibGfx/CMakeLists.txt
-@@ -59,6 +59,10 @@ if (HAS_VULKAN)
+@@ -55,6 +55,10 @@ if (HAS_VULKAN)
      list(APPEND SOURCES ImportedYCbCrVulkanImage.cpp VulkanContext.cpp VulkanImage.cpp)
  endif()
  
@@ -13,7 +13,7 @@ index ab662ba03..b13a7f3b6 100644
  if (HAS_FONTCONFIG)
      list(APPEND SOURCES Font/GlobalFontConfig.cpp Font/SystemFontMatcherFontconfig.cpp)
  elseif (APPLE)
-@@ -114,6 +118,12 @@ if (WIN32)
+@@ -110,6 +114,12 @@ if (WIN32)
      target_link_libraries(LibGfx PRIVATE dwrite)
  endif()
  
@@ -507,7 +507,7 @@ index bead78452..a0a0d81b3 100644
  struct VulkanImage;
  SharedImage duplicate_shared_image(VulkanImage const&);
 diff --git a/Libraries/LibGfx/SharedImageBuffer.cpp b/Libraries/LibGfx/SharedImageBuffer.cpp
-index 78cffc63d..86a79925d 100644
+index 66a5a1ab9..a324e2080 100644
 --- a/Libraries/LibGfx/SharedImageBuffer.cpp
 +++ b/Libraries/LibGfx/SharedImageBuffer.cpp
 @@ -7,7 +7,7 @@
@@ -534,7 +534,7 @@ index 78cffc63d..86a79925d 100644
  
 -#    ifdef USE_VULKAN_DMABUF_IMAGES
 +#    ifdef USE_LINUX_DMABUF_SHARED_IMAGES
- SharedImageBuffer::SharedImageBuffer(NonnullRefPtr<Bitmap> bitmap, LinuxDmaBufHandle&& dmabuf)
+ SharedImageBuffer::SharedImageBuffer(RefPtr<Bitmap> bitmap, LinuxDmaBufHandle&& dmabuf)
      : m_linux_dmabuf_handle(move(dmabuf))
      , m_bitmap(move(bitmap))
 @@ -98,7 +98,7 @@ SharedImageBuffer SharedImageBuffer::import_from_shared_image(SharedImage shared
@@ -543,11 +543,11 @@ index 78cffc63d..86a79925d 100644
          [](LinuxDmaBufHandle& dmabuf) -> SharedImageBuffer {
 -#    ifdef USE_VULKAN_DMABUF_IMAGES
 +#    ifdef USE_LINUX_DMABUF_SHARED_IMAGES
-             auto bitmap = create_bitmap_from_linux_dmabuf(dmabuf);
-             return SharedImageBuffer(move(bitmap), move(dmabuf));
- #    else
+             // NB: Only a linear layout can be read through a mapping. The pixels of a tiled one are only for the GPU.
+             if (dmabuf.modifier != DRM_FORMAT_MOD_LINEAR)
+                 return SharedImageBuffer(nullptr, move(dmabuf));
 diff --git a/Libraries/LibGfx/SharedImageBuffer.h b/Libraries/LibGfx/SharedImageBuffer.h
-index 6e3fe63a7..fa6baad32 100644
+index 154409a38..4ac9bb150 100644
 --- a/Libraries/LibGfx/SharedImageBuffer.h
 +++ b/Libraries/LibGfx/SharedImageBuffer.h
 @@ -42,7 +42,7 @@ public:
@@ -565,11 +565,11 @@ index 6e3fe63a7..fa6baad32 100644
      explicit SharedImageBuffer(NonnullRefPtr<Bitmap>);
 -#    ifdef USE_VULKAN_DMABUF_IMAGES
 +#    ifdef USE_LINUX_DMABUF_SHARED_IMAGES
-     SharedImageBuffer(NonnullRefPtr<Bitmap>, LinuxDmaBufHandle&&);
+     SharedImageBuffer(RefPtr<Bitmap>, LinuxDmaBufHandle&&);
      Optional<LinuxDmaBufHandle> m_linux_dmabuf_handle;
  #    endif
 diff --git a/Meta/CMake/check_for_dependencies.cmake b/Meta/CMake/check_for_dependencies.cmake
-index 208c0e734..7c1813639 100644
+index 3a1dc8768..49617fbc6 100644
 --- a/Meta/CMake/check_for_dependencies.cmake
 +++ b/Meta/CMake/check_for_dependencies.cmake
 @@ -40,7 +40,16 @@ if (NOT APPLE AND NOT ANDROID AND NOT WIN32)
@@ -591,7 +591,7 @@ index 208c0e734..7c1813639 100644
      find_package(Vulkan QUIET)
      find_program(GLSLANG_VALIDATOR glslangValidator)
 diff --git a/Services/Compositor/BackingStoreManager.cpp b/Services/Compositor/BackingStoreManager.cpp
-index 5fd9bef56..5916e8b4b 100644
+index 9b29091ac..4d3320b67 100644
 --- a/Services/Compositor/BackingStoreManager.cpp
 +++ b/Services/Compositor/BackingStoreManager.cpp
 @@ -21,9 +21,13 @@
@@ -627,7 +627,7 @@ index 5fd9bef56..5916e8b4b 100644
  struct GpuBackingStore {
      RefPtr<Gfx::PaintingSurface> surface;
      Gfx::SharedImage shared_image;
-@@ -74,6 +78,19 @@ static ErrorOr<GpuBackingStore> create_shared_gpu_backing_store(Gfx::IntSize siz
+@@ -103,6 +107,19 @@ static ErrorOr<GpuBackingStore> create_shared_gpu_backing_store(Gfx::IntSize siz
  }
  #endif
  
@@ -647,7 +647,7 @@ index 5fd9bef56..5916e8b4b 100644
  #ifdef USE_DIRECTX
  static ErrorOr<GpuBackingStore> create_shared_gpu_backing_store(Gfx::IntSize size, Gfx::SkiaBackendContext& skia_backend_context)
  {
-@@ -165,7 +182,7 @@ Optional<BackingStoreManager::Publication> BackingStoreManager::allocate_backing
+@@ -194,7 +211,7 @@ Optional<BackingStoreManager::Publication> BackingStoreManager::allocate_backing
          return index == 0 ? BufferState::Presented : BufferState::Available;
      };
  
@@ -738,7 +738,7 @@ index 09b34ac6a..7d5996d41 100644
      static ErrorOr<NonnullRefPtr<PaintingSurface>> create_from_d3d_texture(NonnullRefPtr<SkiaBackendContext>, NonnullRefPtr<D3DSharedTexture>, Origin = Origin::TopLeft);
  #endif
 diff --git a/Services/Compositor/SkiaBackendContext.cpp b/Services/Compositor/SkiaBackendContext.cpp
-index 428973bdd..84c6babe8 100644
+index 199a5c35b..589a54d64 100644
 --- a/Services/Compositor/SkiaBackendContext.cpp
 +++ b/Services/Compositor/SkiaBackendContext.cpp
 @@ -35,6 +35,12 @@ template<>
@@ -763,7 +763,7 @@ index 428973bdd..84c6babe8 100644
  static constexpr size_t skia_resource_cache_limit = 256 * MiB;
  #endif
  static constexpr auto skia_deferred_cleanup_interval = AK::Duration::from_seconds(1);
-@@ -168,6 +174,13 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_independent_gpu_backend()
+@@ -168,6 +174,13 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_independent_gpu_backend([[
      }
      auto vulkan_context = maybe_vulkan_context.release_value();
      return create_vulkan_context(vulkan_context);
@@ -838,10 +838,10 @@ index 428973bdd..84c6babe8 100644
 +
  }
 diff --git a/Services/Compositor/SkiaBackendContext.h b/Services/Compositor/SkiaBackendContext.h
-index 806529ba1..6e4d6634f 100644
+index 8a93975a4..cc220c5bb 100644
 --- a/Services/Compositor/SkiaBackendContext.h
 +++ b/Services/Compositor/SkiaBackendContext.h
-@@ -22,6 +22,10 @@
+@@ -24,6 +24,10 @@
  #    include <LibGfx/MetalContext.h>
  #endif
  
@@ -852,7 +852,7 @@ index 806529ba1..6e4d6634f 100644
  class GrDirectContext;
  class SkSurface;
  
-@@ -49,6 +53,10 @@ public:
+@@ -51,6 +55,10 @@ public:
      static RefPtr<SkiaBackendContext> create_metal_context(NonnullRefPtr<MetalContext>);
  #endif
  
@@ -860,10 +860,10 @@ index 806529ba1..6e4d6634f 100644
 +    static RefPtr<SkiaBackendContext> create_gles_context(NonnullRefPtr<GLESContext>);
 +#endif
 +
-     static void initialize_gpu_backend();
-     static RefPtr<SkiaBackendContext> create_independent_gpu_backend();
-     static RefPtr<SkiaBackendContext> the_main_thread_context();
-@@ -65,6 +73,9 @@ public:
+     // The preferred GPU is used when there is one, so that the backing stores can be shared with the presentation.
+     static void initialize_gpu_backend(Optional<GpuDeviceIdentity> const& preferred_device = {});
+     static RefPtr<SkiaBackendContext> create_independent_gpu_backend(Optional<GpuDeviceIdentity> const& preferred_device = {});
+@@ -68,6 +76,9 @@ public:
      virtual MetalContext& metal_context() = 0;
      virtual VulkanContext const& vulkan_context() = 0;
      virtual Direct3DContext& direct3d_context() { VERIFY_NOT_REACHED(); }
@@ -874,7 +874,7 @@ index 806529ba1..6e4d6634f 100644
  private:
      void perform_post_flush_cleanup();
 diff --git a/vcpkg.json b/vcpkg.json
-index da8c0ef6a..96f1d2eea 100644
+index 0d6754f14..b08e75cf9 100644
 --- a/vcpkg.json
 +++ b/vcpkg.json
 @@ -47,11 +47,7 @@

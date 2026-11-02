@@ -1,7 +1,7 @@
 #!/bin/bash
-# Run Ladybird's own tests for what our patches change, and our own tests of them (patches/0025), with Ladybird's
-# test runner, headless on the build host. CI runs it after every build; the results land in dist/test-results.
-# Usage: scripts/test-engine.sh [test-web arguments...]   (e.g. -f 'Text/input/UIEvents/touch-*' for ours only)
+# Run Ladybird's own tests for what our patches change, with Ladybird's test runner, headless on the build host. CI
+# runs it after every build; the results land in dist/test-results.
+# Usage: scripts/test-engine.sh [test-web arguments...]   (e.g. -f 'Text/input/UIEvents/touch-*' for touch only)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,8 +14,8 @@ RESULTS="$ROOT/dist/test-results"
 [ -n "${CI_CACHE:-}" ] && source "$ROOT/scripts/pgo-select.sh"
 "$ROOT/scripts/build.sh" test-web
 
-# What the patches change, by the tests Ladybird keeps for it: input and pointer events (0021-0025), wheel and
-# scrolling (0022, 0023), and DOM events (0021, 0022).
+# What the patches change, by the tests Ladybird keeps for it: touch, input and pointer events (0021, 0022), wheel
+# and scrolling (0021), and DOM events (0021, 0022).
 filters=(
     -f 'Text/input/UIEvents/*'
     -f 'Text/input/wpt-import/pointerevents/*'

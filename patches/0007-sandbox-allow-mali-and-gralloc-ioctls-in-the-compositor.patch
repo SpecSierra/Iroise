@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibSandbox/Seccomp.cpp b/Libraries/LibSandbox/Seccomp.cpp
-index 968f7eac5..6aa96970b 100644
+index df326aee1..ff9056849 100644
 --- a/Libraries/LibSandbox/Seccomp.cpp
 +++ b/Libraries/LibSandbox/Seccomp.cpp
-@@ -1835,13 +1835,20 @@ void SeccompPolicy::allow_gpu_device_operations()
+@@ -1864,13 +1864,20 @@ void SeccompPolicy::allow_gpu_device_operations()
          // NVIDIA Tegra's nvmap and nvhost interfaces.
          'N',
          'H',

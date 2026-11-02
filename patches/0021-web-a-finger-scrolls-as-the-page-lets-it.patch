@@ -1,0 +1,248 @@
+diff --git a/Libraries/LibWeb/DOM/EventTarget.cpp b/Libraries/LibWeb/DOM/EventTarget.cpp
+index 1965aac12..e1af916ae 100644
+--- a/Libraries/LibWeb/DOM/EventTarget.cpp
++++ b/Libraries/LibWeb/DOM/EventTarget.cpp
+@@ -292,7 +292,9 @@ static void invalidate_compositor_keyboard_scroll_state(EventTarget& target, DOM
+ 
+ static bool is_blocking_wheel_event_listener(DOMEventListener const& listener)
+ {
+-    return AK::first_is_one_of(listener.type, u"wheel"sv, u"mousewheel"sv) && listener.passive != true;
++    // NB: A touchstart or touchmove listener can stop the scroll of a finger, whose steps are wheel steps (Iroise,
++    //     patches/0021), and holds them back for the page as a wheel listener does.
++    return AK::first_is_one_of(listener.type, u"wheel"sv, u"mousewheel"sv, u"touchstart"sv, u"touchmove"sv) && listener.passive != true;
+ }
+ 
+ static void invalidate_compositor_wheel_event_listener_state(EventTarget& event_target, DOMEventListener const& listener)
+diff --git a/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp b/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp
+index f0bf76eda..f46ba1e21 100644
+--- a/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp
++++ b/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp
+@@ -465,9 +465,11 @@ void EventLoop::process_input_events() const
+             root->event_handler().set_handling_outdated_input(input_is_outdated);
+             auto const* handled_mouse_event = event.event.get_pointer<Web::MouseEvent>();
+             root->event_handler().set_handling_input_event_id(handled_mouse_event ? handled_mouse_event->id : 0);
++            page.set_handling_touch_scroll(handled_mouse_event && handled_mouse_event->is_touch_scroll);
+             ScopeGuard end_outdated_input = [&] {
+                 root->event_handler().set_handling_outdated_input(false);
+                 root->event_handler().set_handling_input_event_id(0);
++                page.set_handling_touch_scroll(false);
+             };
+ 
+             Optional<RemoteInputEventTarget> remote_target;
+diff --git a/Libraries/LibWeb/Page/EventHandler.cpp b/Libraries/LibWeb/Page/EventHandler.cpp
+index 7f4c03693..355267526 100644
+--- a/Libraries/LibWeb/Page/EventHandler.cpp
++++ b/Libraries/LibWeb/Page/EventHandler.cpp
+@@ -19,12 +19,14 @@
+ #include <LibGfx/Bitmap.h>
+ #include <LibUnicode/CharacterTypes.h>
+ #include <LibUnicode/Segmenter.h>
++#include <LibWeb/CSS/CSSStyleProperties.h>
+ #include <LibWeb/CSS/ComputedValues.h>
+ #include <LibWeb/CSS/StyleComputer.h>
+ #include <LibWeb/CSS/StyleEngineInput.h>
+ #include <LibWeb/CSS/VisualViewport.h>
+ #include <LibWeb/Clipboard/ClipboardEvent.h>
+ #include <LibWeb/Compositor/NavigablePresenter.h>
++#include <LibWeb/DOM/AbstractElement.h>
+ #include <LibWeb/DOM/DOMEventListener.h>
+ #include <LibWeb/DOM/Document.h>
+ #include <LibWeb/DOM/Element.h>
+@@ -970,7 +972,9 @@ static Vector<Web::AsyncScrollNodeStableID> wheel_scroll_chain_from(Layout::Node
+ 
+ EventResult EventHandler::handle_mousewheel(CSSPixelPoint visual_viewport_position, CSSPixelPoint screen_position, u32 button, u32 buttons, u32 modifiers, double wheel_delta_x, double wheel_delta_y, double wheel_tick_120ths_x, double wheel_tick_120ths_y, Web::WheelDeltaPrecision wheel_delta_precision, Web::ScrollGesturePhase scroll_gesture_phase, bool async_scroll_performed_default_action, Optional<AsyncScrollOperation>* async_scroll_operation, Optional<RemoteInputEventTarget>* remote_target, Optional<Web::WheelGestureMark> wheel_gesture_mark)
+ {
+-    record_last_known_mouse_position(visual_viewport_position, screen_position, buttons, modifiers);
++    // NB: A finger's step leaves no pointer behind to hover what scrolls under it (Iroise, patches/0021).
++    if (!m_navigable->page().handling_touch_scroll())
++        record_last_known_mouse_position(visual_viewport_position, screen_position, buttons, modifiers);
+ 
+     if (should_ignore_device_input_event())
+         return EventResult::Dropped;
+@@ -1160,7 +1164,11 @@ EventResult EventHandler::handle_mousewheel(CSSPixelPoint visual_viewport_positi
+ 
+     auto dispatch_result = EventResult::Accepted;
+     if (wheel_event_target_node) {
+-        dispatch_result = dispatch_wheel_event(read, *wheel_event_target_layout_node, visual_viewport_position, screen_position, button, buttons, modifiers, wheel_delta_x, wheel_delta_y, wheel_tick_120ths_x, wheel_tick_120ths_y, !async_scroll_performed_default_action);
++        // NB: A step of a finger's scroll fires no wheel event; the page's touch events and touch-action decide it
++        //     (Iroise, patches/0021).
++        dispatch_result = m_navigable->page().handling_touch_scroll()
++            ? m_navigable->page().touch_scroll_step_result(!async_scroll_performed_default_action, wheel_delta_x, wheel_delta_y)
++            : dispatch_wheel_event(read, *wheel_event_target_layout_node, visual_viewport_position, screen_position, button, buttons, modifiers, wheel_delta_x, wheel_delta_y, wheel_tick_120ths_x, wheel_tick_120ths_y, !async_scroll_performed_default_action);
+         if (dispatch_result == EventResult::Accepted)
+             record_input_routing(InputRoutingDecision::DispatchedWheelEvent, {}, wheel_event_target_node);
+         else if (dispatch_result == EventResult::Cancelled)
+@@ -4567,6 +4575,33 @@ void EventHandler::update_pointer_hover(Layout::BegunRead const& read, PointerSt
+         dispatch(boundary, UIEvents::EventNames::pointerenter, previous, false);
+ }
+ 
++// https://w3c.github.io/pointerevents/#determining-supported-direct-manipulation-behavior
++// The directions a touch may pan in: what touch-action allows on the element it began on and on every element around
++// it (Iroise, patches/0021). NB: Other browsers stop at the nearest scroll container; this goes to the root.
++static void touch_panning_for(DOM::Node& target, bool& pans_x, bool& pans_y)
++{
++    pans_x = pans_y = true;
++    for (GC::Ptr<DOM::Node> node = target; node && (pans_x || pans_y); node = node->flat_tree_parent()) {
++        auto* element = as_if<DOM::Element>(*node);
++        if (!element)
++            continue;
++        DOM::AbstractElement abstract_element { *element };
++        RefPtr<CSS::StyleValue const> value;
++        if (auto computed = CSS::CSSStyleProperties::resolved_value_read_from_computed_style(abstract_element, CSS::PropertyID::TouchAction); computed.has_value())
++            value = computed.release_value();
++        else if (auto property = CSS::CSSStyleProperties::create_resolved_style(abstract_element)->get_property(CSS::PropertyID::TouchAction); property.has_value())
++            value = property->value;
++        if (!value)
++            continue;
++        auto text = value->to_string(CSS::SerializationMode::Normal);
++        if (text == "auto"sv)
++            continue;
++        bool manipulation = text == "manipulation"sv;
++        pans_x = pans_x && (manipulation || text.contains("pan-x"sv) || text.contains("pan-left"sv) || text.contains("pan-right"sv));
++        pans_y = pans_y && (manipulation || text.contains("pan-y"sv) || text.contains("pan-up"sv) || text.contains("pan-down"sv));
++    }
++}
++
+ // https://w3c.github.io/touch-events/#touchevent-interface
+ bool EventHandler::dispatch_touch_event(PointerState& pointer, DOM::Node& target, Utf16FlyString const& name, MouseEventCoordinates const& coordinates, CSSPixelPoint screen_position)
+ {
+@@ -4629,11 +4664,28 @@ bool EventHandler::dispatch_touch_event(PointerState& pointer, DOM::Node& target
+             if (has_non_passive_listener)
+                 break;
+         }
++        // NB: Once the finger scrolls, its touchmove can no longer stop it, as in other browsers (Iroise,
++        //     patches/0021).
++        if (name == UIEvents::EventNames::touchmove && m_navigable->page().touch_scrolls())
++            has_non_passive_listener = false;
+         event->set_cancelable(has_non_passive_listener);
+     }
+ 
++    // NB: The finger's scroll steps follow its touchstart, which decides what they may do (Iroise, patches/0021).
++    if (name == UIEvents::EventNames::touchstart && pointer.is_primary) {
++        bool pans_x = true;
++        bool pans_y = true;
++        touch_panning_for(target, pans_x, pans_y);
++        m_navigable->page().touch_started(pans_x, pans_y);
++    }
++
+     event->set_is_trusted(true);
+-    return original_target->dispatch_event(event);
++    bool allowed = original_target->dispatch_event(event);
++    // https://w3c.github.io/touch-events/#cancelability
++    // NB: A cancelled touchstart or touchmove keeps the finger from scrolling.
++    if (!allowed && name.is_one_of(UIEvents::EventNames::touchstart, UIEvents::EventNames::touchmove))
++        m_navigable->page().touch_prevented_scrolling();
++    return allowed;
+ }
+ 
+ bool EventHandler::has_pointer_capture_in_subtree(i32 pointer_id) const
+diff --git a/Libraries/LibWeb/Page/Page.cpp b/Libraries/LibWeb/Page/Page.cpp
+index fbef33d4b..eb2f774da 100644
+--- a/Libraries/LibWeb/Page/Page.cpp
++++ b/Libraries/LibWeb/Page/Page.cpp
+@@ -610,6 +610,23 @@ EventResult Page::handle_pinch_event(HTML::LocalNavigable& root, PinchEvent cons
+     return root.event_handler().handle_pinch_event(device_to_css_point(event.position), event, remote_target);
+ }
+ 
++EventResult Page::touch_scroll_step_result(bool cancelable, double delta_x, double delta_y)
++{
++    // https://w3c.github.io/pointerevents/#the-touch-action-css-property
++    // NB: As in other browsers, the direction the finger first scrolls in decides whether touch-action lets it pan.
++    if (!m_touch_scroll_direction_decided && (delta_x != 0 || delta_y != 0)) {
++        m_touch_scroll_direction_decided = true;
++        auto magnitude = [](double delta) { return delta < 0 ? -delta : delta; };
++        if (!(magnitude(delta_x) > magnitude(delta_y) ? m_touch_pans_x : m_touch_pans_y))
++            m_touch_prevents_scrolling = true;
++    }
++    // NB: A step the compositor scrolled already cannot be taken back.
++    if (m_touch_prevents_scrolling && cancelable)
++        return EventResult::Cancelled;
++    m_touch_scrolls = true;
++    return EventResult::Accepted;
++}
++
+ EventResult Page::handle_pinch_event(DevicePixelPoint position, unsigned modifiers, double scale)
+ {
+     PinchEvent event {
+diff --git a/Libraries/LibWeb/Page/Page.h b/Libraries/LibWeb/Page/Page.h
+index 22337dbb5..60caa572f 100644
+--- a/Libraries/LibWeb/Page/Page.h
++++ b/Libraries/LibWeb/Page/Page.h
+@@ -205,6 +205,24 @@ public:
+     EventResult handle_drag_and_drop_event(HTML::LocalNavigable& root, DragEvent::Type, DevicePixelPoint, DevicePixelPoint screen_position, unsigned button, unsigned buttons, unsigned modifiers, Vector<HTML::SelectedFile> files);
+     EventResult handle_pinch_event(HTML::LocalNavigable& root, PinchEvent const&, Optional<RemoteInputEventTarget>* remote_target);
+ 
++    // A finger's scroll (Iroise, patches/0021). The UI scrolls a finger by wheel steps; the page's touch events and
++    // touch-action decide them, as a wheel listener would a wheel's.
++    void set_handling_touch_scroll(bool handling) { m_handling_touch_scroll = handling; }
++    bool handling_touch_scroll() const { return m_handling_touch_scroll; }
++    EventResult touch_scroll_step_result(bool cancelable, double delta_x, double delta_y);
++    // https://w3c.github.io/pointerevents/#the-touch-action-css-property
++    // A finger came down, where touch-action lets it pan in these directions.
++    void touch_started(bool pans_x, bool pans_y)
++    {
++        m_touch_prevents_scrolling = false;
++        m_touch_scrolls = false;
++        m_touch_scroll_direction_decided = false;
++        m_touch_pans_x = pans_x;
++        m_touch_pans_y = pans_y;
++    }
++    void touch_prevented_scrolling() { m_touch_prevents_scrolling = true; }
++    bool touch_scrolls() const { return m_touch_scrolls; }
++
+     EventResult handle_mouseup(DevicePixelPoint, DevicePixelPoint screen_position, unsigned button, unsigned buttons, unsigned modifiers);
+     EventResult handle_mousedown(DevicePixelPoint, DevicePixelPoint screen_position, unsigned button, unsigned buttons, unsigned modifiers, int click_count);
+     EventResult handle_mousemove(DevicePixelPoint, DevicePixelPoint screen_position, unsigned buttons, unsigned modifiers);
+@@ -530,6 +548,13 @@ private:
+     // Mouse events are hit-tested independently, so a release can target an ancestor document after a press began in
+     // a child navigable. Retain the interaction owner separately from focus to clear its non-DOM input state.
+     GC::Weak<HTML::LocalNavigable> m_mouse_event_tracking_navigable;
++
++    bool m_handling_touch_scroll { false };
++    bool m_touch_prevents_scrolling { false };
++    bool m_touch_scrolls { false };
++    bool m_touch_scroll_direction_decided { false };
++    bool m_touch_pans_x { true };
++    bool m_touch_pans_y { true };
+     // The navigable whose event handler reported the hovered link or tooltip the client shows, while it shows one. Only
+     // that handler ends the hover when its document is replaced; another navigable's replacement (an iframe the pointer
+     // once passed through, e.g.) leaves the report standing.
+diff --git a/Libraries/LibWebCommon/Page/InputEvent.cpp b/Libraries/LibWebCommon/Page/InputEvent.cpp
+index 0177ed88d..d02bf79b8 100644
+--- a/Libraries/LibWebCommon/Page/InputEvent.cpp
++++ b/Libraries/LibWebCommon/Page/InputEvent.cpp
+@@ -33,7 +33,7 @@ KeyEvent KeyEvent::clone_without_browser_data() const
+ 
+ MouseEvent MouseEvent::clone_without_browser_data() const
+ {
+-    return { type, position, screen_position, button, buttons, modifiers, wheel_delta_x, wheel_delta_y, wheel_tick_120ths_x, wheel_tick_120ths_y, wheel_delta_precision, scroll_gesture_phase, click_count, nullptr, async_scroll_performed_default_action, id, scrollbar_dragged_by_compositor, pointer_data, wheel_gesture_mark };
++    return { type, position, screen_position, button, buttons, modifiers, wheel_delta_x, wheel_delta_y, wheel_tick_120ths_x, wheel_tick_120ths_y, wheel_delta_precision, scroll_gesture_phase, click_count, nullptr, async_scroll_performed_default_action, id, scrollbar_dragged_by_compositor, pointer_data, wheel_gesture_mark, is_touch_scroll };
+ }
+ 
+ }
+diff --git a/Libraries/LibWebCommon/Page/InputEvent.h b/Libraries/LibWebCommon/Page/InputEvent.h
+index fe015a96f..1a222676c 100644
+--- a/Libraries/LibWebCommon/Page/InputEvent.h
++++ b/Libraries/LibWebCommon/Page/InputEvent.h
+@@ -185,6 +185,9 @@ struct WEBCOMMON_API MouseEvent {
+     Optional<Web::ScrollbarDraggedByCompositor> scrollbar_dragged_by_compositor {};
+     PointerInputData pointer_data {};
+     Optional<WheelGestureMark> wheel_gesture_mark {};
++    // A wheel step that a finger scrolls (Iroise, patches/0021): it fires no wheel event, and the page's touch events
++    // and touch-action decide it.
++    bool is_touch_scroll { false };
+ };
+ 
+ struct WEBCOMMON_API PinchEvent {
+diff --git a/Libraries/LibWebCommon/Page/InputEvent.ipc b/Libraries/LibWebCommon/Page/InputEvent.ipc
+index b5c8d83b5..7c1a3b5aa 100644
+--- a/Libraries/LibWebCommon/Page/InputEvent.ipc
++++ b/Libraries/LibWebCommon/Page/InputEvent.ipc
+@@ -103,6 +103,7 @@ struct Web::MouseEvent {
+     Optional<Web::ScrollbarDraggedByCompositor> scrollbar_dragged_by_compositor;
+     Web::PointerInputData pointer_data;
+     Optional<Web::WheelGestureMark> wheel_gesture_mark;
++    bool is_touch_scroll;
+ }
+ 
+ [ExistingCpp]

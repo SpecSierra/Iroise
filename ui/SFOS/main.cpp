@@ -134,21 +134,23 @@ public:
             m_active_touch = id;
             m_touch_start = m_touch_last = position;
             m_is_scrolling = false;
-            // NB: The engine has no touch events, so a page only ever sees a mouse. A page in fullscreen has nothing
-            //     to scroll, and its player's controls are pressed and dragged (a seek bar): there the finger is the
-            //     mouse, its button held from the moment it touches until it lifts.
+            // NB: A page in fullscreen has nothing to scroll, and its player's controls are pressed and dragged (a seek
+            //     bar): there the finger is the mouse, its button held from the moment it touches until it lifts.
+            //     Touches there wait on a bug of Ladybird's: hit testing does not go inside the fullscreen element.
             m_touch_is_mouse = is_page_fullscreen;
             if (m_touch_is_mouse) {
                 send_mouse_event(Web::MouseEvent::Type::MouseMove, position);
                 send_mouse_event(Web::MouseEvent::Type::MouseDown, position);
                 m_mouse_held = true;
-            } else {
-                ++m_touch_serial;
-                m_touch_may_scroll = true;
-                send_touch_event(Web::MouseEvent::Type::TouchStart, position);
-                if (s_touch_events)
-                    m_touch_events_awaiting_page.append(m_touch_serial);
+                return;
             }
+            ++m_touch_serial;
+            m_touch_may_scroll = true;
+            m_touch_scroll_took = false;
+            m_touch_pointer_down = s_touch_events;
+            m_touch_pointer_id = s_next_touch_pointer_id++;
+            if (m_touch_pointer_down)
+                send_touch_pointer_event(Web::MouseEvent::Type::MouseDown, position);
             return;
         }
         if (m_active_touch != id)
@@ -169,38 +171,31 @@ public:
         }
 
         if (phase == Motion) {
-            send_touch_event(Web::MouseEvent::Type::TouchMove, position);
-            if (s_touch_events)
-                m_touch_events_awaiting_page.append(m_touch_serial);
+            if (m_touch_pointer_down)
+                send_touch_pointer_event(Web::MouseEvent::Type::MouseMove, position);
             auto travelled = position - m_touch_start;
             if (!m_is_scrolling && m_touch_may_scroll && max(abs(travelled.x()), abs(travelled.y())) > touch_slop)
                 m_is_scrolling = true;
-            // NB: A touchstart's word that comes once the scroll began stops it there.
             if (m_is_scrolling && m_touch_may_scroll) {
                 // The content follows the finger, so it scrolls the opposite way.
-                send_mouse_event(Web::MouseEvent::Type::MouseWheel, position, m_touch_last - position, Web::ScrollGesturePhase::Ongoing);
+                send_scroll_step(position, m_touch_last - position, Web::ScrollGesturePhase::Ongoing);
                 m_touch_last = position;
             }
             return;
         }
 
         m_active_touch.clear();
-        if (phase == Cancel) {
-            send_touch_event(Web::MouseEvent::Type::TouchCancel, position);
-            end_scroll(position);
-            return;
+        // NB: The engine makes a tap of the touch that ends: its mouse events and its click, unless the page
+        //     cancelled them. A finger that lifts while it scrolls, before the page said whether it may (a flick), is
+        //     cancelled rather than lifted, so that it makes no tap.
+        if (m_touch_pointer_down) {
+            m_touch_pointer_down = false;
+            bool cancel = phase == Cancel || (m_is_scrolling && m_touch_may_scroll);
+            send_touch_pointer_event(cancel ? Web::MouseEvent::Type::MouseCancel : Web::MouseEvent::Type::MouseUp, position);
         }
-        // NB: The mouse events of a tap follow only once the page has handled its touchend, and only if the page
-        //     cancelled neither that nor the touchstart (see touch_event_finished).
-        bool is_tap = !m_is_scrolling;
-        send_touch_event(Web::MouseEvent::Type::TouchEnd, position);
-        if (s_touch_events)
-            m_touch_ends_awaiting_page.append({ is_tap ? Optional<Gfx::IntPoint> { position } : Optional<Gfx::IntPoint> {}, MonotonicTime::now() });
-        if (m_is_scrolling) {
-            end_scroll(position);
-            return;
-        }
-        if (!s_touch_events)
+        bool was_tap = !m_is_scrolling;
+        end_scroll(position);
+        if (!s_touch_events && phase == Up && was_tap)
             send_tap(position);
     }
 
@@ -210,26 +205,33 @@ public:
     void end_scroll(Gfx::IntPoint position)
     {
         if (m_is_scrolling && m_touch_may_scroll)
-            send_mouse_event(Web::MouseEvent::Type::MouseWheel, position, {}, Web::ScrollGesturePhase::Ended);
+            send_scroll_step(position, {}, Web::ScrollGesturePhase::Ended);
         m_is_scrolling = false;
     }
 
-    // The page has handled an input event. Its touchend decides whether a tap is one.
+    // The page has handled an input event. The first scroll step of a finger tells whether the finger scrolls.
     void touch_event_finished(Web::MouseEvent const& event, Web::EventResult result)
     {
-        // A touchstart or touchmove the page cancelled, or a touchstart whose touch-action allows no panning (a
-        // map's), keeps the finger from scrolling from then on.
-        if ((event.type == Web::MouseEvent::Type::TouchStart || event.type == Web::MouseEvent::Type::TouchMove) && !m_touch_events_awaiting_page.is_empty()) {
-            auto serial = m_touch_events_awaiting_page.take_first();
-            if (serial == m_touch_serial && result == Web::EventResult::Cancelled)
-                m_touch_may_scroll = false;
+        if (event.type != Web::MouseEvent::Type::MouseWheel || !event.is_touch_scroll || m_touch_scroll_steps_awaiting_page.is_empty())
+            return;
+        auto serial = m_touch_scroll_steps_awaiting_page.take_first();
+        if (serial != m_touch_serial || event.scroll_gesture_phase == Web::ScrollGesturePhase::Ended)
+            return;
+        // A cancelled touchstart or touchmove, or a touch-action that allows no panning this way (a map's), keeps the
+        // finger from scrolling from then on.
+        if (result == Web::EventResult::Cancelled) {
+            m_touch_may_scroll = false;
             return;
         }
-        if (event.type != Web::MouseEvent::Type::TouchEnd || m_touch_ends_awaiting_page.is_empty())
+        if (result == Web::EventResult::Dropped || m_touch_scroll_took)
             return;
-        auto touch_end = m_touch_ends_awaiting_page.take_first();
-        if (touch_end.tap.has_value() && result != Web::EventResult::Cancelled)
-            send_tap(*touch_end.tap);
+        // https://w3c.github.io/pointerevents/#the-pointercancel-event
+        // The finger scrolls: its pointer is cancelled, as in other browsers, and it makes no tap.
+        m_touch_scroll_took = true;
+        if (m_touch_pointer_down && m_active_touch.has_value()) {
+            m_touch_pointer_down = false;
+            send_touch_pointer_event(Web::MouseEvent::Type::MouseCancel, m_touch_last);
+        }
     }
 
     // Every page that comes to host the tab, also after a cross-site navigation moved it to another process.
@@ -264,6 +266,8 @@ public:
 private:
     // A finger has to travel this far, in device pixels, before a touch becomes a scroll rather than a tap.
     static constexpr int touch_slop = 24;
+    // How wide a fingertip's contact is, in device pixels.
+    static constexpr double finger_width = 24;
 
     PresentedWebView(Core::AnonymousBuffer theme, Gfx::IntSize size, double device_pixel_ratio, WebView::IsPrivate is_private)
         : WebView::HeadlessWebView(move(theme), size.to_type<Web::DevicePixels>(), is_private)
@@ -317,34 +321,58 @@ private:
         }
     }
 
+    // Without touch events (IROISE_TOUCH_EVENTS=0), a tap is a mouse's click.
     void send_tap(Gfx::IntPoint position)
     {
-        // NB: After touch events, these are the tap's compatibility mouse events, which fire no pointer events: the
-        //     touch's pointer events were the page's already (patches/0023).
-        m_sending_tap = true;
         send_mouse_event(Web::MouseEvent::Type::MouseMove, position);
         send_mouse_event(Web::MouseEvent::Type::MouseDown, position);
         send_mouse_event(Web::MouseEvent::Type::MouseUp, position);
-        m_sending_tap = false;
     }
 
-    // Touch events are the engine's by our patches 0021 and 0022 (docs/TOUCH.md).
-    void send_touch_event(Web::MouseEvent::Type type, Gfx::IntPoint position)
+    // A finger is a pointer of type "touch": the engine fires its pointer and touch events, and the tap it makes.
+    // https://w3c.github.io/pointerevents/#pointerevent-interface
+    void send_touch_pointer_event(Web::MouseEvent::Type type, Gfx::IntPoint position)
     {
-        if (!s_touch_events)
-            return;
-        // A touchend the page never answered (its process went away) holds up no later tap.
-        auto now = MonotonicTime::now();
-        while (!m_touch_ends_awaiting_page.is_empty() && now - m_touch_ends_awaiting_page.first().sent > AK::Duration::from_seconds(2))
-            m_touch_ends_awaiting_page.take_first();
         Web::MouseEvent event {};
         event.type = type;
         event.position = position.to_type<Web::DevicePixels>();
         event.screen_position = position.to_type<Web::DevicePixels>();
+        bool down = type == Web::MouseEvent::Type::MouseDown || type == Web::MouseEvent::Type::MouseMove;
+        if (type == Web::MouseEvent::Type::MouseDown || type == Web::MouseEvent::Type::MouseUp) {
+            event.button = Web::UIEvents::MouseButton::Primary;
+            event.click_count = 1;
+        }
+        if (down)
+            event.buttons = Web::UIEvents::MouseButton::Primary;
+        Web::PointerProperties properties;
+        properties.pointer_id = m_touch_pointer_id;
+        properties.pointer_type = Web::PointerType::Touch;
+        // NB: The panel reports no contact size or pressure: a fingertip, and the 0.5 of a pointer without pressure.
+        properties.width = properties.height = finger_width / m_device_pixel_ratio;
+        properties.pressure = down ? 0.5 : 0;
+        event.pointer_data = Web::PointerInputData { properties };
         enqueue_input_event(move(event));
     }
 
-    void send_mouse_event(Web::MouseEvent::Type type, Gfx::IntPoint position, Gfx::IntPoint wheel_delta = {}, Web::ScrollGesturePhase phase = Web::ScrollGesturePhase::None)
+    // A step of a finger's scroll, which fires no wheel event: the page's touch events and touch-action decide it
+    // (patches/0021).
+    void send_scroll_step(Gfx::IntPoint position, Gfx::IntPoint delta, Web::ScrollGesturePhase phase)
+    {
+        Web::MouseEvent event {};
+        event.type = Web::MouseEvent::Type::MouseWheel;
+        event.position = position.to_type<Web::DevicePixels>();
+        event.screen_position = position.to_type<Web::DevicePixels>();
+        // NB: Wheel deltas are in CSS pixels; touches arrive in device pixels.
+        event.wheel_delta_x = delta.x() / m_device_pixel_ratio;
+        event.wheel_delta_y = delta.y() / m_device_pixel_ratio;
+        event.wheel_delta_precision = Web::WheelDeltaPrecision::Precise;
+        event.scroll_gesture_phase = phase;
+        event.is_touch_scroll = true;
+        m_touch_scroll_steps_awaiting_page.append(m_touch_serial);
+        enqueue_input_event(move(event));
+    }
+
+    void send_mouse_event(Web::MouseEvent::Type type, Gfx::IntPoint position)
     {
         auto is_button_event = type == Web::MouseEvent::Type::MouseDown || type == Web::MouseEvent::Type::MouseUp;
         Web::MouseEvent event {};
@@ -357,14 +385,6 @@ private:
         }
         if (type == Web::MouseEvent::Type::MouseDown || (type == Web::MouseEvent::Type::MouseMove && m_mouse_held))
             event.buttons = Web::UIEvents::MouseButton::Primary;
-        // NB: Wheel deltas are in CSS pixels; touches arrive in device pixels.
-        event.wheel_delta_x = wheel_delta.x() / m_device_pixel_ratio;
-        event.wheel_delta_y = wheel_delta.y() / m_device_pixel_ratio;
-        event.wheel_delta_precision = Web::WheelDeltaPrecision::Precise;
-        event.scroll_gesture_phase = phase;
-        // NB: Every scroll this front end sends is a finger's.
-        event.is_touch_scroll = s_touch_events && type == Web::MouseEvent::Type::MouseWheel;
-        event.is_touch_compatibility = s_touch_events && m_sending_tap;
         enqueue_input_event(move(event));
     }
 
@@ -381,18 +401,17 @@ private:
     Gfx::IntPoint m_touch_start;
     Gfx::IntPoint m_touch_last;
     bool m_is_scrolling { false };
-    // The touchends sent that the page has yet to finish, in order, with the tap each would make.
-    struct TouchEndAwaitingPage {
-        Optional<Gfx::IntPoint> tap;
-        MonotonicTime sent;
-    };
-    Vector<TouchEndAwaitingPage> m_touch_ends_awaiting_page;
-    bool m_sending_tap { false };
-    // Which touch this is, and the touchstarts and touchmoves the page has yet to finish. A touch scrolls unless one of
-    // them says otherwise.
+    // Which touch this is, and the scroll steps sent that the page has yet to finish, by the touch each was of.
     u64 m_touch_serial { 0 };
-    Vector<u64> m_touch_events_awaiting_page;
+    Vector<u64> m_touch_scroll_steps_awaiting_page;
+    // The touch scrolls unless the page keeps it; once a step of it scrolled, it is a scroll and not the page's.
     bool m_touch_may_scroll { true };
+    bool m_touch_scroll_took { false };
+    // The touch's pointer is down in the page, and neither lifted nor cancelled by a scroll.
+    bool m_touch_pointer_down { false };
+    // NB: The mouse is pointer 0; every touch is a pointer of its own.
+    i32 m_touch_pointer_id { 2 };
+    static inline i32 s_next_touch_pointer_id { 2 };
     // This touch is passed on as a mouse with its button held (see handle_touch).
     bool m_touch_is_mouse { false };
     bool m_mouse_held { false };
