@@ -569,7 +569,7 @@ index 154409a38..4ac9bb150 100644
      Optional<LinuxDmaBufHandle> m_linux_dmabuf_handle;
  #    endif
 diff --git a/Meta/CMake/check_for_dependencies.cmake b/Meta/CMake/check_for_dependencies.cmake
-index db582e3c3..fc090865c 100644
+index da9897c7b..2051ed1ae 100644
 --- a/Meta/CMake/check_for_dependencies.cmake
 +++ b/Meta/CMake/check_for_dependencies.cmake
 @@ -42,7 +42,16 @@ if (NOT APPLE AND NOT ANDROID AND NOT WIN32)
