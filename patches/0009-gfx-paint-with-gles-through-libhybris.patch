@@ -569,10 +569,10 @@ index 154409a38..4ac9bb150 100644
      Optional<LinuxDmaBufHandle> m_linux_dmabuf_handle;
  #    endif
 diff --git a/Meta/CMake/check_for_dependencies.cmake b/Meta/CMake/check_for_dependencies.cmake
-index 3a1dc8768..49617fbc6 100644
+index db582e3c3..fc090865c 100644
 --- a/Meta/CMake/check_for_dependencies.cmake
 +++ b/Meta/CMake/check_for_dependencies.cmake
-@@ -40,7 +40,16 @@ if (NOT APPLE AND NOT ANDROID AND NOT WIN32)
+@@ -42,7 +42,16 @@ if (NOT APPLE AND NOT ANDROID AND NOT WIN32)
      add_cxx_compile_definitions(USE_FONTCONFIG=1)
  endif()
  
@@ -657,7 +657,7 @@ index 9b29091ac..4d3320b67 100644
          Vector<Gfx::SharedImage> shared_images;
          shared_images.ensure_capacity(buffer_count);
 diff --git a/Services/Compositor/PaintingSurface.cpp b/Services/Compositor/PaintingSurface.cpp
-index 8a4ef6807..3cd9ca845 100644
+index b6e5761a8..7ea20d750 100644
 --- a/Services/Compositor/PaintingSurface.cpp
 +++ b/Services/Compositor/PaintingSurface.cpp
 @@ -26,6 +26,10 @@
@@ -680,7 +680,7 @@ index 8a4ef6807..3cd9ca845 100644
  static GrSurfaceOrigin origin_to_sk_origin(PaintingSurface::Origin origin)
  {
      switch (origin) {
-@@ -171,6 +175,26 @@ NonnullRefPtr<PaintingSurface> PaintingSurface::wrap_bitmap(Bitmap& bitmap)
+@@ -177,6 +181,26 @@ NonnullRefPtr<PaintingSurface> PaintingSurface::wrap_bitmap(Bitmap& bitmap)
      return adopt_ref(*new PaintingSurface(make<Impl>(RefPtr<SkiaBackendContext> {}, size, surface, bitmap)));
  }
  
@@ -708,7 +708,7 @@ index 8a4ef6807..3cd9ca845 100644
  NonnullRefPtr<PaintingSurface> PaintingSurface::create_from_shared_image_buffer(SharedImageBuffer& shared_image_buffer, NonnullRefPtr<SkiaBackendContext> context, Origin origin)
  {
 diff --git a/Services/Compositor/PaintingSurface.h b/Services/Compositor/PaintingSurface.h
-index 09b34ac6a..7d5996d41 100644
+index a420ab8dc..9730f6620 100644
 --- a/Services/Compositor/PaintingSurface.h
 +++ b/Services/Compositor/PaintingSurface.h
 @@ -23,6 +23,14 @@ struct VulkanImage;
@@ -726,7 +726,7 @@ index 09b34ac6a..7d5996d41 100644
  #ifdef USE_DIRECTX
  #    include <AK/Error.h>
  
-@@ -65,6 +73,10 @@ public:
+@@ -67,6 +75,10 @@ public:
      static NonnullRefPtr<PaintingSurface> create_from_vkimage(NonnullRefPtr<SkiaBackendContext> context, NonnullRefPtr<VulkanImage> vulkan_image, Origin origin);
  #endif
  
@@ -738,10 +738,10 @@ index 09b34ac6a..7d5996d41 100644
      static ErrorOr<NonnullRefPtr<PaintingSurface>> create_from_d3d_texture(NonnullRefPtr<SkiaBackendContext>, NonnullRefPtr<D3DSharedTexture>, Origin = Origin::TopLeft);
  #endif
 diff --git a/Services/Compositor/SkiaBackendContext.cpp b/Services/Compositor/SkiaBackendContext.cpp
-index 199a5c35b..589a54d64 100644
+index 740b10371..8e8752561 100644
 --- a/Services/Compositor/SkiaBackendContext.cpp
 +++ b/Services/Compositor/SkiaBackendContext.cpp
-@@ -35,6 +35,12 @@ template<>
+@@ -39,6 +39,12 @@ template<>
  constexpr bool AllocatedWithSystemAllocator<skgpu::VulkanExtensions> = true;
  #endif
  
@@ -754,7 +754,7 @@ index 199a5c35b..589a54d64 100644
  #ifdef AK_OS_MACOS
  #    include <gpu/ganesh/GrBackendSurface.h>
  #    include <gpu/ganesh/mtl/GrMtlBackendContext.h>
-@@ -44,7 +50,7 @@ constexpr bool AllocatedWithSystemAllocator<skgpu::VulkanExtensions> = true;
+@@ -48,7 +54,7 @@ constexpr bool AllocatedWithSystemAllocator<skgpu::VulkanExtensions> = true;
  
  namespace Gfx {
  
@@ -763,7 +763,7 @@ index 199a5c35b..589a54d64 100644
  static constexpr size_t skia_resource_cache_limit = 256 * MiB;
  #endif
  static constexpr auto skia_deferred_cleanup_interval = AK::Duration::from_seconds(1);
-@@ -168,6 +174,13 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_independent_gpu_backend([[
+@@ -200,6 +206,13 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_independent_gpu_backend([[
      }
      auto vulkan_context = maybe_vulkan_context.release_value();
      return create_vulkan_context(vulkan_context);
@@ -777,7 +777,7 @@ index 199a5c35b..589a54d64 100644
  #else
      return {};
  #endif
-@@ -350,4 +363,59 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_metal_context(NonnullRefPt
+@@ -382,4 +395,59 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_metal_context(NonnullRefPt
  }
  #endif
  
@@ -874,12 +874,12 @@ index 8a93975a4..cc220c5bb 100644
  private:
      void perform_post_flush_cleanup();
 diff --git a/vcpkg.json b/vcpkg.json
-index 0d6754f14..b08e75cf9 100644
+index bfebfcb94..c8e890617 100644
 --- a/vcpkg.json
 +++ b/vcpkg.json
-@@ -47,11 +47,7 @@
-         "swresample",
+@@ -48,11 +48,7 @@
          "dav1d",
+         "opus",
          "zlib",
 -        "ladybird-components",
 -        {
@@ -890,7 +890,7 @@ index 0d6754f14..b08e75cf9 100644
        ]
      },
      {
-@@ -236,6 +232,7 @@
+@@ -238,6 +234,7 @@
          "fontconfig",
          "harfbuzz",
          "icu",

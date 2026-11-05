@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibWeb/DOM/Element.cpp b/Libraries/LibWeb/DOM/Element.cpp
-index 6e9c49386..1e0eda16c 100644
+index dad29df7d..51a81ca09 100644
 --- a/Libraries/LibWeb/DOM/Element.cpp
 +++ b/Libraries/LibWeb/DOM/Element.cpp
-@@ -2016,8 +2016,42 @@ static void apply_display_contents_style_to_text_boxes(Element& element, CSS::Re
+@@ -1730,8 +1730,42 @@ static void apply_display_contents_style_to_text_boxes(Element& element, CSS::Re
          Layout::RustFFI::render_state_reinherit_display_contents_text(arena->host(), element.style_node_id().value());
  }
  
@@ -46,22 +46,22 @@ index 6e9c49386..1e0eda16c 100644
      if (auto* svg_element = as_if<SVG::SVGElement>(*this))
          svg_element->note_svg_paint_resource_description_may_have_changed();
 diff --git a/Libraries/LibWeb/DOM/Element.h b/Libraries/LibWeb/DOM/Element.h
-index 42d7b01b1..79c15ab2c 100644
+index 6851f42a1..4b841a399 100644
 --- a/Libraries/LibWeb/DOM/Element.h
 +++ b/Libraries/LibWeb/DOM/Element.h
-@@ -1068,6 +1068,7 @@ private:
+@@ -1058,6 +1058,7 @@ private:
+ 
      void exit_fullscreen_on_element_removal();
-     CSS::RequiredInvalidationAfterStyleChange recompute_pseudo_element_styles(Layout::BegunRead const& read, bool& did_change_custom_properties, bool had_list_marker, CSS::ComputedValues const* old_originating_style, EnginePseudoElementRecords const* = nullptr, EngineRecordDamages const* = nullptr);
      void apply_computed_style_to_layout_node_if_needed(Layout::BegunRead const& read, CSS::RequiredInvalidationAfterStyleChange const&);
 +    void update_restricts_touch_panning();
      void apply_computed_pseudo_element_styles_to_layout_nodes_if_needed(Layout::BegunRead const& read, CSS::RequiredInvalidationAfterStyleChange const&);
-     void publish_custom_property_names();
      void update_anchor_name_registry(CSS::ComputedValues const* old_computed_values, CSS::ComputedValues const& new_computed_values);
+     void replace_installed_style(Layout::BegunRead const&, CSS::InstalledStyle);
 diff --git a/Libraries/LibWeb/DOM/EventTarget.cpp b/Libraries/LibWeb/DOM/EventTarget.cpp
-index 1965aac12..e1af916ae 100644
+index 6456e296a..1ac147b74 100644
 --- a/Libraries/LibWeb/DOM/EventTarget.cpp
 +++ b/Libraries/LibWeb/DOM/EventTarget.cpp
-@@ -292,7 +292,9 @@ static void invalidate_compositor_keyboard_scroll_state(EventTarget& target, DOM
+@@ -297,7 +297,9 @@ static bool is_blocking_keyboard_event_listener(DOMEventListener const& listener
  
  static bool is_blocking_wheel_event_listener(DOMEventListener const& listener)
  {
@@ -73,10 +73,10 @@ index 1965aac12..e1af916ae 100644
  
  static void invalidate_compositor_wheel_event_listener_state(EventTarget& event_target, DOMEventListener const& listener)
 diff --git a/Libraries/LibWeb/DOM/Node.cpp b/Libraries/LibWeb/DOM/Node.cpp
-index f93547c06..e4f55dbb6 100644
+index 100c92c50..f33346c21 100644
 --- a/Libraries/LibWeb/DOM/Node.cpp
 +++ b/Libraries/LibWeb/DOM/Node.cpp
-@@ -2963,7 +2963,7 @@ bool Node::update_inside_blocking_wheel_event_handler_state()
+@@ -2908,7 +2908,7 @@ bool Node::update_inside_blocking_wheel_event_handler_state()
          m_inside_blocking_wheel_event_handler = parent->inside_blocking_wheel_event_handler();
      }
  
@@ -86,10 +86,10 @@ index f93547c06..e4f55dbb6 100644
  
      bool const flipped = was_inside_blocking_wheel_event_handler != m_inside_blocking_wheel_event_handler;
 diff --git a/Libraries/LibWeb/DOM/Node.h b/Libraries/LibWeb/DOM/Node.h
-index 4e2c00547..5741b044b 100644
+index 8d035a498..6346765ea 100644
 --- a/Libraries/LibWeb/DOM/Node.h
 +++ b/Libraries/LibWeb/DOM/Node.h
-@@ -406,6 +406,10 @@ public:
+@@ -410,6 +410,10 @@ public:
      void set_has_assigned_slot(Badge<SlottableMixin>, bool value) { m_has_assigned_slot = value; }
  
      bool inside_blocking_wheel_event_handler() const { return m_inside_blocking_wheel_event_handler; }
@@ -100,7 +100,7 @@ index 4e2c00547..5741b044b 100644
      bool update_inside_blocking_wheel_event_handler_state();
      void update_inside_blocking_wheel_event_handler_state_for_subtree();
  
-@@ -726,6 +730,7 @@ protected:
+@@ -722,6 +726,7 @@ protected:
      // NB: These share a byte, which keeps every node from growing.
      bool m_has_assigned_slot : 1 { false };
      bool m_inside_blocking_wheel_event_handler : 1 { false };
@@ -109,7 +109,7 @@ index 4e2c00547..5741b044b 100644
      bool m_descendant_style_arrival_pending : 1 { false };
      bool m_child_style_arrivals_wait : 1 { false };
 diff --git a/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp b/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp
-index f0bf76eda..f46ba1e21 100644
+index 792c162b6..292a5007d 100644
 --- a/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp
 +++ b/Libraries/LibWeb/HTML/EventLoop/EventLoop.cpp
 @@ -465,9 +465,11 @@ void EventLoop::process_input_events() const
@@ -125,7 +125,7 @@ index f0bf76eda..f46ba1e21 100644
  
              Optional<RemoteInputEventTarget> remote_target;
 diff --git a/Libraries/LibWeb/Page/EventHandler.cpp b/Libraries/LibWeb/Page/EventHandler.cpp
-index 7f4c03693..355267526 100644
+index 5f47dd75d..cd954fb4d 100644
 --- a/Libraries/LibWeb/Page/EventHandler.cpp
 +++ b/Libraries/LibWeb/Page/EventHandler.cpp
 @@ -19,12 +19,14 @@
@@ -143,7 +143,7 @@ index 7f4c03693..355267526 100644
  #include <LibWeb/DOM/DOMEventListener.h>
  #include <LibWeb/DOM/Document.h>
  #include <LibWeb/DOM/Element.h>
-@@ -970,7 +972,9 @@ static Vector<Web::AsyncScrollNodeStableID> wheel_scroll_chain_from(Layout::Node
+@@ -987,7 +989,9 @@ static Vector<Web::AsyncScrollNodeStableID> wheel_scroll_chain_from(Layout::Node
  
  EventResult EventHandler::handle_mousewheel(CSSPixelPoint visual_viewport_position, CSSPixelPoint screen_position, u32 button, u32 buttons, u32 modifiers, double wheel_delta_x, double wheel_delta_y, double wheel_tick_120ths_x, double wheel_tick_120ths_y, Web::WheelDeltaPrecision wheel_delta_precision, Web::ScrollGesturePhase scroll_gesture_phase, bool async_scroll_performed_default_action, Optional<AsyncScrollOperation>* async_scroll_operation, Optional<RemoteInputEventTarget>* remote_target, Optional<Web::WheelGestureMark> wheel_gesture_mark)
  {
@@ -154,7 +154,7 @@ index 7f4c03693..355267526 100644
  
      if (should_ignore_device_input_event())
          return EventResult::Dropped;
-@@ -1160,7 +1164,11 @@ EventResult EventHandler::handle_mousewheel(CSSPixelPoint visual_viewport_positi
+@@ -1177,7 +1181,11 @@ EventResult EventHandler::handle_mousewheel(CSSPixelPoint visual_viewport_positi
  
      auto dispatch_result = EventResult::Accepted;
      if (wheel_event_target_node) {
@@ -167,7 +167,7 @@ index 7f4c03693..355267526 100644
          if (dispatch_result == EventResult::Accepted)
              record_input_routing(InputRoutingDecision::DispatchedWheelEvent, {}, wheel_event_target_node);
          else if (dispatch_result == EventResult::Cancelled)
-@@ -4567,6 +4575,33 @@ void EventHandler::update_pointer_hover(Layout::BegunRead const& read, PointerSt
+@@ -4759,6 +4767,33 @@ void EventHandler::update_pointer_hover(Layout::BegunRead const& read, PointerSt
          dispatch(boundary, UIEvents::EventNames::pointerenter, previous, false);
  }
  
@@ -201,7 +201,7 @@ index 7f4c03693..355267526 100644
  // https://w3c.github.io/touch-events/#touchevent-interface
  bool EventHandler::dispatch_touch_event(PointerState& pointer, DOM::Node& target, Utf16FlyString const& name, MouseEventCoordinates const& coordinates, CSSPixelPoint screen_position)
  {
-@@ -4629,11 +4664,28 @@ bool EventHandler::dispatch_touch_event(PointerState& pointer, DOM::Node& target
+@@ -4821,11 +4856,28 @@ bool EventHandler::dispatch_touch_event(PointerState& pointer, DOM::Node& target
              if (has_non_passive_listener)
                  break;
          }
@@ -232,10 +232,10 @@ index 7f4c03693..355267526 100644
  
  bool EventHandler::has_pointer_capture_in_subtree(i32 pointer_id) const
 diff --git a/Libraries/LibWeb/Page/Page.cpp b/Libraries/LibWeb/Page/Page.cpp
-index fbef33d4b..eb2f774da 100644
+index a0cf61ade..b2b60b151 100644
 --- a/Libraries/LibWeb/Page/Page.cpp
 +++ b/Libraries/LibWeb/Page/Page.cpp
-@@ -610,6 +610,23 @@ EventResult Page::handle_pinch_event(HTML::LocalNavigable& root, PinchEvent cons
+@@ -637,6 +637,23 @@ EventResult Page::handle_pinch_event(HTML::LocalNavigable& root, PinchEvent cons
      return root.event_handler().handle_pinch_event(device_to_css_point(event.position), event, remote_target);
  }
  
@@ -260,10 +260,10 @@ index fbef33d4b..eb2f774da 100644
  {
      PinchEvent event {
 diff --git a/Libraries/LibWeb/Page/Page.h b/Libraries/LibWeb/Page/Page.h
-index 22337dbb5..60caa572f 100644
+index b3b80c039..5a280e312 100644
 --- a/Libraries/LibWeb/Page/Page.h
 +++ b/Libraries/LibWeb/Page/Page.h
-@@ -205,6 +205,24 @@ public:
+@@ -207,6 +207,24 @@ public:
      EventResult handle_drag_and_drop_event(HTML::LocalNavigable& root, DragEvent::Type, DevicePixelPoint, DevicePixelPoint screen_position, unsigned button, unsigned buttons, unsigned modifiers, Vector<HTML::SelectedFile> files);
      EventResult handle_pinch_event(HTML::LocalNavigable& root, PinchEvent const&, Optional<RemoteInputEventTarget>* remote_target);
  
@@ -288,7 +288,7 @@ index 22337dbb5..60caa572f 100644
      EventResult handle_mouseup(DevicePixelPoint, DevicePixelPoint screen_position, unsigned button, unsigned buttons, unsigned modifiers);
      EventResult handle_mousedown(DevicePixelPoint, DevicePixelPoint screen_position, unsigned button, unsigned buttons, unsigned modifiers, int click_count);
      EventResult handle_mousemove(DevicePixelPoint, DevicePixelPoint screen_position, unsigned buttons, unsigned modifiers);
-@@ -530,6 +548,13 @@ private:
+@@ -535,6 +553,13 @@ private:
      // Mouse events are hit-tested independently, so a release can target an ancestor document after a press began in
      // a child navigable. Retain the interaction owner separately from focus to clear its non-DOM input state.
      GC::Weak<HTML::LocalNavigable> m_mouse_event_tracking_navigable;
@@ -303,7 +303,7 @@ index 22337dbb5..60caa572f 100644
      // that handler ends the hover when its document is replaced; another navigable's replacement (an iframe the pointer
      // once passed through, e.g.) leaves the report standing.
 diff --git a/Libraries/LibWeb/Painting/DocumentPaintState.cpp b/Libraries/LibWeb/Painting/DocumentPaintState.cpp
-index 90fae02e4..c16a1114d 100644
+index ef3f7e8c0..1c638dad2 100644
 --- a/Libraries/LibWeb/Painting/DocumentPaintState.cpp
 +++ b/Libraries/LibWeb/Painting/DocumentPaintState.cpp
 @@ -62,7 +62,11 @@ BlockingWheelEventRegionState DocumentPaintState::collect_root_blocking_wheel_ev
@@ -320,7 +320,7 @@ index 90fae02e4..c16a1114d 100644
                  .has_blocking_wheel_event_listeners = true,
                  .has_blocking_wheel_event_region_covering_viewport = true,
 diff --git a/Libraries/LibWebCommon/Page/InputEvent.cpp b/Libraries/LibWebCommon/Page/InputEvent.cpp
-index 0177ed88d..d02bf79b8 100644
+index 38313533b..2a739fb64 100644
 --- a/Libraries/LibWebCommon/Page/InputEvent.cpp
 +++ b/Libraries/LibWebCommon/Page/InputEvent.cpp
 @@ -33,7 +33,7 @@ KeyEvent KeyEvent::clone_without_browser_data() const
@@ -333,10 +333,10 @@ index 0177ed88d..d02bf79b8 100644
  
  }
 diff --git a/Libraries/LibWebCommon/Page/InputEvent.h b/Libraries/LibWebCommon/Page/InputEvent.h
-index fe015a96f..1a222676c 100644
+index d0d0e4174..2d5358f4e 100644
 --- a/Libraries/LibWebCommon/Page/InputEvent.h
 +++ b/Libraries/LibWebCommon/Page/InputEvent.h
-@@ -185,6 +185,9 @@ struct WEBCOMMON_API MouseEvent {
+@@ -187,6 +187,9 @@ struct WEBCOMMON_API MouseEvent {
      Optional<Web::ScrollbarDraggedByCompositor> scrollbar_dragged_by_compositor {};
      PointerInputData pointer_data {};
      Optional<WheelGestureMark> wheel_gesture_mark {};
@@ -347,10 +347,10 @@ index fe015a96f..1a222676c 100644
  
  struct WEBCOMMON_API PinchEvent {
 diff --git a/Libraries/LibWebCommon/Page/InputEvent.ipc b/Libraries/LibWebCommon/Page/InputEvent.ipc
-index b5c8d83b5..7c1a3b5aa 100644
+index b7b09afaf..e2bd1a6f2 100644
 --- a/Libraries/LibWebCommon/Page/InputEvent.ipc
 +++ b/Libraries/LibWebCommon/Page/InputEvent.ipc
-@@ -103,6 +103,7 @@ struct Web::MouseEvent {
+@@ -104,6 +104,7 @@ struct Web::MouseEvent {
      Optional<Web::ScrollbarDraggedByCompositor> scrollbar_dragged_by_compositor;
      Web::PointerInputData pointer_data;
      Optional<Web::WheelGestureMark> wheel_gesture_mark;

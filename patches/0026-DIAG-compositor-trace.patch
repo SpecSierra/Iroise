@@ -2,10 +2,10 @@ Iroise DIAGNOSTIC, never for main: LADYBIRD_IROISE_COMPOSITOR_TRACE=1 logs once 
 presenting frames cost (damage and raster share of the viewport, paint and flush time).
 
 diff --git a/Services/Compositor/CompositorState.cpp b/Services/Compositor/CompositorState.cpp
-index 29239b645..857eedc5c 100644
+index 918e8fdf2..5eb34c601 100644
 --- a/Services/Compositor/CompositorState.cpp
 +++ b/Services/Compositor/CompositorState.cpp
-@@ -1496,6 +1496,8 @@ void CompositorState::present_frame(Web::CompositorContextId context_id, Gfx::In
+@@ -1524,6 +1524,8 @@ void CompositorState::present_frame(Web::CompositorContextId context_id, Gfx::In
      schedule_pending_present_frame(context_id, *context);
  }
  
@@ -14,7 +14,7 @@ index 29239b645..857eedc5c 100644
  void CompositorState::present_frame(Web::CompositorContextId context_id, ContextState& context, PendingFrame pending_frame)
  {
      auto composited_context_resolver = resolver_for(context_id);
-@@ -1509,11 +1511,13 @@ void CompositorState::present_frame(Web::CompositorContextId context_id, Context
+@@ -1537,11 +1539,13 @@ void CompositorState::present_frame(Web::CompositorContextId context_id, Context
  
      auto& event_loop = Core::EventLoop::current();
      auto self = NonnullRefPtr { *this };
@@ -29,10 +29,10 @@ index 29239b645..857eedc5c 100644
  #ifdef AK_OS_MACOS
      // The window server's reads of an IOSurface wait for GPU work that is already scheduled to write it. Handing the
 diff --git a/Services/Compositor/ContextPresenter.cpp b/Services/Compositor/ContextPresenter.cpp
-index a146dd5f9..6f434fba9 100644
+index 609aa9cab..e78a6f8cf 100644
 --- a/Services/Compositor/ContextPresenter.cpp
 +++ b/Services/Compositor/ContextPresenter.cpp
-@@ -13,6 +13,8 @@
+@@ -14,6 +14,8 @@
  #include <Compositor/ScrollbarController.h>
  #include <Compositor/SkiaUtils.h>
  #include <LibCompositing/DisplayList/DisplayListDamage.h>
@@ -41,7 +41,7 @@ index a146dd5f9..6f434fba9 100644
  #include <LibCore/Timer.h>
  #include <LibGfx/Bitmap.h>
  #include <LibMedia/Sinks/VideoSink.h>
-@@ -290,6 +292,43 @@ bool ContextPresenter::draws_canvas(Compositing::CanvasId canvas_id) const
+@@ -291,6 +293,43 @@ bool ContextPresenter::draws_canvas(Compositing::CanvasId canvas_id) const
      return m_last_rasterized_frame.has_value() && m_last_rasterized_frame->canvas_content_generations.contains(canvas_id);
  }
  
@@ -85,7 +85,7 @@ index a146dd5f9..6f434fba9 100644
  Optional<PreparedFrame> ContextPresenter::prepare_frame(DisplayListPlayerSkia& display_list_player, PendingFrame pending_frame, FrameContent const& frame_content)
  {
      if (is_present_blocked()) {
-@@ -314,7 +353,23 @@ Optional<PreparedFrame> ContextPresenter::prepare_frame(DisplayListPlayerSkia& d
+@@ -315,7 +354,23 @@ Optional<PreparedFrame> ContextPresenter::prepare_frame(DisplayListPlayerSkia& d
          return {};
      }
      auto& back_store = render_target->surface;

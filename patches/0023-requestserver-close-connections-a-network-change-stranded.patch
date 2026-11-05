@@ -220,7 +220,7 @@ index 000000000..acada4dce
 +
 +}
 diff --git a/Services/RequestServer/Request.cpp b/Services/RequestServer/Request.cpp
-index 38321758b..0c1f68e99 100644
+index 02744696a..ab1ba8155 100644
 --- a/Services/RequestServer/Request.cpp
 +++ b/Services/RequestServer/Request.cpp
 @@ -26,6 +26,7 @@
@@ -231,7 +231,7 @@ index 38321758b..0c1f68e99 100644
  #include <openssl/ssl.h>
  #include <string.h>
  
-@@ -1451,6 +1452,8 @@ void Request::handle_connect_state()
+@@ -1488,6 +1489,8 @@ void Request::handle_connect_state()
      set_option(CURLOPT_PROTOCOLS_STR, "http,https");
      set_option(CURLOPT_REDIR_PROTOCOLS_STR, "http,https");
      set_option(CURLOPT_CONNECTTIMEOUT, s_connect_timeout_seconds);
@@ -240,15 +240,15 @@ index 38321758b..0c1f68e99 100644
      set_option(CURLOPT_CONNECT_ONLY, 1L);
      set_option(CURLOPT_PROXY, m_proxy.has_value() ? m_proxy->to_curl_url().characters() : "");
  
-@@ -1530,6 +1533,8 @@ void Request::handle_fetch_state()
+@@ -1567,6 +1570,8 @@ void Request::handle_fetch_state()
      set_option(CURLOPT_PROTOCOLS_STR, "http,https");
      set_option(CURLOPT_REDIR_PROTOCOLS_STR, "http,https");
      set_option(CURLOPT_CONNECTTIMEOUT, s_connect_timeout_seconds);
 +    set_option(CURLOPT_OPENSOCKETFUNCTION, open_socket_for_curl);
 +    set_option(CURLOPT_CLOSESOCKETFUNCTION, close_socket_for_curl);
  
-     if (m_alternative_service.has_value()) {
-         // https://www.rfc-editor.org/rfc/rfc7838#section-2.4
+ #ifdef LIBCURL_WAKES_ALL_PENDING_TRANSFERS
+     // A burst of requests to a new origin would otherwise each open a connection, even if they could all multiplex over
 diff --git a/Services/RequestServer/WebSocketImplCurl.cpp b/Services/RequestServer/WebSocketImplCurl.cpp
 index cd87053b5..0379fbf3d 100644
 --- a/Services/RequestServer/WebSocketImplCurl.cpp
@@ -272,7 +272,7 @@ index cd87053b5..0379fbf3d 100644
  
      if (auto root_certs = info.root_certificates_path(); root_certs.has_value())
 diff --git a/Services/RequestServer/main.cpp b/Services/RequestServer/main.cpp
-index 9ff9a60fc..d3b78d0f8 100644
+index 5402ba094..48427a1ff 100644
 --- a/Services/RequestServer/main.cpp
 +++ b/Services/RequestServer/main.cpp
 @@ -26,6 +26,7 @@
@@ -283,11 +283,11 @@ index 9ff9a60fc..d3b78d0f8 100644
  #include <RequestServer/Sandbox.h>
  
  namespace RequestServer {
-@@ -142,6 +143,7 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
-         RequestServer::set_process_sites_have_their_own();
+@@ -138,6 +139,7 @@ ErrorOr<int> ladybird_main(Main::Arguments arguments)
+         RequestServer::set_process_top_level_site(Utf16String::from_utf8(top_level_site));
  
      TRY(RequestServer::initialize_libcurl());
 +    RequestServer::watch_for_network_changes();
  
-     if (!disable_sandbox)
-         TRY(RequestServer::apply_sandbox(mach_server_name, certificates, cache_path));
+     if (!disable_sandbox) {
+         Optional<StringView> disk_cache_directory;

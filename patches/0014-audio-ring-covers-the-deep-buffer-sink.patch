@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibAudio/ClientConnection.cpp b/Libraries/LibAudio/ClientConnection.cpp
-index a597daa02..fc222575b 100644
+index 338354f85..badab1e4c 100644
 --- a/Libraries/LibAudio/ClientConnection.cpp
 +++ b/Libraries/LibAudio/ClientConnection.cpp
-@@ -12,7 +12,10 @@
+@@ -13,7 +13,10 @@
  namespace Audio {
  
  // The ring only has to cover the pump's cadence; the device's own buffer spends the rest of a stream's budget.

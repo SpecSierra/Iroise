@@ -175,7 +175,6 @@ Each patch in `patches/` does one thing:
 | 0001 | lets the build pick our front end instead of upstream's Qt one |
 | 0002 | fits the garbage collector's memory reservation into the phone's smaller address space |
 | 0007 | lets the compositor's sandbox talk to the phone's GPU and buffer drivers |
-| 0008 | lets a download from a link to another site be saved |
 | 0009 | paints with OpenGL ES through libhybris instead of Vulkan |
 | 0010 | trusts a certificate the user accepted, for that site and that public key only |
 | 0011 | runs every engine process from the one executable |

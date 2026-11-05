@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibWeb/HTML/Navigator.cpp b/Libraries/LibWeb/HTML/Navigator.cpp
-index 6cf45cc2b..405e0db0c 100644
+index 7c6f3456f..5caf3b171 100644
 --- a/Libraries/LibWeb/HTML/Navigator.cpp
 +++ b/Libraries/LibWeb/HTML/Navigator.cpp
-@@ -159,8 +159,8 @@ GC::Ref<WebXR::XRSystem> Navigator::xr()
+@@ -135,8 +135,8 @@ GC::Ref<CredentialManagement::CredentialsContainer> Navigator::credentials()
  // https://w3c.github.io/pointerevents/#dom-navigator-maxtouchpoints
  WebIDL::Long Navigator::max_touch_points()
  {
@@ -50,7 +50,7 @@ index 39d79f443..d15860eaf 100644
          // https://github.com/w3c/csswg-drafts/issues/7213
          // An SVG used as an image answers with the used `color-scheme` of the element referencing
 diff --git a/Libraries/LibWebCommon/Loader/UserAgent.h b/Libraries/LibWebCommon/Loader/UserAgent.h
-index d22398891..c7d4bcaf2 100644
+index eb9ee0823..d121e5042 100644
 --- a/Libraries/LibWebCommon/Loader/UserAgent.h
 +++ b/Libraries/LibWebCommon/Loader/UserAgent.h
 @@ -85,7 +85,6 @@ namespace Web {

@@ -30,7 +30,7 @@ index 19647f7d8..e9ccf6aac 100644
      return NonnullOwnPtr<VideoDecoder> { TRY(FFmpegVideoDecoder::try_create(library->functions(), codec_id, codec_initialization_data)) };
  }
 diff --git a/Libraries/LibMediaCodecs/FFmpeg/FFmpegFunctions.h b/Libraries/LibMediaCodecs/FFmpeg/FFmpegFunctions.h
-index 031bf8bdb..6a6199823 100644
+index 4354d95f2..354413eae 100644
 --- a/Libraries/LibMediaCodecs/FFmpeg/FFmpegFunctions.h
 +++ b/Libraries/LibMediaCodecs/FFmpeg/FFmpegFunctions.h
 @@ -21,9 +21,11 @@ extern "C" {

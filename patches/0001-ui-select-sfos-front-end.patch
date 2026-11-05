@@ -1,5 +1,5 @@
 diff --git a/UI/CMakeLists.txt b/UI/CMakeLists.txt
-index 29ffaa944..e87d50e18 100644
+index fc47d8ade..cddb5cab4 100644
 --- a/UI/CMakeLists.txt
 +++ b/UI/CMakeLists.txt
 @@ -97,6 +97,8 @@ endfunction()

@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibWeb/HTML/AttributeNames.h b/Libraries/LibWeb/HTML/AttributeNames.h
-index 6011ddf3a..f089b2295 100644
+index f5adfcae9..23a9416cf 100644
 --- a/Libraries/LibWeb/HTML/AttributeNames.h
 +++ b/Libraries/LibWeb/HTML/AttributeNames.h
-@@ -253,6 +253,10 @@ namespace AttributeNames {
+@@ -254,6 +254,10 @@ namespace AttributeNames {
      __ENUMERATE_HTML_ATTRIBUTE(onsuspend, "onsuspend")                                             \
      __ENUMERATE_HTML_ATTRIBUTE(ontimeupdate, "ontimeupdate")                                       \
      __ENUMERATE_HTML_ATTRIBUTE(ontoggle, "ontoggle")                                               \
@@ -14,10 +14,10 @@ index 6011ddf3a..f089b2295 100644
      __ENUMERATE_HTML_ATTRIBUTE(ontransitionend, "ontransitionend")                                 \
      __ENUMERATE_HTML_ATTRIBUTE(ontransitionrun, "ontransitionrun")                                 \
 diff --git a/Libraries/LibWeb/HTML/GlobalEventHandlers.h b/Libraries/LibWeb/HTML/GlobalEventHandlers.h
-index 1fd6279fd..242c75580 100644
+index 57a511afa..02ad7c27e 100644
 --- a/Libraries/LibWeb/HTML/GlobalEventHandlers.h
 +++ b/Libraries/LibWeb/HTML/GlobalEventHandlers.h
-@@ -99,6 +99,10 @@
+@@ -100,6 +100,10 @@
      E(onsuspend, HTML::EventNames::suspend)                                   \
      E(ontimeupdate, HTML::EventNames::timeupdate)                             \
      E(ontoggle, HTML::EventNames::toggle)                                     \
@@ -43,10 +43,10 @@ index 000000000..e53eaadda
 +    attribute EventHandler ontouchcancel;
 +};
 diff --git a/Libraries/LibWeb/idl_files.cmake b/Libraries/LibWeb/idl_files.cmake
-index 3829acc0e..5cf70fcc7 100644
+index 28d13f274..ca945f0f0 100644
 --- a/Libraries/LibWeb/idl_files.cmake
 +++ b/Libraries/LibWeb/idl_files.cmake
-@@ -612,6 +612,7 @@ libweb_js_bindings(UIEvents/KeyboardEvent)
+@@ -608,6 +608,7 @@ libweb_js_bindings(UIEvents/KeyboardEvent)
  libweb_js_bindings(UIEvents/MouseEvent)
  libweb_js_bindings(UIEvents/PointerEvent)
  libweb_js_bindings(UIEvents/PointerEventHandlers)

@@ -1,5 +1,5 @@
 diff --git a/Meta/CMake/cmake_options.cmake b/Meta/CMake/cmake_options.cmake
-index c4d529da2..bd4492b64 100644
+index 0a9747138..b8e430629 100644
 --- a/Meta/CMake/cmake_options.cmake
 +++ b/Meta/CMake/cmake_options.cmake
 @@ -40,6 +40,7 @@ if (LADYBIRD_GENERATE_SYMBOL_FILES AND MSVC)
@@ -8,8 +8,8 @@ index c4d529da2..bd4492b64 100644
  option(ENABLE_CI_BASELINE_CPU "Use a common CPU baseline for portable binaries and ccache sharing" OFF)
 +option(ENABLE_ARMV8_BASELINE_CPU "Target plain ARMv8.0 on aarch64 instead of the build host's CPU, for older phones" OFF)
  
- set(LADYBIRD_VERSION "" CACHE STRING "Version of a release: year.month.patch, optionally followed by .alpha or .beta")
- set(LADYBIRD_BUNDLE_VERSION "${PROJECT_VERSION}")
+ set(LADYBIRD_VERSION "" CACHE STRING "Version of a release: year.month.patch")
+ set(LADYBIRD_BROWSER_VERSION "${PROJECT_VERSION}")
 diff --git a/Meta/CMake/compile_options.cmake b/Meta/CMake/compile_options.cmake
 index 349bc73e8..a373a7bc5 100644
 --- a/Meta/CMake/compile_options.cmake
