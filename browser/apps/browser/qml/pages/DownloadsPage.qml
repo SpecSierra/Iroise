@@ -97,10 +97,14 @@ Page {
                     text: {
                         switch (model.status) {
                         case DownloadModel.InProgress:
-                            return model.total > 0
+                            var progress = model.total > 0
                                     //% "%1 of %2"
                                     ? qsTrId("iroise-la-download_progress").arg(Format.formatFileSize(model.received)).arg(Format.formatFileSize(model.total))
                                     : Format.formatFileSize(model.received)
+                            return model.speed < 0 ? progress
+                                    //: Bytes a second, %1 being a size such as "1.2 MB"
+                                    //% "%1/s"
+                                    : progress + " · " + qsTrId("iroise-la-download_speed").arg(Format.formatFileSize(model.speed))
                         case DownloadModel.Completed:
                             return Format.formatFileSize(model.received)
                         case DownloadModel.Cancelled:

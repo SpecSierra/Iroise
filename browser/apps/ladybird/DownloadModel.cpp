@@ -15,6 +15,7 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QTimer>
 #include <QUrl>
 
 DownloadModel* DownloadModel::instance()
@@ -25,7 +26,11 @@ DownloadModel* DownloadModel::instance()
 
 DownloadModel::DownloadModel(QObject* parent)
     : QAbstractListModel(parent)
+    , m_tick(new QTimer(this))
 {
+    m_clock.start();
+    m_tick->setInterval(1000);
+    connect(m_tick, &QTimer::timeout, this, &DownloadModel::sampleActive);
 }
 
 int DownloadModel::rowCount(const QModelIndex& parent) const
@@ -57,6 +62,8 @@ QVariant DownloadModel::data(const QModelIndex& index, int role) const
         return download.status;
     case ErrorRole:
         return download.error;
+    case SpeedRole:
+        return download.speed;
     default:
         return QVariant();
     }
@@ -74,6 +81,7 @@ QHash<int, QByteArray> DownloadModel::roleNames() const
         { ProgressRole, "progress" },
         { StatusRole, "status" },
         { ErrorRole, "error" },
+        { SpeedRole, "speed" },
     };
 }
 
@@ -210,6 +218,7 @@ void DownloadModel::list(const Download& saved)
     if (download.status == InProgress) {
         emit activeCountChanged();
         emit started(QFileInfo(download.path).fileName());
+        updateTicking();
         return;
     }
     if (download.status == Completed)
@@ -239,6 +248,42 @@ void DownloadModel::moveToDownloads(Download& download)
     download.path = target;
 }
 
+// The speed over the last three seconds: from the newest sample before them (so that a download that just stalled
+// slows down rather than stops at once) to now. Under half a second of samples tells nothing yet.
+void DownloadModel::sample(Download& download)
+{
+    static constexpr qint64 window = 3000;
+    const qint64 now = m_clock.elapsed();
+    download.samples.append(qMakePair(now, download.received));
+    while (download.samples.size() > 2 && download.samples.at(1).first <= now - window)
+        download.samples.removeFirst();
+    const QPair<qint64, qint64> first = download.samples.first();
+    const qint64 span = now - first.first;
+    download.speed = span >= 500 ? qMax<qint64>(0, (download.received - first.second) * 1000 / span) : -1;
+}
+
+void DownloadModel::sampleActive()
+{
+    for (int row = 0; row < m_downloads.size(); ++row) {
+        Download& download = m_downloads[row];
+        if (download.status != InProgress)
+            continue;
+        const qint64 speed = download.speed;
+        sample(download);
+        if (download.speed != speed)
+            emit dataChanged(index(row), index(row), { SpeedRole });
+    }
+    updateTicking();
+}
+
+void DownloadModel::updateTicking()
+{
+    if (activeCount() == 0)
+        m_tick->stop();
+    else if (!m_tick->isActive())
+        m_tick->start();
+}
+
 void DownloadModel::discard(const Download& download)
 {
     if (!m_incoming.isEmpty() && download.path.startsWith(m_incoming + QLatin1Char('/')))
@@ -257,6 +302,12 @@ void DownloadModel::report(int downloadId, int status, const QByteArray& json)
             : status == LB_EMBED_DOWNLOAD_CANCELLED             ? Cancelled
             : status == LB_EMBED_DOWNLOAD_FAILED                ? Failed
                                                                 : InProgress;
+        if (download.status == InProgress)
+            sample(download);
+        else {
+            download.samples.clear();
+            download.speed = -1;
+        }
     };
 
     const int row = rowOf(downloadId);
@@ -271,6 +322,7 @@ void DownloadModel::report(int downloadId, int status, const QByteArray& json)
             emit activeCountChanged();
             emit finished(QFileInfo(download.path).fileName(), download.path, download.status == Completed);
         }
+        updateTicking();
         return;
     }
 

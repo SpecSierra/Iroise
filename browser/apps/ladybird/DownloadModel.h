@@ -7,8 +7,11 @@
 #pragma once
 
 #include <QAbstractListModel>
+#include <QElapsedTimer>
 #include <QStringList>
 #include <QVector>
+
+class QTimer;
 
 // The engine saves every download by itself, as soon as a page starts one, and reports how it is getting on
 // (LB_EMBED_DOWNLOAD). It saves into a folder of the app's: the user is asked first (asking*, answer()), and only a
@@ -44,6 +47,8 @@ public:
         ProgressRole,
         StatusRole,
         ErrorRole,
+        // Bytes a second over the last few seconds, -1 until that is known.
+        SpeedRole,
     };
 
     static DownloadModel* instance();
@@ -94,6 +99,9 @@ private:
         Status status = InProgress;
         QString error;
         Decision decision = Decision::Asking;
+        // (milliseconds on m_clock, bytes received) over the last few seconds, for the speed.
+        QVector<QPair<qint64, qint64>> samples;
+        qint64 speed = -1;
     };
 
     // A download the user is still being asked about, or refused and is not over yet.
@@ -103,6 +111,9 @@ private:
     void moveToDownloads(Download&);
     void discard(const Download&);
     void askNext();
+    void sample(Download&);
+    void sampleActive();
+    void updateTicking();
 
     QVector<Download> m_downloads;
     // In the order they came, the first is the one asked about.
@@ -110,4 +121,8 @@ private:
     QStringList m_startedByUser;
     QString m_incoming;
     QString m_downloadsFolder;
+    QElapsedTimer m_clock;
+    // While a listed download is in progress: the engine reports nothing while none of the file comes, so the
+    // speed falls by this as well.
+    QTimer* m_tick = nullptr;
 };
