@@ -14,7 +14,6 @@
 #include <AK/LexicalPath.h>
 #include <AK/StringBuilder.h>
 #include <AK/Time.h>
-#include <LibAudio/Audibility.h>
 #include <LibCore/ElapsedTimer.h>
 #include <LibCore/File.h>
 #include <LibCore/Environment.h>
@@ -789,9 +788,12 @@ private:
             raw_view->is_page_fullscreen = false;
             m_host.send_flags(id, LB_EMBED_FULLSCREEN, false);
         };
-        // NB: The AudioServer tells which pages it hears, Web Audio and other processes' frames included.
-        view->on_audibility_changed = [this, id, raw_view](Audio::Audibility audibility) {
-            raw_view->plays_audio = audibility == Audio::Audibility::Audible;
+        // NB: The AudioServer tells which pages it hears, Web Audio and other processes' frames included. The indicator
+        //     stays on for a few seconds after the last sound (WebView::TabIndicators::LINGER).
+        view->on_tab_indicator_change = [this, id, raw_view](WebView::TabIndicator indicator, bool visible) {
+            if (indicator != WebView::TabIndicator::PlayingAudio)
+                return;
+            raw_view->plays_audio = visible;
             if (raw_view->plays_audio)
                 raw_view->keep_full_frame_rate();
             m_host.send_flags(id, LB_EMBED_MEDIA, raw_view->plays_audio, raw_view->holds_wake_lock);
