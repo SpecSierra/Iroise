@@ -2,10 +2,10 @@ Iroise DIAGNOSTIC, never for main: LADYBIRD_IROISE_COMPOSITOR_TRACE=1 logs once 
 presenting frames cost (damage and raster share of the viewport, paint and flush time).
 
 diff --git a/Services/Compositor/CompositorState.cpp b/Services/Compositor/CompositorState.cpp
-index 918e8fdf2..5eb34c601 100644
+index 7de9c4238..ed24e97eb 100644
 --- a/Services/Compositor/CompositorState.cpp
 +++ b/Services/Compositor/CompositorState.cpp
-@@ -1524,6 +1524,8 @@ void CompositorState::present_frame(Web::CompositorContextId context_id, Gfx::In
+@@ -1688,6 +1688,8 @@ void CompositorState::present_frame(Web::CompositorContextId context_id, Gfx::In
      schedule_pending_present_frame(context_id, *context);
  }
  
@@ -14,7 +14,7 @@ index 918e8fdf2..5eb34c601 100644
  void CompositorState::present_frame(Web::CompositorContextId context_id, ContextState& context, PendingFrame pending_frame)
  {
      auto composited_context_resolver = resolver_for(context_id);
-@@ -1537,11 +1539,13 @@ void CompositorState::present_frame(Web::CompositorContextId context_id, Context
+@@ -1701,11 +1703,13 @@ void CompositorState::present_frame(Web::CompositorContextId context_id, Context
  
      auto& event_loop = Core::EventLoop::current();
      auto self = NonnullRefPtr { *this };
@@ -29,7 +29,7 @@ index 918e8fdf2..5eb34c601 100644
  #ifdef AK_OS_MACOS
      // The window server's reads of an IOSurface wait for GPU work that is already scheduled to write it. Handing the
 diff --git a/Services/Compositor/ContextPresenter.cpp b/Services/Compositor/ContextPresenter.cpp
-index 609aa9cab..e78a6f8cf 100644
+index 80946b91f..7c951baac 100644
 --- a/Services/Compositor/ContextPresenter.cpp
 +++ b/Services/Compositor/ContextPresenter.cpp
 @@ -14,6 +14,8 @@

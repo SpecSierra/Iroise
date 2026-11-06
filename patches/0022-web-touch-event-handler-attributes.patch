@@ -43,10 +43,10 @@ index 000000000..e53eaadda
 +    attribute EventHandler ontouchcancel;
 +};
 diff --git a/Libraries/LibWeb/idl_files.cmake b/Libraries/LibWeb/idl_files.cmake
-index 28d13f274..ca945f0f0 100644
+index 664aed601..7d820eebe 100644
 --- a/Libraries/LibWeb/idl_files.cmake
 +++ b/Libraries/LibWeb/idl_files.cmake
-@@ -608,6 +608,7 @@ libweb_js_bindings(UIEvents/KeyboardEvent)
+@@ -607,6 +607,7 @@ libweb_js_bindings(UIEvents/KeyboardEvent)
  libweb_js_bindings(UIEvents/MouseEvent)
  libweb_js_bindings(UIEvents/PointerEvent)
  libweb_js_bindings(UIEvents/PointerEventHandlers)
