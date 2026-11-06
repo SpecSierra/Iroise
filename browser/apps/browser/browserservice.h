@@ -18,9 +18,9 @@
 #include <QStringList>
 
 // Iroise: the app's D-Bus service. Sailjail lets an app own only the bus name made of its OrganizationName and
-// ApplicationName, and a Jolla Store app cannot be started by D-Bus activation. So the name is there for a second
-// launch (another app opening a link in Iroise starts the app again) to hand its URL to the running browser, see
-// iroise_ui_main().
+// ApplicationName, and starts the app for a call to it ([X-Sailjail] ExecDBus). The launcher entry sends a link from
+// another app here (X-Maemo-Method, scripts/package-rpm.sh). A second launch with a URL on its command line hands it
+// over the same way, see iroise_ui_main().
 #define IROISE_SERVICE_NAME "org.iroise.harbour-iroise"
 #define IROISE_SERVICE_PATH "/"
 #define IROISE_SERVICE_INTERFACE "org.iroise.Browser"

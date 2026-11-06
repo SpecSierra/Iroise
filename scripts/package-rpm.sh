@@ -31,6 +31,10 @@ PY
 
 # no-invoker: started through the booster, /proc/self/exe would be the booster's, and the engine's helper
 # processes are started from it (see browser/apps/launcher).
+# X-Maemo-*: a link from another app goes to the browser's openUrl over D-Bus, whether it runs or not; without them the
+# home screen only brings a running browser to the front, and the link is lost. Sailjail makes the D-Bus service
+# (org.iroise.harbour-iroise, from OrganizationName and ApplicationName) out of ExecDBus; -prestart starts the browser
+# without a page of its own, as the link comes by the call.
 cat > "$S/usr/share/applications/harbour-iroise.desktop" <<'DESKTOP'
 [Desktop Entry]
 Type=Application
@@ -40,11 +44,15 @@ Exec=harbour-iroise %U
 Comment=Web browser
 MimeType=text/html;application/xhtml+xml;x-scheme-handler/http;x-scheme-handler/https;
 X-Nemo-Application-Type=no-invoker
+X-Maemo-Service=org.iroise.harbour-iroise
+X-Maemo-Object-Path=/
+X-Maemo-Method=org.iroise.Browser.openUrl
 
 [X-Sailjail]
 Permissions=Internet;Audio;Microphone;Location;Downloads;Documents;Pictures;Videos;Music;RemovableMedia;MediaIndexing
 OrganizationName=org.iroise
 ApplicationName=harbour-iroise
+ExecDBus=harbour-iroise -prestart
 DESKTOP
 
 # NB: No automatic dependencies: the engine brings its own libraries, and the scan would turn each of them into

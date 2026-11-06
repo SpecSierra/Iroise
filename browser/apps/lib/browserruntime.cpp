@@ -158,7 +158,13 @@ extern "C" Q_DECL_EXPORT int iroise_ui_main(int argc, char *argv[])
     if (bus.interface() && bus.interface()->isServiceRegistered(QStringLiteral(IROISE_SERVICE_NAME))) {
         QDBusMessage call = QDBusMessage::createMethodCall(QStringLiteral(IROISE_SERVICE_NAME), QStringLiteral(IROISE_SERVICE_PATH),
             QStringLiteral(IROISE_SERVICE_INTERFACE), QStringLiteral("openUrl"));
-        call << QStringList(app.arguments().mid(1));
+        // NB: Only what can be a link: a D-Bus start of the app (-prestart) racing the running one brings none.
+        QStringList links;
+        for (const QString &argument : app.arguments().mid(1)) {
+            if (!argument.startsWith(QLatin1Char('-')))
+                links.append(argument);
+        }
+        call << (links.isEmpty() ? QStringList() : QStringList(links.last()));
         bus.call(call);
         return 0;
     }
