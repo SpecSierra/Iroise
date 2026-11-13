@@ -2,9 +2,10 @@
 # Lay the app out as it is installed, in dist/harbour-iroise (and dist/harbour-iroise.tar.gz):
 #   bin/harbour-iroise                  the one executable (browser/apps/launcher)
 #   share/harbour-iroise/lib            the interface's libraries, found by the executable's rpath
-#   share/harbour-iroise/lib/engine     the engine (libiroiseengine.so) and the libraries of its build it needs,
-#                                        which find each other by $ORIGIN. Kept apart, so the interface's Qt never
-#                                        picks up the engine's own libcrypto, freetype and the like.
+#   share/harbour-iroise/lib/engine     the engine (libiroiseengine.so), the libraries of its build it needs,
+#                                        which find each other by $ORIGIN, and ICU's data file. Kept apart, so
+#                                        the interface's Qt never picks up the engine's own libcrypto, freetype
+#                                        and the like.
 #   share/harbour-iroise/share/Lagom    the engine's resources, and ours in iroise/ (autoconsent.js)
 #   share/harbour-iroise/qml            the interface, with the search engines it ships
 #   share/harbour-iroise/translations
@@ -35,6 +36,13 @@ ldd "$BUILD/lib/libiroiseengine.so" | awk '/=>/ {print $3}' | sort -u |
         esac
     done
 cp -a "$BUILD/share/Lagom" "$SHARE/share/"
+# ICU's data is a file of its own since Ladybird 3227c20e, which every engine process maps as its libraries load and
+# ends without. It is looked for beside the library that maps it and in ../share/Lagom/icu from there, which is not
+# where our resources are (two directories up): it goes beside the library.
+if [ -d "$SHARE/share/Lagom/icu" ]; then
+    mv "$SHARE"/share/Lagom/icu/icudt*.dat "$ENGINE/"
+    rmdir "$SHARE/share/Lagom/icu"
+fi
 # The cookie-consent answerer the engine runs in pages (scripts/fetch-autoconsent.sh).
 "$ROOT/scripts/fetch-autoconsent.sh"
 mkdir -p "$SHARE/share/Lagom/iroise"

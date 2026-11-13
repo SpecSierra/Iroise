@@ -12,7 +12,7 @@ index db582e3c3..da9897c7b 100644
      if (NOT APPLE)
          list(APPEND LADYBIRD_QT_COMPONENTS Positioning)
 diff --git a/UI/CMakeLists.txt b/UI/CMakeLists.txt
-index fc47d8ade..cddb5cab4 100644
+index d8528197a..8ef40772d 100644
 --- a/UI/CMakeLists.txt
 +++ b/UI/CMakeLists.txt
 @@ -97,6 +97,8 @@ endfunction()

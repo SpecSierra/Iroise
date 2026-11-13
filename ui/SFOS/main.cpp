@@ -41,7 +41,6 @@
 #include <LibWebView/FileDownloader.h>
 #include <LibWebView/HelperProcess.h>
 #include <LibWebView/HeadlessWebView.h>
-#include <LibWebView/Menu.h>
 #include <LibWebView/Settings.h>
 #include <LibWebView/URL.h>
 #include <LibWebCommon/Loader/UserAgent.h>
@@ -234,6 +233,8 @@ public:
 
     // Every page that comes to host the tab, also after a cross-site navigation moved it to another process.
     Function<void(WebView::WebContentPage&)> on_prepare_page;
+    // Whether the tab can go back or forward has changed.
+    Function<void(bool can_go_back, bool can_go_forward)> on_history_change;
     Gfx::IntSize size() const { return viewport_size().to_type<int>(); }
     bool desktop_mode { false };
     bool plays_audio { false };
@@ -279,6 +280,19 @@ private:
         on_ready_to_paint = [this] { present(); };
     }
 
+    // The view tells its interface that something it shows of the view may have changed; of those, the app shows
+    // whether the tab can go back and forward.
+    virtual void did_change_state() override
+    {
+        WebView::HeadlessWebView::did_change_state();
+        if (m_reported_can_go_back == can_navigate_back() && m_reported_can_go_forward == can_navigate_forward())
+            return;
+        m_reported_can_go_back = can_navigate_back();
+        m_reported_can_go_forward = can_navigate_forward();
+        if (on_history_change)
+            on_history_change(m_reported_can_go_back, m_reported_can_go_forward);
+    }
+
     // Runs for the tab's page and for every process hosting one of its cross-site frames.
     virtual void prepare_page_for_navigable(WebView::WebContentPage& page) override
     {
@@ -303,12 +317,17 @@ private:
 
     void present()
     {
-        if (!m_has_usable_bitmap || !m_front_bitmap.shared_image_buffer || !on_present)
+        // NB: Only a frame of the front backing store: the one kept as a backup while a page is replaced has been
+        //     shown already.
+        if (!backing_stores().has_usable_front_bitmap() || !on_present)
             return;
-        auto const* dmabuf = m_front_bitmap.shared_image_buffer->linux_dmabuf_handle();
+        auto frame = backing_stores().displayed_frame();
+        if (!frame.has_value() || !frame->shared_image_buffer)
+            return;
+        auto const* dmabuf = frame->shared_image_buffer->linux_dmabuf_handle();
         if (!dmabuf)
             return;
-        on_present(*dmabuf, m_front_bitmap.last_painted_size.to_type<int>());
+        on_present(*dmabuf, frame->size);
 
         ++m_frames_presented;
         if (auto elapsed = m_frame_timer.elapsed_milliseconds(); elapsed >= 1000) {
@@ -446,6 +465,9 @@ private:
 
     Core::ElapsedTimer m_frame_timer;
     i64 m_frames_presented { 0 };
+
+    bool m_reported_can_go_back { false };
+    bool m_reported_can_go_forward { false };
 };
 
 static ErrorOr<Core::AnonymousBuffer> load_theme()
@@ -628,16 +650,6 @@ private:
     }
 
 private:
-    // The Action a view enables and disables as its history changes; we only relay that.
-    struct HistoryObserver final : WebView::Action::Observer {
-        explicit HistoryObserver(Function<void()> callback)
-            : on_change(move(callback))
-        {
-        }
-        virtual void on_enabled_state_changed(WebView::Action&) override { on_change(); }
-        Function<void()> on_change;
-    };
-
     void create_view(u32 id, Gfx::IntSize size, double device_pixel_ratio, WebView::IsPrivate is_private)
     {
         if (m_views.contains(id) || size.is_empty() || id >= LB_EMBED_FIRST_ENGINE_VIEW)
@@ -821,12 +833,9 @@ private:
             .on_load_finish = {},
         });
 
-
-        for (auto* action : { &view->navigate_back_action(), &view->navigate_forward_action() }) {
-            action->add_observer(make<HistoryObserver>(Function<void()> { [this, id, raw_view] {
-                m_host.send_flags(id, LB_EMBED_HISTORY, raw_view->navigate_back_action().enabled(), raw_view->navigate_forward_action().enabled());
-            } }));
-        }
+        view->on_history_change = [this, id](bool can_go_back, bool can_go_forward) {
+            m_host.send_flags(id, LB_EMBED_HISTORY, can_go_back, can_go_forward);
+        };
 
         m_views.set(id, move(view));
         return *raw_view;
@@ -1265,14 +1274,10 @@ private:
             m_dark_mode = header.a != 0;
             // NB: Every page that comes to host a tab gets the application's colour scheme again
             //     (Application::apply_view_options), so a view's own setting would last until its next navigation.
-            //     The application's is only reachable through its colour scheme menu.
-            auto wanted = m_dark_mode ? "Dark"sv : "Light"sv;
-            for (auto& item : WebView::Application::the().color_scheme_menu().items()) {
-                if (auto* action = item.get_pointer<NonnullRefPtr<WebView::Action>>(); action && (*action)->text() == wanted) {
-                    (*action)->set_checked(true);
-                    (*action)->activate();
-                }
-            }
+            //     The application takes its own from the settings, and passes a change on to every view.
+            auto appearance = WebView::Application::settings().appearance();
+            appearance.website_color_scheme = m_dark_mode ? WebView::ThemePreference::Dark : WebView::ThemePreference::Light;
+            WebView::Application::settings().set_appearance(appearance);
             return;
         }
         if (header.type == LB_EMBED_SET_BLOCKER_FILTERS) {

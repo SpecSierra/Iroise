@@ -8,7 +8,7 @@ endif()
 # The whole engine as one library, every process in it: the Jolla Store allows an app a single executable, which
 # calls iroise_engine_main() with the role to play (see EngineMain.cpp). Each process's main.cpp is compiled in
 # with its ladybird_main() renamed after the role.
-set(IROISE_HELPERS AudioServer Compositor ImageDecoder MediaServer RequestServer VideoDecoderServer WebContent WebWorker)
+set(IROISE_HELPERS AudioServer Compositor ImageDecoder MediaServer RequestServer VideoDecoderServer WebContent)
 add_library(iroiseengine SHARED EngineMain.cpp main.cpp EmbeddedHost.cpp MemoryGuard.cpp)
 # EngineMain.cpp picks a role from this list; it is written from the one above so that the two cannot differ.
 set(iroise_helper_roles "")
@@ -34,7 +34,7 @@ target_include_directories(iroiseengine PRIVATE ${LADYBIRD_SOURCE_DIR} ${LADYBIR
 target_link_libraries(iroiseengine PRIVATE
     LibWebView LibCore LibSandbox LibThreading LibFileSystem LibURL LibAudio LibMedia LibMediaCodecs LibUnicode
     audioserverservice imagedecoderservice mediaserverservice requestserverservice
-    videodecoderserverservice webcontentservice webworkerservice
+    videodecoderserverservice webcontentservice
     OpenSSL::Crypto OpenSSL::SSL)
 # Upstream fails the configuration when anything but the Compositor reaches Skia (check_skia_confinement.cmake). The
 # one executable must link it for its Compositor role; the check walks only plain target names, so this one goes
@@ -61,6 +61,8 @@ if (IROISE_PGO_GENERATE)
         endforeach()
         set(${out} ${targets} PARENT_SCOPE)
     endfunction()
+    # The Compositor's Rust core is a static library inside the engine's own.
+    target_link_libraries(iroiseengine PRIVATE compositor_core "$<LINK_LIBRARY:WHOLE_ARCHIVE,${IROISE_PGO_PROFILER_RUNTIME}>")
     iroise_targets_below("${LADYBIRD_SOURCE_DIR}" all_targets)
     foreach (target IN LISTS all_targets)
         get_target_property(type ${target} TYPE)

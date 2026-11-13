@@ -1,47 +1,47 @@
 Iroise DIAGNOSTIC, never for main: LADYBIRD_IROISE_COMPOSITOR_TRACE=1 logs once a second what
 presenting frames cost (damage and raster share of the viewport, paint and flush time).
-
 diff --git a/Services/Compositor/CompositorState.cpp b/Services/Compositor/CompositorState.cpp
-index 7de9c4238..ed24e97eb 100644
+index 8b3fc3e41..c121e152e 100644
 --- a/Services/Compositor/CompositorState.cpp
 +++ b/Services/Compositor/CompositorState.cpp
-@@ -1688,6 +1688,8 @@ void CompositorState::present_frame(Web::CompositorContextId context_id, Gfx::In
+@@ -1227,6 +1227,8 @@ void CompositorState::present_frame(Web::CompositorContextId context_id, Gfx::In
      schedule_pending_present_frame(context_id, *context);
  }
  
 +void iroise_trace_flush(u64 microseconds);
 +
- void CompositorState::present_frame(Web::CompositorContextId context_id, ContextState& context, PendingFrame pending_frame)
+ void CompositorState::present_frame(Web::CompositorContextId context_id, PresentedContext& context, PendingFrame pending_frame)
  {
      auto composited_context_resolver = resolver_for(context_id);
-@@ -1701,11 +1703,13 @@ void CompositorState::present_frame(Web::CompositorContextId context_id, Context
- 
-     auto& event_loop = Core::EventLoop::current();
-     auto self = NonnullRefPtr { *this };
-+    auto flush_start = MonotonicTime::now();
-     m_display_list_player->flush_async(*prepared_frame->rendered_surface, [self = move(self), &event_loop, pending_present] {
-         event_loop.deferred_invoke([self = move(self), pending_present] {
+@@ -1248,12 +1250,14 @@ void CompositorState::present_frame(Web::CompositorContextId context_id, Present
              self->did_finish_async_present(*pending_present);
          });
-     });
+     };
++    auto flush_start = MonotonicTime::now();
+     // A frame without a store still waits for what was drawn into the surfaces that the window server shows above the
+     // store, such as a canvas that presented.
+     if (prepared_frame->rendered_surface)
+         m_display_list_player->flush_async(*prepared_frame->rendered_surface, move(did_finish));
+     else
+         m_skia_backend_context->flush_and_submit_async(move(did_finish));
 +    iroise_trace_flush(static_cast<u64>((MonotonicTime::now() - flush_start).to_microseconds()));
-     context.presenter().did_submit_prepared_frame(pending_frame.viewport_rect);
+     context.presenter.did_submit_prepared_frame(pending_frame.viewport_rect);
  #ifdef AK_OS_MACOS
      // The window server's reads of an IOSurface wait for GPU work that is already scheduled to write it. Handing the
 diff --git a/Services/Compositor/ContextPresenter.cpp b/Services/Compositor/ContextPresenter.cpp
-index 80946b91f..7c951baac 100644
+index e30debfcb..655fa8415 100644
 --- a/Services/Compositor/ContextPresenter.cpp
 +++ b/Services/Compositor/ContextPresenter.cpp
-@@ -14,6 +14,8 @@
- #include <Compositor/ScrollbarController.h>
+@@ -13,6 +13,8 @@
+ #include <Compositor/PictureInPictureControls.h>
  #include <Compositor/SkiaUtils.h>
- #include <LibCompositing/DisplayList/DisplayListDamage.h>
+ #include <LibCompositing/PictureInPictureControls.h>
 +#include <AK/Time.h>
 +#include <LibCore/Environment.h>
  #include <LibCore/Timer.h>
  #include <LibGfx/Bitmap.h>
  #include <LibMedia/Sinks/VideoSink.h>
-@@ -291,6 +293,43 @@ bool ContextPresenter::draws_canvas(Compositing::CanvasId canvas_id) const
+@@ -310,6 +312,43 @@ bool ContextPresenter::draws_canvas(Compositing::CanvasId canvas_id) const
      return m_last_rasterized_frame.has_value() && m_last_rasterized_frame->canvas_content_generations.contains(canvas_id);
  }
  
@@ -82,15 +82,17 @@ index 80946b91f..7c951baac 100644
 +        iroise_trace().flush_us += microseconds;
 +}
 +
- Optional<PreparedFrame> ContextPresenter::prepare_frame(DisplayListPlayerSkia& display_list_player, PendingFrame pending_frame, FrameContent const& frame_content)
+ Optional<PreparedFrame> ContextPresenter::prepare_frame(DisplayListPlayerSkia& display_list_player, PendingFrame pending_frame, Optional<FrameInputs>&& frame_inputs, CompositedContextResolver const* composited_context_resolver)
  {
      if (is_present_blocked()) {
-@@ -315,7 +354,23 @@ Optional<PreparedFrame> ContextPresenter::prepare_frame(DisplayListPlayerSkia& d
+@@ -347,9 +386,25 @@ Optional<PreparedFrame> ContextPresenter::prepare_frame(DisplayListPlayerSkia& d
          return {};
      }
      auto& back_store = render_target->surface;
 +    auto paint_start = MonotonicTime::now();
-     paint_current_display_list(display_list_player, back_store, frame_content, render_target->damage_rect);
+     auto painted_rect = paint_frame(display_list_player, back_store, *frame_inputs, composited_context_resolver, render_target->damage_rect, frame_damage.layers);
+     if (painted_rect != render_target->damage_rect)
+         damage_rect = { {}, pending_frame.viewport_rect.size() };
 +    if (auto& trace = iroise_trace(); trace.enabled) {
 +        auto viewport_area = static_cast<u64>(pending_frame.viewport_rect.width()) * pending_frame.viewport_rect.height();
 +        auto raster_size = this->raster_size();
@@ -106,6 +108,6 @@ index 80946b91f..7c951baac 100644
 +        trace.paint_us += static_cast<u64>((MonotonicTime::now() - paint_start).to_microseconds());
 +        trace.report();
 +    }
-     remember_rasterized_frame(pending_frame.viewport_rect.size(), frame_content.presented_scroll_state_snapshot);
+     commit_layer_update(move(frame_damage.layers));
+     remember_rasterized_frame(pending_frame.viewport_rect.size(), frame_inputs.release_value());
  
-     return PreparedFrame {

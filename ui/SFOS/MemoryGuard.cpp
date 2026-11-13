@@ -62,7 +62,6 @@ NonnullRefPtr<Core::Timer> start_memory_guard()
         WebView::Application::process_manager().for_each_process([&](WebView::Process& process) {
             switch (process.type()) {
             case WebView::ProcessType::WebContent:
-            case WebView::ProcessType::WebWorker:
             case WebView::ProcessType::ImageDecoder:
             case WebView::ProcessType::Compositor:
                 break;
@@ -86,7 +85,7 @@ void raise_out_of_memory_priority(StringView role)
     // From 0 (the default) to 1000 (first to go). Android's cached apps, under the phone's App Support, are at 900
     // and above: a page goes before them.
     int score = 0;
-    if (role == "WebContent"sv || role == "WebWorker"sv)
+    if (role == "WebContent"sv)
         score = 950;
     else if (role == "ImageDecoder"sv)
         score = 900;

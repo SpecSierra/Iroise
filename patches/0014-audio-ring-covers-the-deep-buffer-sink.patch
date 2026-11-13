@@ -1,5 +1,5 @@
 diff --git a/Libraries/LibAudio/ClientConnection.cpp b/Libraries/LibAudio/ClientConnection.cpp
-index 338354f85..badab1e4c 100644
+index bf5c9cade..8683dcdbb 100644
 --- a/Libraries/LibAudio/ClientConnection.cpp
 +++ b/Libraries/LibAudio/ClientConnection.cpp
 @@ -13,7 +13,10 @@

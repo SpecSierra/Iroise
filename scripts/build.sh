@@ -95,12 +95,18 @@ else
 fi
 patch -d "$OVERLAY" -p1 -s < "$ROOT/patches/vcpkg-skia-gl-without-system-libraries.patch"
 # mimalloc compiles itself for ARMv8.1 (its MI_OPT_ARCH) on arm64, which the Xperia 10 II's cores do not have.
+# Ladybird keeps an overlay of the port since 28645bb3 (the version it pins, built without padding), which is restored
+# first so that a second build patches it once; before that, the overlay was ours.
 OVERLAY="$UP/Meta/CMake/vcpkg/overlay-ports/mimalloc"
-rm -rf "$OVERLAY"
-# NB: An overlay replaces the version Ladybird pins, so it must be that version's port (2.2.7, this git tree from
-#     versions/m-/mimalloc.json), not the newer one in ports/.
-mkdir -p "$OVERLAY"
-git -C "$VCPKG_ROOT" archive 5b9c09b6d1592392634727afb0abbe0b14e030a2 | tar -x -C "$OVERLAY"
+if git -C "$UP" ls-files --error-unmatch Meta/CMake/vcpkg/overlay-ports/mimalloc/portfile.cmake > /dev/null 2>&1; then
+    git -C "$UP" checkout -- Meta/CMake/vcpkg/overlay-ports/mimalloc
+else
+    rm -rf "$OVERLAY"
+    # NB: An overlay replaces the version Ladybird pins, so it must be that version's port (2.2.7, this git tree from
+    #     versions/m-/mimalloc.json), not the newer one in ports/.
+    mkdir -p "$OVERLAY"
+    git -C "$VCPKG_ROOT" archive 5b9c09b6d1592392634727afb0abbe0b14e030a2 | tar -x -C "$OVERLAY"
+fi
 sed -i 's/^\( *\)-DMI_USE_CXX=ON\(\r\?\)$/\1-DMI_USE_CXX=ON\2\n\1-DMI_NO_OPT_ARCH=ON\2/' "$OVERLAY/portfile.cmake"
 grep -q MI_NO_OPT_ARCH "$OVERLAY/portfile.cmake"
 if [ ! -f "$BUILD/build.ninja" ]; then

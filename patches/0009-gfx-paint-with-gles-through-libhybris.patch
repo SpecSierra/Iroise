@@ -1,5 +1,5 @@
 diff --git a/Libraries/LibGfx/CMakeLists.txt b/Libraries/LibGfx/CMakeLists.txt
-index 70a06646b..e41614eae 100644
+index a2af26f8f..b0139bbb7 100644
 --- a/Libraries/LibGfx/CMakeLists.txt
 +++ b/Libraries/LibGfx/CMakeLists.txt
 @@ -55,6 +55,10 @@ if (HAS_VULKAN)
@@ -507,7 +507,7 @@ index bead78452..a0a0d81b3 100644
  struct VulkanImage;
  SharedImage duplicate_shared_image(VulkanImage const&);
 diff --git a/Libraries/LibGfx/SharedImageBuffer.cpp b/Libraries/LibGfx/SharedImageBuffer.cpp
-index 66a5a1ab9..a324e2080 100644
+index 70a57e110..a0daf611e 100644
 --- a/Libraries/LibGfx/SharedImageBuffer.cpp
 +++ b/Libraries/LibGfx/SharedImageBuffer.cpp
 @@ -7,7 +7,7 @@
@@ -537,7 +537,7 @@ index 66a5a1ab9..a324e2080 100644
  SharedImageBuffer::SharedImageBuffer(RefPtr<Bitmap> bitmap, LinuxDmaBufHandle&& dmabuf)
      : m_linux_dmabuf_handle(move(dmabuf))
      , m_bitmap(move(bitmap))
-@@ -98,7 +98,7 @@ SharedImageBuffer SharedImageBuffer::import_from_shared_image(SharedImage shared
+@@ -103,7 +103,7 @@ SharedImageBuffer SharedImageBuffer::import_from_shared_image(SharedImage shared
              return SharedImageBuffer(*shareable_bitmap.bitmap());
          },
          [](LinuxDmaBufHandle& dmabuf) -> SharedImageBuffer {
@@ -547,10 +547,10 @@ index 66a5a1ab9..a324e2080 100644
              if (dmabuf.modifier != DRM_FORMAT_MOD_LINEAR)
                  return SharedImageBuffer(nullptr, move(dmabuf));
 diff --git a/Libraries/LibGfx/SharedImageBuffer.h b/Libraries/LibGfx/SharedImageBuffer.h
-index 154409a38..4ac9bb150 100644
+index 835de8b95..0ffa61550 100644
 --- a/Libraries/LibGfx/SharedImageBuffer.h
 +++ b/Libraries/LibGfx/SharedImageBuffer.h
-@@ -42,7 +42,7 @@ public:
+@@ -43,7 +43,7 @@ public:
  
  #ifdef AK_OS_MACOS
      Core::IOSurfaceHandle const& iosurface_handle() const { return m_iosurface_handle; }
@@ -559,7 +559,7 @@ index 154409a38..4ac9bb150 100644
      LinuxDmaBufHandle const* linux_dmabuf_handle() const { return m_linux_dmabuf_handle.has_value() ? &m_linux_dmabuf_handle.value() : nullptr; }
  #elif defined(USE_DIRECTX)
      WindowsD3DHandle const* windows_d3d_handle() const { return m_windows_d3d_handle.has_value() ? &m_windows_d3d_handle.value() : nullptr; }
-@@ -54,7 +54,7 @@ private:
+@@ -55,7 +55,7 @@ private:
      Core::IOSurfaceHandle m_iosurface_handle;
  #else
      explicit SharedImageBuffer(NonnullRefPtr<Bitmap>);
@@ -591,7 +591,7 @@ index da9897c7b..2051ed1ae 100644
      find_package(Vulkan QUIET)
      find_program(GLSLANG_VALIDATOR glslangValidator)
 diff --git a/Services/Compositor/BackingStoreManager.cpp b/Services/Compositor/BackingStoreManager.cpp
-index 9b29091ac..4d3320b67 100644
+index 69232c94e..25f92d132 100644
 --- a/Services/Compositor/BackingStoreManager.cpp
 +++ b/Services/Compositor/BackingStoreManager.cpp
 @@ -21,9 +21,13 @@
@@ -647,7 +647,7 @@ index 9b29091ac..4d3320b67 100644
  #ifdef USE_DIRECTX
  static ErrorOr<GpuBackingStore> create_shared_gpu_backing_store(Gfx::IntSize size, Gfx::SkiaBackendContext& skia_backend_context)
  {
-@@ -194,7 +211,7 @@ Optional<BackingStoreManager::Publication> BackingStoreManager::allocate_backing
+@@ -199,7 +216,7 @@ Optional<BackingStoreManager::Publication> BackingStoreManager::allocate_backing
          return index == 0 ? BufferState::Presented : BufferState::Available;
      };
  
@@ -738,7 +738,7 @@ index a420ab8dc..9730f6620 100644
      static ErrorOr<NonnullRefPtr<PaintingSurface>> create_from_d3d_texture(NonnullRefPtr<SkiaBackendContext>, NonnullRefPtr<D3DSharedTexture>, Origin = Origin::TopLeft);
  #endif
 diff --git a/Services/Compositor/SkiaBackendContext.cpp b/Services/Compositor/SkiaBackendContext.cpp
-index 740b10371..8e8752561 100644
+index 118fa248f..0d156eb5d 100644
 --- a/Services/Compositor/SkiaBackendContext.cpp
 +++ b/Services/Compositor/SkiaBackendContext.cpp
 @@ -39,6 +39,12 @@ template<>
@@ -763,7 +763,7 @@ index 740b10371..8e8752561 100644
  static constexpr size_t skia_resource_cache_limit = 256 * MiB;
  #endif
  static constexpr auto skia_deferred_cleanup_interval = AK::Duration::from_seconds(1);
-@@ -200,6 +206,13 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_independent_gpu_backend([[
+@@ -222,6 +228,13 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_independent_gpu_backend([[
      }
      auto vulkan_context = maybe_vulkan_context.release_value();
      return create_vulkan_context(vulkan_context);
@@ -777,7 +777,7 @@ index 740b10371..8e8752561 100644
  #else
      return {};
  #endif
-@@ -382,4 +395,59 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_metal_context(NonnullRefPt
+@@ -404,4 +417,59 @@ RefPtr<SkiaBackendContext> SkiaBackendContext::create_metal_context(NonnullRefPt
  }
  #endif
  
@@ -838,10 +838,10 @@ index 740b10371..8e8752561 100644
 +
  }
 diff --git a/Services/Compositor/SkiaBackendContext.h b/Services/Compositor/SkiaBackendContext.h
-index 8a93975a4..cc220c5bb 100644
+index c0f70a9de..9b01cf2c5 100644
 --- a/Services/Compositor/SkiaBackendContext.h
 +++ b/Services/Compositor/SkiaBackendContext.h
-@@ -24,6 +24,10 @@
+@@ -25,6 +25,10 @@
  #    include <LibGfx/MetalContext.h>
  #endif
  
@@ -852,7 +852,7 @@ index 8a93975a4..cc220c5bb 100644
  class GrDirectContext;
  class SkSurface;
  
-@@ -51,6 +55,10 @@ public:
+@@ -52,6 +56,10 @@ public:
      static RefPtr<SkiaBackendContext> create_metal_context(NonnullRefPtr<MetalContext>);
  #endif
  
@@ -863,7 +863,7 @@ index 8a93975a4..cc220c5bb 100644
      // The preferred GPU is used when there is one, so that the backing stores can be shared with the presentation.
      static void initialize_gpu_backend(Optional<GpuDeviceIdentity> const& preferred_device = {});
      static RefPtr<SkiaBackendContext> create_independent_gpu_backend(Optional<GpuDeviceIdentity> const& preferred_device = {});
-@@ -68,6 +76,9 @@ public:
+@@ -71,6 +79,9 @@ public:
      virtual MetalContext& metal_context() = 0;
      virtual VulkanContext const& vulkan_context() = 0;
      virtual Direct3DContext& direct3d_context() { VERIFY_NOT_REACHED(); }
@@ -874,7 +874,7 @@ index 8a93975a4..cc220c5bb 100644
  private:
      void perform_post_flush_cleanup();
 diff --git a/vcpkg.json b/vcpkg.json
-index bfebfcb94..c8e890617 100644
+index b35f8f519..873596170 100644
 --- a/vcpkg.json
 +++ b/vcpkg.json
 @@ -48,11 +48,7 @@
