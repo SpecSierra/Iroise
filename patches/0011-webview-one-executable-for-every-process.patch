@@ -1,8 +1,16 @@
 diff --git a/Libraries/LibWebCommon/WebView/Utilities.cpp b/Libraries/LibWebCommon/WebView/Utilities.cpp
-index aee32f1e7..ad6789314 100644
+index aee32f1e7..f3513a538 100644
 --- a/Libraries/LibWebCommon/WebView/Utilities.cpp
 +++ b/Libraries/LibWebCommon/WebView/Utilities.cpp
-@@ -52,6 +52,10 @@ static ErrorOr<ByteString> application_directory()
+@@ -7,6 +7,7 @@
+ 
+ #include <AK/LexicalPath.h>
+ #include <AK/Platform.h>
++#include <LibCore/Environment.h>
+ #include <LibCore/Process.h>
+ #include <LibCore/Resource.h>
+ #include <LibCore/ResourceImplementationFile.h>
+@@ -52,6 +53,10 @@ static ErrorOr<ByteString> application_directory()
  {
      if (s_ladybird_binary_path.has_value())
          return *s_ladybird_binary_path;
