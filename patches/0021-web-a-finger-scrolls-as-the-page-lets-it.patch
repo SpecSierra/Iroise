@@ -361,3 +361,16 @@ index b7b09afaf..e2bd1a6f2 100644
  }
  
  [ExistingCpp]
+diff --git a/Services/Compositor/Rust/src/scroll_fling_controller.rs b/Services/Compositor/Rust/src/scroll_fling_controller.rs
+index 6418dd096..605b8b0be 100644
+--- a/Services/Compositor/Rust/src/scroll_fling_controller.rs
++++ b/Services/Compositor/Rust/src/scroll_fling_controller.rs
+@@ -148,6 +148,8 @@ impl ScrollFlingController {
+             scrollbar_dragged_by_compositor: None,
+             pointer_data: PointerInputData { properties: None },
+             wheel_gesture_mark: active.wheel_gesture_mark.clone(),
++            // A fling's steps scroll in the Compositor; the page is not asked about each of them.
++            is_touch_scroll: false,
+         }
+     }
+ }
