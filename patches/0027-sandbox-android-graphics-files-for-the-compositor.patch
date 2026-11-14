@@ -1,0 +1,29 @@
+diff --git a/Libraries/LibSandbox/GpuDriverPaths.cpp b/Libraries/LibSandbox/GpuDriverPaths.cpp
+index e4093f242..c5061a2d4 100644
+--- a/Libraries/LibSandbox/GpuDriverPaths.cpp
++++ b/Libraries/LibSandbox/GpuDriverPaths.cpp
+@@ -165,6 +165,24 @@ ErrorOr<void> add_gpu_driver_paths(Vector<PathRule>& paths)
+     TRY(add_path_if_exists(paths, "/usr/share/egl"sv, PathRule::Access::ReadOnly));
+     TRY(add_loader_manifest_paths(paths));
+ 
++#if defined(USE_GLES_HYBRIS)
++    // Iroise: on Sailfish OS the GPU driver is Android's, loaded through libhybris by Android's own linker. That linker
++    // reads its configuration and every library of the driver from the Android side of the system, the driver reads
++    // Android's system properties, and it reaches the GPU, its memory and Android's services through these devices.
++    for (auto path : { "/system"sv, "/system_ext"sv, "/vendor"sv, "/odm"sv, "/product"sv, "/apex"sv, "/linkerconfig"sv,
++             "/mnt/vendor"sv, "/usr/libexec"sv, "/usr/lib64"sv, "/dev/__properties__"sv, "/dev/urandom"sv, "/dev/random"sv })
++        TRY(add_path_if_exists(paths, path, PathRule::Access::ReadOnly));
++    for (auto path : { "/dev/binderfs"sv, "/dev/dma_heap"sv, "/dev/ion"sv, "/dev/mali0"sv, "/dev/kgsl-3d0"sv,
++             "/dev/socket"sv, "/dev/null"sv, "/dev/zero"sv, "/proc/ged"sv })
++        TRY(add_path_if_exists(paths, path, PathRule::Access::ReadWrite));
++    // NB: Android names its shared memory device after the boot (/dev/ashmem<uuid>), with /dev/ashmem kept beside it.
++    TRY(Core::Directory::for_each_entry("/dev"sv, static_cast<Core::DirIterator::Flags>(Core::DirIterator::SkipDots | Core::DirIterator::NoStat), [&](Core::DirectoryEntry const& entry, Core::Directory const&) -> ErrorOr<IterationDecision> {
++        if (entry.name.starts_with("ashmem"sv))
++            TRY(add_path_if_exists(paths, TRY(String::formatted("/dev/{}", entry.name)), PathRule::Access::ReadWrite));
++        return IterationDecision::Continue;
++    }));
++#endif
++
+     // NB: GPU drivers read these while they set up and while they run. They used to do the setup before Landlock was in
+     //     place, and in threads that it never confined.
+     TRY(add_path_if_exists(paths, "/proc/self"sv, PathRule::Access::ReadOnly));

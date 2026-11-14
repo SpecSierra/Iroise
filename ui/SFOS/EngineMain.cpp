@@ -16,6 +16,7 @@
 #include <LibCore/System.h>
 #include <LibMain/Main.h>
 #include <dlfcn.h>
+#include <limits.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
@@ -56,8 +57,23 @@ static void describe_installation()
         setenv("LADYBIRD_HELPER_LAUNCHER", executable.value().characters(), 0);
 }
 
+// The system names its time zone with a link, /etc/localtime, that ends at a file of /usr/share/zoneinfo (through
+// /var/lib/timed on Sailfish OS). The engine's sandboxed processes may read neither, and without them a page's clock
+// is UTC. TZ, which every helper inherits, names the zone instead, and the C library reads its file below, before any
+// sandbox. A zone the user changes is followed when the app next starts.
+static void name_the_time_zone()
+{
+    char path[PATH_MAX];
+    if (getenv("TZ") || !realpath("/etc/localtime", path))
+        return;
+    static constexpr char directory[] = "/zoneinfo/";
+    if (auto const* name = strstr(path, directory))
+        setenv("TZ", name + sizeof(directory) - 1, 0);
+}
+
 int iroise_engine_main(char const* role, int argc, char** argv)
 {
+    name_the_time_zone();
     tzset();
     describe_installation();
     // A document with thousands of images, or many tabs, holds a shared-memory descriptor for each.
