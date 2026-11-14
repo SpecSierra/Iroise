@@ -1,0 +1,26 @@
+diff --git a/Services/Compositor/SandboxLinux.cpp b/Services/Compositor/SandboxLinux.cpp
+index 725b5fd0f..c1d709fda 100644
+--- a/Services/Compositor/SandboxLinux.cpp
++++ b/Services/Compositor/SandboxLinux.cpp
+@@ -26,12 +26,21 @@ ErrorOr<void> restrict_filesystem(StringView resource_root)
+     (void)Gfx::GlobalFontConfig::the();
+ #endif
+ 
++#if defined(USE_GLES_HYBRIS)
++    // Iroise: on Sailfish OS the GPU driver is Android's, loaded through libhybris, and it talks to Android's services
++    // over binder. The kernel has no Landlock there, so files would be opened for this process by the file broker, and
++    // a binder device only serves the process that opened it. So this process opens its own files, as it did before
++    // there was a broker. Seccomp still confines it, and the processes that run a page's content keep the broker.
++    (void)resource_root;
++    return {};
++#else
+     Vector<Sandbox::PathRule> paths;
+     TRY(Sandbox::add_path_if_exists(paths, TRY(String::formatted("{}/fonts", resource_root)), Sandbox::PathRule::Access::ReadOnly));
+     TRY(Sandbox::add_gpu_driver_paths(paths));
+ 
+     TRY(Sandbox::restrict_filesystem(paths.span()));
+     return {};
++#endif
+ }
+ 
+ ErrorOr<void> apply_sandbox(StringView, StringView, StringView)
