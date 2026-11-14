@@ -1,0 +1,14 @@
+diff --git a/Libraries/LibSandbox/FileBroker.cpp b/Libraries/LibSandbox/FileBroker.cpp
+index f7a5f2a47..73fbe3bac 100644
+--- a/Libraries/LibSandbox/FileBroker.cpp
++++ b/Libraries/LibSandbox/FileBroker.cpp
+@@ -770,6 +770,9 @@ static ErrorOr<void> confine_broker()
+     policy.allow_signals();
+     policy.allow_clocks();
+     policy.allow_exit();
++    // Iroise: a library the system preloads into every process may wrap open() and ask who runs it first, as
++    // Patchmanager's does on Sailfish OS (getuid). Killing the broker for that costs the helper every file.
++    policy.allow_process_metadata();
+     return policy.install();
+ }
+ 

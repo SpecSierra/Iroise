@@ -53,8 +53,14 @@ int main(int argc, char** argv)
     executable[length] = 0;
 
     int is_engine = argc >= 3 && strcmp(argv[1], "--engine-role") == 0;
-    if (is_engine)
+    if (is_engine) {
+        // Patchmanager, where a user has it, is preloaded into every process and wraps open() to ask its service,
+        // over a socket, for a patched copy of the file. The engine's sandbox allows its processes no such socket,
+        // and the process that opens files for them is killed for making one. This tells the wrapper to open the
+        // file as asked; nothing of the engine's is there to be patched.
+        setenv("NO_PM_PRELOAD", "1", 1);
         start_again_with_room_for_the_engine(executable, argv);
+    }
     char library[PATH_MAX];
     snprintf(library, sizeof(library), "%s/../share/harbour-iroise/lib/%s", dirname(executable),
         is_engine ? "engine/libiroiseengine.so" : "libiroisebrowser.so.1");
