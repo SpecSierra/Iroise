@@ -507,7 +507,7 @@ index bead78452..a0a0d81b3 100644
  struct VulkanImage;
  SharedImage duplicate_shared_image(VulkanImage const&);
 diff --git a/Libraries/LibGfx/SharedImageBuffer.cpp b/Libraries/LibGfx/SharedImageBuffer.cpp
-index 70a57e110..a0daf611e 100644
+index fad7b6d1f..d0dfa5cf2 100644
 --- a/Libraries/LibGfx/SharedImageBuffer.cpp
 +++ b/Libraries/LibGfx/SharedImageBuffer.cpp
 @@ -7,7 +7,7 @@
@@ -537,7 +537,7 @@ index 70a57e110..a0daf611e 100644
  SharedImageBuffer::SharedImageBuffer(RefPtr<Bitmap> bitmap, LinuxDmaBufHandle&& dmabuf)
      : m_linux_dmabuf_handle(move(dmabuf))
      , m_bitmap(move(bitmap))
-@@ -103,7 +103,7 @@ SharedImageBuffer SharedImageBuffer::import_from_shared_image(SharedImage shared
+@@ -113,7 +113,7 @@ ErrorOr<SharedImageBuffer> SharedImageBuffer::import_from_shared_image(SharedIma
              return SharedImageBuffer(*shareable_bitmap.bitmap());
          },
          [](LinuxDmaBufHandle& dmabuf) -> SharedImageBuffer {
@@ -547,10 +547,10 @@ index 70a57e110..a0daf611e 100644
              if (dmabuf.modifier != DRM_FORMAT_MOD_LINEAR)
                  return SharedImageBuffer(nullptr, move(dmabuf));
 diff --git a/Libraries/LibGfx/SharedImageBuffer.h b/Libraries/LibGfx/SharedImageBuffer.h
-index 835de8b95..0ffa61550 100644
+index b6415e040..52ee50261 100644
 --- a/Libraries/LibGfx/SharedImageBuffer.h
 +++ b/Libraries/LibGfx/SharedImageBuffer.h
-@@ -43,7 +43,7 @@ public:
+@@ -45,7 +45,7 @@ public:
  
  #ifdef AK_OS_MACOS
      Core::IOSurfaceHandle const& iosurface_handle() const { return m_iosurface_handle; }
@@ -559,7 +559,7 @@ index 835de8b95..0ffa61550 100644
      LinuxDmaBufHandle const* linux_dmabuf_handle() const { return m_linux_dmabuf_handle.has_value() ? &m_linux_dmabuf_handle.value() : nullptr; }
  #elif defined(USE_DIRECTX)
      WindowsD3DHandle const* windows_d3d_handle() const { return m_windows_d3d_handle.has_value() ? &m_windows_d3d_handle.value() : nullptr; }
-@@ -55,7 +55,7 @@ private:
+@@ -57,7 +57,7 @@ private:
      Core::IOSurfaceHandle m_iosurface_handle;
  #else
      explicit SharedImageBuffer(NonnullRefPtr<Bitmap>);
@@ -569,7 +569,7 @@ index 835de8b95..0ffa61550 100644
      Optional<LinuxDmaBufHandle> m_linux_dmabuf_handle;
  #    endif
 diff --git a/Meta/CMake/check_for_dependencies.cmake b/Meta/CMake/check_for_dependencies.cmake
-index da9897c7b..2051ed1ae 100644
+index d59304dd7..b717812a4 100644
 --- a/Meta/CMake/check_for_dependencies.cmake
 +++ b/Meta/CMake/check_for_dependencies.cmake
 @@ -42,7 +42,16 @@ if (NOT APPLE AND NOT ANDROID AND NOT WIN32)
@@ -590,10 +590,10 @@ index da9897c7b..2051ed1ae 100644
      find_package(VulkanHeaders CONFIG QUIET)
      find_package(Vulkan QUIET)
      find_program(GLSLANG_VALIDATOR glslangValidator)
-diff --git a/Services/Compositor/BackingStoreManager.cpp b/Services/Compositor/BackingStoreManager.cpp
-index 69232c94e..25f92d132 100644
---- a/Services/Compositor/BackingStoreManager.cpp
-+++ b/Services/Compositor/BackingStoreManager.cpp
+diff --git a/Services/Compositor/BackingStoreFactory.cpp b/Services/Compositor/BackingStoreFactory.cpp
+index 44a8e0aa1..dea13b662 100644
+--- a/Services/Compositor/BackingStoreFactory.cpp
++++ b/Services/Compositor/BackingStoreFactory.cpp
 @@ -21,9 +21,13 @@
  #    include <LibGfx/D3DSharedTexture.h>
  #endif
@@ -608,7 +608,7 @@ index 69232c94e..25f92d132 100644
 +#if defined(USE_DIRECTX) || defined(USE_VULKAN) || defined(USE_GLES_HYBRIS)
  static NonnullRefPtr<Gfx::PaintingSurface> create_gpu_painting_surface_with_bitmap_flush(Gfx::IntSize size, Gfx::SharedImageBuffer& buffer, RefPtr<Gfx::SkiaBackendContext> const& skia_backend_context)
  {
-     auto surface = Gfx::PaintingSurface::create_with_size(size, Gfx::BitmapFormat::BGRA8888, Gfx::AlphaType::Premultiplied, skia_backend_context);
+     auto surface = Gfx::PaintingSurface::create_with_size(size, Gfx::BitmapFormat::BGRA8888, Gfx::AlphaType::Premultiplied, skia_backend_context, {}, Gfx::PaintingSurface::TextAntialiasing::LCD);
 @@ -41,7 +45,7 @@ static NonnullRefPtr<Gfx::PaintingSurface> create_shareable_bitmap_backing_store
      if (skia_backend_context)
          return Gfx::PaintingSurface::create_from_shared_image_buffer(buffer, *skia_backend_context);
@@ -619,7 +619,7 @@ index 69232c94e..25f92d132 100644
          return create_gpu_painting_surface_with_bitmap_flush(size, buffer, skia_backend_context);
  #    else
 @@ -52,7 +56,7 @@ static NonnullRefPtr<Gfx::PaintingSurface> create_shareable_bitmap_backing_store
-     return Gfx::PaintingSurface::wrap_bitmap(*buffer.bitmap());
+     return Gfx::PaintingSurface::wrap_bitmap(*buffer.bitmap(), Gfx::PaintingSurface::TextAntialiasing::LCD);
  }
  
 -#if defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX)
@@ -647,20 +647,20 @@ index 69232c94e..25f92d132 100644
  #ifdef USE_DIRECTX
  static ErrorOr<GpuBackingStore> create_shared_gpu_backing_store(Gfx::IntSize size, Gfx::SkiaBackendContext& skia_backend_context)
  {
-@@ -199,7 +216,7 @@ Optional<BackingStoreManager::Publication> BackingStoreManager::allocate_backing
-         return index == 0 ? BufferState::Presented : BufferState::Available;
-     };
+@@ -131,7 +148,7 @@ static ErrorOr<NewBackingStore> create_shared_bitmap_backing_store(Gfx::IntSize
  
+ static ErrorOr<NewBackingStore> create_shared_gpu_image_backing_store([[maybe_unused]] Gfx::IntSize size, [[maybe_unused]] RefPtr<Gfx::SkiaBackendContext> const& skia_backend_context)
+ {
 -#if defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX)
 +#if defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX) || defined(USE_GLES_HYBRIS)
-     if (skia_backend_context && gpu_sharing == GpuSharing::Allowed) {
-         Vector<Gfx::SharedImage> shared_images;
-         shared_images.ensure_capacity(buffer_count);
+     if (!skia_backend_context)
+         return Error::from_string_literal("Shared GPU images need a GPU");
+     auto backing_store = create_shared_gpu_backing_store(size, *skia_backend_context);
 diff --git a/Services/Compositor/PaintingSurface.cpp b/Services/Compositor/PaintingSurface.cpp
-index b6e5761a8..7ea20d750 100644
+index a06057bb8..e415596b7 100644
 --- a/Services/Compositor/PaintingSurface.cpp
 +++ b/Services/Compositor/PaintingSurface.cpp
-@@ -26,6 +26,10 @@
+@@ -28,6 +28,10 @@
  #    include <LibGfx/VulkanImage.h>
  #    include <gpu/ganesh/vk/GrVkBackendSurface.h>
  #    include <gpu/ganesh/vk/GrVkTypes.h>
@@ -671,17 +671,17 @@ index b6e5761a8..7ea20d750 100644
  #elif defined(USE_DIRECTX)
  #    include <AK/Windows.h>
  #    include <LibGfx/D3DSharedTexture.h>
-@@ -45,7 +49,7 @@ struct PaintingSurface::Impl {
-     bool wraps_shared_image { false };
- };
+@@ -66,7 +70,7 @@ PaintingSurface::Impl& PaintingSurface::impl() const
+     return *static_cast<Impl*>(Compositor::RustFFI::compositor_painting_surface_skia_surface(this));
+ }
  
 -#if defined(AK_OS_MACOS) || defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX)
 +#if defined(AK_OS_MACOS) || defined(USE_VULKAN_DMABUF_IMAGES) || defined(USE_DIRECTX) || defined(USE_GLES_HYBRIS)
  static GrSurfaceOrigin origin_to_sk_origin(PaintingSurface::Origin origin)
  {
      switch (origin) {
-@@ -177,6 +181,26 @@ NonnullRefPtr<PaintingSurface> PaintingSurface::wrap_bitmap(Bitmap& bitmap)
-     return adopt_ref(*new PaintingSurface(make<Impl>(RefPtr<SkiaBackendContext> {}, size, surface, bitmap)));
+@@ -219,6 +223,26 @@ NonnullRefPtr<PaintingSurface> PaintingSurface::wrap_bitmap(Bitmap& bitmap, Text
+     return adopt_impl(size, make<Impl>(RefPtr<SkiaBackendContext> {}, surface, bitmap));
  }
  
 +#ifdef USE_GLES_HYBRIS
@@ -700,7 +700,7 @@ index b6e5761a8..7ea20d750 100644
 +    auto surface = SkSurfaces::WrapBackendRenderTarget(context->sk_context(), render_target, origin_to_sk_origin(origin), kRGBA_8888_SkColorType,
 +        SkColorSpace::MakeSRGB(), nullptr, [](void* image) { static_cast<GLESImage*>(image)->unref(); }, image.ptr());
 +    VERIFY(surface);
-+    return adopt_ref(*new PaintingSurface(make<Impl>(context, size, surface, nullptr, true)));
++    return adopt_impl(size, make<Impl>(context, surface, nullptr, true));
 +}
 +#endif
 +
@@ -708,10 +708,10 @@ index b6e5761a8..7ea20d750 100644
  NonnullRefPtr<PaintingSurface> PaintingSurface::create_from_shared_image_buffer(SharedImageBuffer& shared_image_buffer, NonnullRefPtr<SkiaBackendContext> context, Origin origin)
  {
 diff --git a/Services/Compositor/PaintingSurface.h b/Services/Compositor/PaintingSurface.h
-index a420ab8dc..9730f6620 100644
+index dff856353..43ed1a698 100644
 --- a/Services/Compositor/PaintingSurface.h
 +++ b/Services/Compositor/PaintingSurface.h
-@@ -23,6 +23,14 @@ struct VulkanImage;
+@@ -24,6 +24,14 @@ struct VulkanImage;
  }
  #endif
  
@@ -726,8 +726,8 @@ index a420ab8dc..9730f6620 100644
  #ifdef USE_DIRECTX
  #    include <AK/Error.h>
  
-@@ -67,6 +75,10 @@ public:
-     static NonnullRefPtr<PaintingSurface> create_from_vkimage(NonnullRefPtr<SkiaBackendContext> context, NonnullRefPtr<VulkanImage> vulkan_image, Origin origin);
+@@ -76,6 +84,10 @@ public:
+     static NonnullRefPtr<PaintingSurface> create_from_vkimage(NonnullRefPtr<SkiaBackendContext> context, NonnullRefPtr<VulkanImage> vulkan_image, Origin origin, TextAntialiasing = TextAntialiasing::Grayscale);
  #endif
  
 +#ifdef USE_GLES_HYBRIS
@@ -736,7 +736,7 @@ index a420ab8dc..9730f6620 100644
 +
  #ifdef USE_DIRECTX
      static ErrorOr<NonnullRefPtr<PaintingSurface>> create_from_d3d_texture(NonnullRefPtr<SkiaBackendContext>, NonnullRefPtr<D3DSharedTexture>, Origin = Origin::TopLeft);
- #endif
+     // Over the texture as one that is drawn from as well as into, so that a snapshot of the surface shares the texture
 diff --git a/Services/Compositor/SkiaBackendContext.cpp b/Services/Compositor/SkiaBackendContext.cpp
 index 118fa248f..0d156eb5d 100644
 --- a/Services/Compositor/SkiaBackendContext.cpp
@@ -874,7 +874,7 @@ index c0f70a9de..9b01cf2c5 100644
  private:
      void perform_post_flush_cleanup();
 diff --git a/vcpkg.json b/vcpkg.json
-index b35f8f519..873596170 100644
+index b05b6d3f0..96b378da1 100644
 --- a/vcpkg.json
 +++ b/vcpkg.json
 @@ -48,11 +48,7 @@
@@ -890,7 +890,7 @@ index b35f8f519..873596170 100644
        ]
      },
      {
-@@ -238,6 +234,7 @@
+@@ -232,6 +228,7 @@
          "fontconfig",
          "harfbuzz",
          "icu",

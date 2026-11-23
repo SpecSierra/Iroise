@@ -30,7 +30,7 @@ index 19647f7d8..e9ccf6aac 100644
      return NonnullOwnPtr<VideoDecoder> { TRY(FFmpegVideoDecoder::try_create(library->functions(), codec_id, codec_initialization_data)) };
  }
 diff --git a/Libraries/LibMediaCodecs/FFmpeg/FFmpegFunctions.h b/Libraries/LibMediaCodecs/FFmpeg/FFmpegFunctions.h
-index 192f14063..10403ba86 100644
+index d07e8c1ea..92ad284ef 100644
 --- a/Libraries/LibMediaCodecs/FFmpeg/FFmpegFunctions.h
 +++ b/Libraries/LibMediaCodecs/FFmpeg/FFmpegFunctions.h
 @@ -21,9 +21,11 @@ extern "C" {
@@ -47,10 +47,10 @@ index 192f14063..10403ba86 100644
  
  }
 diff --git a/Libraries/LibMediaCodecs/FFmpeg/SystemFFmpeg.cpp b/Libraries/LibMediaCodecs/FFmpeg/SystemFFmpeg.cpp
-index f49971778..7cf54599c 100644
+index 114ceffac..cf8149cc7 100644
 --- a/Libraries/LibMediaCodecs/FFmpeg/SystemFFmpeg.cpp
 +++ b/Libraries/LibMediaCodecs/FFmpeg/SystemFFmpeg.cpp
-@@ -59,6 +59,26 @@ static void resolve_codec_ids(FFmpegFunctions& functions)
+@@ -60,6 +60,26 @@ static void resolve_codec_ids(FFmpegFunctions& functions)
      }
  }
  
@@ -77,7 +77,7 @@ index f49971778..7cf54599c 100644
  DecoderErrorOr<NonnullOwnPtr<SystemFFmpeg>> SystemFFmpeg::try_load(ByteString const& library_path)
  {
      auto* library_handle = dlopen(library_path.characters(), RTLD_NOW | RTLD_LOCAL);
-@@ -67,12 +87,16 @@ DecoderErrorOr<NonnullOwnPtr<SystemFFmpeg>> SystemFFmpeg::try_load(ByteString co
+@@ -68,12 +88,16 @@ DecoderErrorOr<NonnullOwnPtr<SystemFFmpeg>> SystemFFmpeg::try_load(ByteString co
      ArmedScopeGuard close_library = [&] { dlclose(library_handle); };
  
      auto functions = DECODER_TRY_ALLOC(try_make<FFmpegFunctions>());

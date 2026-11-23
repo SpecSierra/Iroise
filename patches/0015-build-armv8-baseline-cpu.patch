@@ -1,20 +1,20 @@
 diff --git a/Meta/CMake/cmake_options.cmake b/Meta/CMake/cmake_options.cmake
-index 843dd241e..793f28b9f 100644
+index 7032bfc76..d90f6a6cd 100644
 --- a/Meta/CMake/cmake_options.cmake
 +++ b/Meta/CMake/cmake_options.cmake
-@@ -42,6 +42,7 @@ if (LADYBIRD_GENERATE_SYMBOL_FILES AND MSVC)
+@@ -49,6 +49,7 @@ if (LADYBIRD_GENERATE_SYMBOL_FILES AND MSVC)
      message(FATAL_ERROR "LADYBIRD_GENERATE_SYMBOL_FILES is not supported with MSVC-style toolchains")
  endif()
- option(ENABLE_CI_BASELINE_CPU "Use a common CPU baseline for portable binaries and ccache sharing" OFF)
+ option(LADYBIRD_BASELINE_CPU_TARGET "Use a common CPU baseline for portable binaries and ccache sharing" OFF)
 +option(ENABLE_ARMV8_BASELINE_CPU "Target plain ARMv8.0 on aarch64 instead of the build host's CPU, for older phones" OFF)
  
  set(LADYBIRD_VERSION "" CACHE STRING "Version of a release, such as 2026.46.0")
  set(LADYBIRD_BROWSER_VERSION "${PROJECT_VERSION}")
 diff --git a/Meta/CMake/compile_options.cmake b/Meta/CMake/compile_options.cmake
-index 2c63f58c0..88e449a9d 100644
+index 6f7e1549c..778c6dd87 100644
 --- a/Meta/CMake/compile_options.cmake
 +++ b/Meta/CMake/compile_options.cmake
-@@ -70,6 +70,11 @@ if (ENABLE_CI_BASELINE_CPU)
+@@ -70,6 +70,11 @@ if (LADYBIRD_BASELINE_CPU_TARGET)
          add_cxx_compile_options(-march=x86-64-v2)
          set(RUSTC_TARGET_CPU_FLAGS -Ctarget-cpu=x86-64-v2)
      endif()

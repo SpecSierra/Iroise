@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibWebView/HelperProcess.cpp b/Libraries/LibWebView/HelperProcess.cpp
-index 4cfad72cd..ed826ded7 100644
+index 7a1c5101c..4939b0532 100644
 --- a/Libraries/LibWebView/HelperProcess.cpp
 +++ b/Libraries/LibWebView/HelperProcess.cpp
-@@ -565,6 +565,17 @@ ErrorOr<NonnullRefPtr<WebView::CompositorClient>> launch_compositor_process()
+@@ -580,6 +580,17 @@ ErrorOr<NonnullRefPtr<WebView::CompositorClient>> launch_compositor_process(Byte
      return client;
  }
  
@@ -20,7 +20,7 @@ index 4cfad72cd..ed826ded7 100644
  void apply_dns_settings(Requests::RequestControlClient& client)
  {
      Application::settings().dns_settings().visit(
-@@ -637,6 +648,8 @@ ErrorOr<NonnullRefPtr<Requests::RequestControlClient>> launch_request_server_pro
+@@ -652,6 +663,8 @@ ErrorOr<NonnullRefPtr<Requests::RequestControlClient>> launch_request_server_pro
  
      client->async_set_disk_cache_settings(Application::settings().disk_cache_settings());
      client->async_set_proxy_configuration(request_server_options.proxy_configuration);
@@ -30,23 +30,23 @@ index 4cfad72cd..ed826ded7 100644
          apply_dns_settings(*client);
  
 diff --git a/Libraries/LibWebView/HelperProcess.h b/Libraries/LibWebView/HelperProcess.h
-index 866fa9c28..1906b6b26 100644
+index c972048fc..d041890b8 100644
 --- a/Libraries/LibWebView/HelperProcess.h
 +++ b/Libraries/LibWebView/HelperProcess.h
-@@ -32,6 +32,8 @@ WEBVIEW_API ErrorOr<NonnullRefPtr<WebView::CompositorClient>> launch_compositor_
+@@ -58,6 +58,8 @@ WEBVIEW_API ErrorOr<NonnullRefPtr<WebView::CompositorClient>> launch_compositor_
  // Serves the given site's partitions, or all partitions if site is empty.
- WEBVIEW_API ErrorOr<NonnullRefPtr<Requests::RequestControlClient>> launch_request_server_process(ByteString const& cache_path, Optional<Utf16String> const& site, HTTPDiskCacheMode);
+ WEBVIEW_API ErrorOr<NonnullRefPtr<Requests::RequestControlClient>> launch_request_server_process(ByteString const& cache_path, Optional<Utf16String> const& site, IsPrivate, HTTPDiskCacheMode);
  WEBVIEW_API void apply_dns_settings(Requests::RequestControlClient&);
 +// Hosts whose unverifiable certificates the user chose to trust, for every RequestServer, also ones started later.
 +WEBVIEW_API void set_certificate_exceptions(Vector<ByteString>);
  
  // Launches an ImageDecoder, which is listed with the given site, or with the given process if it serves no site.
- WEBVIEW_API ErrorOr<NonnullRefPtr<ImageDecoderControlClient>> launch_image_decoder_process(u64 owner_child_id, Optional<Utf16String> const& site);
+ WEBVIEW_API ErrorOr<NonnullRefPtr<ImageDecoderControlClient>> launch_image_decoder_process(u64 owner_child_id, IsPrivate, Optional<Utf16String> const& site);
 diff --git a/Services/RequestServer/ControlConnectionFromClient.cpp b/Services/RequestServer/ControlConnectionFromClient.cpp
-index 51ff5ae65..ddb1e5406 100644
+index 0986357e6..5456234bc 100644
 --- a/Services/RequestServer/ControlConnectionFromClient.cpp
 +++ b/Services/RequestServer/ControlConnectionFromClient.cpp
-@@ -190,6 +190,11 @@ void ControlConnectionFromClient::set_proxy_configuration(HTTP::ProxyConfigurati
+@@ -199,6 +199,11 @@ void ControlConnectionFromClient::set_proxy_configuration(HTTP::ProxyConfigurati
      RequestServer::set_proxy_configuration(move(proxy_configuration));
  }
  
@@ -59,10 +59,10 @@ index 51ff5ae65..ddb1e5406 100644
  {
      Request::set_performance_monitor_enabled(enabled);
 diff --git a/Services/RequestServer/ControlConnectionFromClient.h b/Services/RequestServer/ControlConnectionFromClient.h
-index 4145b6e1b..6f6b0f25b 100644
+index b31878960..f7cd0f28b 100644
 --- a/Services/RequestServer/ControlConnectionFromClient.h
 +++ b/Services/RequestServer/ControlConnectionFromClient.h
-@@ -48,6 +48,7 @@ private:
+@@ -52,6 +52,7 @@ private:
      virtual void set_use_system_dns() override;
  
      virtual void set_proxy_configuration(HTTP::ProxyConfiguration) override;
@@ -71,7 +71,7 @@ index 4145b6e1b..6f6b0f25b 100644
      virtual void set_performance_monitor_enabled(bool) override;
  
 diff --git a/Services/RequestServer/Request.cpp b/Services/RequestServer/Request.cpp
-index 618c9134c..dc1f5e4ed 100644
+index 94c0b5973..d64a44c7f 100644
 --- a/Services/RequestServer/Request.cpp
 +++ b/Services/RequestServer/Request.cpp
 @@ -40,6 +40,39 @@ static AK::Duration s_wait_for_cache_timeout = AK::Duration::from_seconds(10);
@@ -114,7 +114,7 @@ index 618c9134c..dc1f5e4ed 100644
  // Let Fetch authorize credentials; otherwise curl sends URL credentials itself.
  static ByteString url_without_credentials(URL::URL url)
  {
-@@ -1387,6 +1420,11 @@ void Request::handle_connect_state()
+@@ -1421,6 +1454,11 @@ void Request::handle_connect_state()
      set_option(CURLOPT_NOSIGNAL, 1L);
  
      set_option(CURLOPT_SSL_CTX_FUNCTION, configure_ssl_context);
@@ -126,7 +126,7 @@ index 618c9134c..dc1f5e4ed 100644
  
      set_option(CURLOPT_URL, url_without_credentials(m_url).characters());
      set_option(CURLOPT_DISALLOW_USERNAME_IN_URL, 1L);
-@@ -1445,11 +1483,20 @@ void Request::handle_fetch_state()
+@@ -1471,11 +1509,20 @@ void Request::handle_fetch_state()
          set_option(CURLOPT_CAINFO, path.characters());
  
      set_option(CURLOPT_SSL_CTX_FUNCTION, configure_ssl_context);
@@ -151,10 +151,10 @@ index 618c9134c..dc1f5e4ed 100644
      if (m_content_decoding_disabled) {
          set_option(CURLOPT_ACCEPT_ENCODING, "identity");
 diff --git a/Services/RequestServer/Request.h b/Services/RequestServer/Request.h
-index 53e15d8e4..4d8716856 100644
+index 00232f92a..bc674b938 100644
 --- a/Services/RequestServer/Request.h
 +++ b/Services/RequestServer/Request.h
-@@ -426,4 +426,9 @@ private:
+@@ -430,4 +430,9 @@ private:
      Optional<Import> m_import;
  };
  
@@ -165,7 +165,7 @@ index 53e15d8e4..4d8716856 100644
 +
  }
 diff --git a/Services/RequestServer/RequestServerControl.ipc b/Services/RequestServer/RequestServerControl.ipc
-index 104fb1498..b8a139c65 100644
+index 177df1742..b467c67f2 100644
 --- a/Services/RequestServer/RequestServerControl.ipc
 +++ b/Services/RequestServer/RequestServerControl.ipc
 @@ -28,6 +28,10 @@ endpoint RequestServerControl

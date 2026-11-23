@@ -1,26 +1,30 @@
 diff --git a/Meta/CMake/check_for_dependencies.cmake b/Meta/CMake/check_for_dependencies.cmake
-index db582e3c3..da9897c7b 100644
+index db142b9b5..d59304dd7 100644
 --- a/Meta/CMake/check_for_dependencies.cmake
 +++ b/Meta/CMake/check_for_dependencies.cmake
-@@ -147,7 +147,7 @@ else()
+@@ -145,7 +145,7 @@ else()
      set(HAS_DIRECTX OFF CACHE BOOL "" FORCE)
  endif()
  
--if (ENABLE_GUI_TARGETS AND NOT (ANDROID OR VCPKG_TARGET_ANDROID))
+-if (ENABLE_GUI_TARGETS AND NOT ANDROID)
 +if (ENABLE_GUI_TARGETS AND NOT (ANDROID OR VCPKG_TARGET_ANDROID OR LADYBIRD_UI_SFOS OR DEFINED ENV{LADYBIRD_UI_SFOS}))
      set(LADYBIRD_QT_COMPONENTS Core Gui Widgets)
      if (NOT APPLE)
          list(APPEND LADYBIRD_QT_COMPONENTS Positioning)
 diff --git a/UI/CMakeLists.txt b/UI/CMakeLists.txt
-index d8528197a..8ef40772d 100644
+index 7ef5450a1..cead5b733 100644
 --- a/UI/CMakeLists.txt
 +++ b/UI/CMakeLists.txt
-@@ -97,6 +97,8 @@ endfunction()
+@@ -151,7 +151,11 @@ function(create_ladybird_bundle target_name)
+     copy_resources_to_build(${resource_base_dir} ${target_name})
+ endfunction()
  
- if (ANDROID OR VCPKG_TARGET_ANDROID)
-     add_subdirectory("Android")
-+elseif (LADYBIRD_UI_SFOS OR DEFINED ENV{LADYBIRD_UI_SFOS})
+-add_subdirectory("Qt")
++if (LADYBIRD_UI_SFOS OR DEFINED ENV{LADYBIRD_UI_SFOS})
 +    add_subdirectory("SFOS")
- else()
-     add_subdirectory("Qt")
- endif()
++else()
++    add_subdirectory("Qt")
++endif()
+ 
+ if (NOT TARGET ladybird)
+     message(FATAL_ERROR "UI Framework selection must declare a ladybird target")

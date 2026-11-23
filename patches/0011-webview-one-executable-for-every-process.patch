@@ -1,5 +1,5 @@
 diff --git a/Libraries/LibWebCommon/WebView/Utilities.cpp b/Libraries/LibWebCommon/WebView/Utilities.cpp
-index aee32f1e7..f3513a538 100644
+index e5df9789a..0ecfcbdf4 100644
 --- a/Libraries/LibWebCommon/WebView/Utilities.cpp
 +++ b/Libraries/LibWebCommon/WebView/Utilities.cpp
 @@ -7,6 +7,7 @@
@@ -22,7 +22,7 @@ index aee32f1e7..f3513a538 100644
      auto current_executable_path = TRY(Core::System::current_executable_path());
      return LexicalPath::dirname(current_executable_path);
 diff --git a/Libraries/LibWebView/HelperProcess.cpp b/Libraries/LibWebView/HelperProcess.cpp
-index ed826ded7..c6dd471e7 100644
+index 4939b0532..85c5463d7 100644
 --- a/Libraries/LibWebView/HelperProcess.cpp
 +++ b/Libraries/LibWebView/HelperProcess.cpp
 @@ -9,6 +9,7 @@
@@ -33,7 +33,7 @@ index ed826ded7..c6dd471e7 100644
  #include <LibCore/File.h>
  #include <LibCore/Process.h>
  #include <LibCore/System.h>
-@@ -178,6 +179,11 @@ static ErrorOr<ChildIdentity> launch_helper_process(StringView server_name, Vect
+@@ -192,6 +193,11 @@ static ErrorOr<ChildIdentity> launch_helper_process(StringView server_name, Vect
      auto const& browser_options = WebView::Application::browser_options();
  
      auto candidate_server_paths = TRY(get_paths_for_helper_process(server_name));

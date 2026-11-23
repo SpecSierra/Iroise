@@ -1,8 +1,8 @@
 diff --git a/Libraries/LibSandbox/Seccomp.cpp b/Libraries/LibSandbox/Seccomp.cpp
-index 3516b082b..643aef410 100644
+index 5d037b7b6..4c3017d6a 100644
 --- a/Libraries/LibSandbox/Seccomp.cpp
 +++ b/Libraries/LibSandbox/Seccomp.cpp
-@@ -2939,6 +2939,14 @@ ErrorOr<void> SeccompPolicy::install()
+@@ -2962,6 +2962,14 @@ ErrorOr<void> SeccompPolicy::install()
      append(SECCOMP_ERRNO(EAFNOSUPPORT));
  #endif
  
