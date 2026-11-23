@@ -47,37 +47,10 @@ index d07e8c1ea..92ad284ef 100644
  
  }
 diff --git a/Libraries/LibMediaCodecs/FFmpeg/SystemFFmpeg.cpp b/Libraries/LibMediaCodecs/FFmpeg/SystemFFmpeg.cpp
-index 114ceffac..cf8149cc7 100644
+index 114ceffac..2a52bd357 100644
 --- a/Libraries/LibMediaCodecs/FFmpeg/SystemFFmpeg.cpp
 +++ b/Libraries/LibMediaCodecs/FFmpeg/SystemFFmpeg.cpp
-@@ -60,6 +60,26 @@ static void resolve_codec_ids(FFmpegFunctions& functions)
-     }
- }
- 
-+// FFmpeg 7.0 added av_channel_layout_custom_init; for an older library, this does what it does, allocating with the
-+// library's own av_malloc so that its av_channel_layout_uninit can free the map.
-+static decltype(&::av_malloc) s_older_library_av_malloc;
-+static int channel_layout_custom_init_for_older_library(AVChannelLayout* layout, int channel_count)
-+{
-+    if (channel_count <= 0)
-+        return AVERROR(EINVAL);
-+    auto* map = static_cast<AVChannelCustom*>(s_older_library_av_malloc(sizeof(AVChannelCustom) * static_cast<size_t>(channel_count)));
-+    if (!map)
-+        return AVERROR(ENOMEM);
-+    memset(map, 0, sizeof(AVChannelCustom) * static_cast<size_t>(channel_count));
-+    for (int i = 0; i < channel_count; i++)
-+        map[i].id = AV_CHAN_UNKNOWN;
-+    layout->order = AV_CHANNEL_ORDER_CUSTOM;
-+    layout->nb_channels = channel_count;
-+    layout->u.map = map;
-+    layout->opaque = nullptr;
-+    return 0;
-+}
-+
- DecoderErrorOr<NonnullOwnPtr<SystemFFmpeg>> SystemFFmpeg::try_load(ByteString const& library_path)
- {
-     auto* library_handle = dlopen(library_path.characters(), RTLD_NOW | RTLD_LOCAL);
-@@ -68,12 +88,16 @@ DecoderErrorOr<NonnullOwnPtr<SystemFFmpeg>> SystemFFmpeg::try_load(ByteString co
+@@ -68,9 +68,9 @@ DecoderErrorOr<NonnullOwnPtr<SystemFFmpeg>> SystemFFmpeg::try_load(ByteString co
      ArmedScopeGuard close_library = [&] { dlclose(library_handle); };
  
      auto functions = DECODER_TRY_ALLOC(try_make<FFmpegFunctions>());
@@ -86,14 +59,7 @@ index 114ceffac..cf8149cc7 100644
 -    if (functions->name == nullptr)                                                      \
 +#define RESOLVE_FUNCTION(name)                                                                                     \
 +    functions->name = reinterpret_cast<decltype(&::name)>(dlsym(library_handle, #name));                           \
-+    if (functions->name == nullptr && #name##sv != "av_channel_layout_custom_init"sv)                                \
++    if (functions->name == nullptr)                                                                                \
          return DecoderError::format(DecoderErrorCategory::NotImplemented, "{} does not provide {}", library_path, #name##sv);
      FFMPEG_ENUMERATE_FUNCTIONS(RESOLVE_FUNCTION)
  #undef RESOLVE_FUNCTION
-+    if (functions->av_channel_layout_custom_init == nullptr) {
-+        s_older_library_av_malloc = functions->av_malloc;
-+        functions->av_channel_layout_custom_init = channel_layout_custom_init_for_older_library;
-+    }
- 
-     auto major = functions->avcodec_version() >> 16;
-     if (major < LOWEST_SUPPORTED_LIBAVCODEC_MAJOR || major > HIGHEST_VERIFIED_LIBAVCODEC_MAJOR)
