@@ -1,0 +1,34 @@
+diff --git a/Libraries/LibJS/JIT/Rust/src/scratch.rs b/Libraries/LibJS/JIT/Rust/src/scratch.rs
+index 75828993d..51b29fab8 100644
+--- a/Libraries/LibJS/JIT/Rust/src/scratch.rs
++++ b/Libraries/LibJS/JIT/Rust/src/scratch.rs
+@@ -38,6 +38,12 @@ impl Default for Scratch {
+ 
+ /// The most bytes that a zone of a compile gives out. It is address space, which costs nothing before it is used, and
+ /// it is far above what the largest function that the builder accepts takes.
++///
++/// Some AArch64 systems provide only 39 bits of user address space (512 GiB), and a thread that compiles holds four
++/// zones of this size, next to the heap region and the zones of parsing. A smaller zone fits there.
++#[cfg(all(target_arch = "aarch64", not(target_os = "macos")))]
++const ZONE_LIMIT: usize = 1 << 31;
++#[cfg(not(all(target_arch = "aarch64", not(target_os = "macos"))))]
+ const ZONE_LIMIT: usize = 1 << 34;
+ 
+ impl Scratch {
+diff --git a/Libraries/LibJS/Rust/src/work_zone.rs b/Libraries/LibJS/Rust/src/work_zone.rs
+index cbcab1ea1..e9950db3f 100644
+--- a/Libraries/LibJS/Rust/src/work_zone.rs
++++ b/Libraries/LibJS/Rust/src/work_zone.rs
+@@ -18,6 +18,12 @@ use ak::Zone;
+ 
+ /// The most bytes that the work data of one job can take. It is address space, which costs nothing before it is
+ /// used, and it is far above what the largest source takes.
++///
++/// Some AArch64 systems provide only 39 bits of user address space (512 GiB), and every thread that parses holds a
++/// zone, next to the heap region and the zones of the JIT. A smaller zone fits there.
++#[cfg(all(target_arch = "aarch64", not(target_os = "macos")))]
++const LIMIT: usize = 1 << 30;
++#[cfg(not(all(target_arch = "aarch64", not(target_os = "macos"))))]
+ const LIMIT: usize = 1 << 34;
+ 
+ /// The most bytes of memory that the zone keeps for the next job, about what a tree of 2^16 nodes takes with the
