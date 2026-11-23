@@ -9,8 +9,11 @@ successor to Atlantic, our WebKit-based browser, which is now kept in maintenanc
 ## Status
 
 Iroise is in development and has not been released. It is meant for the Jolla Store, so it follows the store's
-rules on what an app may use. Nothing is published yet, and the app does not use the Ladybird name anywhere you
-would see it: the Ladybird project has not yet said how its name may be used by others, and we are waiting for that.
+rules on what an app may use. Nothing is published yet.
+
+Iroise is not an official Ladybird release and is not endorsed by the Ladybird Browser Initiative.
+It is an independent port, made by us, with its own name, and it follows
+[Ladybird's trademark policy](https://ladybird.org/trademark/).
 
 It is developed on the Jolla Phone 2 and also runs on the Xperia 10 II, where pages are still painted in software.
 
