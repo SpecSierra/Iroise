@@ -1345,7 +1345,7 @@ private:
         case LB_EMBED_LOAD:
             if (auto url = WebView::sanitize_url(text); url.has_value()) {
                 apply_site_options(view, view.page(), *url);
-                view.load(*url);
+                view.load_from_browser_ui(*url);
             }
             break;
         case LB_EMBED_TOUCH: {
