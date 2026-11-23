@@ -354,6 +354,15 @@ Page {
                 onClicked: pageStack.push("SiteUaSettingsPage.qml")
             }
 
+            SettingsLinkItem {
+                iconSource: "image://theme/icon-m-about"
+                //% "About Iroise"
+                text: qsTrId("iroise-he-about")
+                //% "What it is built on"
+                description: qsTrId("iroise-la-about_description")
+                onClicked: pageStack.push("AboutPage.qml")
+            }
+
         }
     }
 
